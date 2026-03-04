@@ -1,0 +1,71 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from uuid import UUID
+
+from app.db.session import get_db
+from app.db.models.tenant.clinical import Refraction, RefractionType
+from app.schemas.refraction import RefractionUpdateRequest, RefractionResponse
+
+router = APIRouter()
+
+# Map the frontend column index (0-3) to the database RefractionType enum
+COLUMN_TYPE_MAP = {
+    0: RefractionType.HABITUAL,
+    1: RefractionType.AUTO,
+    2: RefractionType.MANIFEST,
+    3: RefractionType.FINAL
+}
+
+@router.patch("/encounters/{encounter_id}/refraction/{col_index}", response_model=RefractionResponse)
+def update_refraction_column(
+    encounter_id: UUID,
+    col_index: int,
+    payload: RefractionUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Updates a specific refraction type for an encounter.
+    The 'get_db' dependency automatically handles the 'SET search_path' 
+    switching to the correct clinic schema.
+    """
+    if col_index not in COLUMN_TYPE_MAP:
+        raise HTTPException(status_code=400, detail="Invalid column index")
+
+    rx_type = COLUMN_TYPE_MAP[col_index]
+
+    # 1. Find or create the refraction record for this specific type
+    rx = db.query(Refraction).filter(
+        Refraction.encounter_id == encounter_id,
+        Refraction.refraction_type == rx_type
+    ).first()
+
+    if not rx:
+        rx = Refraction(encounter_id=encounter_id, refraction_type=rx_type)
+        db.add(rx)
+
+    # 2. Map nested Pydantic 'od/os' objects to flat database columns
+    if payload.od:
+        rx.od_sphere = payload.od.sphere
+        rx.od_cylinder = payload.od.cylinder
+        rx.od_axis = payload.od.axis
+        rx.od_add = payload.od.add
+        rx.od_visual_acuity = payload.od.visual_acuity
+    
+    if payload.os:
+        rx.os_sphere = payload.os.sphere
+        rx.os_cylinder = payload.os.cylinder
+        rx.os_axis = payload.os.axis
+        rx.os_add = payload.os.add
+        rx.os_visual_acuity = payload.os.visual_acuity
+
+    # 3. Handle Pupillary Distance (PD)
+    if payload.pd_distance is not None: rx.pd_distance = payload.pd_distance
+    if payload.pd_near is not None: rx.pd_near = payload.pd_near
+    if payload.is_final_rx is not None: rx.is_final_rx = payload.is_final_rx
+
+    db.commit()
+    db.refresh(rx)
+    
+    # Use the helper method defined in your schema to return nested response
+    return RefractionResponse.from_orm_model(rx)

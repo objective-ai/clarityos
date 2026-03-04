@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api repos/Dammyjay93/interface-design/contents/.claude/skills --jq '.[].name')",
+      "Bash(gh api repos/Dammyjay93/interface-design/contents/.claude-plugin/plugin.json --jq '.content')",
+      "Bash(gh api repos/Dammyjay93/interface-design/contents/.claude/skills/interface-design --jq '.[].name')",
+      "Bash(gh api repos/Dammyjay93/interface-design/contents/.claude/skills/interface-design/SKILL.md --jq '.content')",
+      "Bash(gh api repos/Dammyjay93/interface-design/contents/.claude/skills/interface-design/references --jq '.[].name')",
+      "Bash(gh api repos/Dammyjay93/interface-design/contents/reference/system-template.md --jq '.content')",
+      "Bash(for f in critique.md example.md principles.md validation.md)",
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(gh api \"repos/Dammyjay93/interface-design/contents/.claude/skills/interface-design/references/$f\" --jq '.content')",
+      "Bash(done)",
+      "Bash(for f in audit.md critique.md extract.md init.md status.md)",
+      "Bash(gh api \"repos/Dammyjay93/interface-design/contents/.claude/commands/$f\" --jq '.content')"
+    ]
+  }
+}

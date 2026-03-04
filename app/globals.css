@@ -1,0 +1,456 @@
+/**
+ * app/globals.css
+ *
+ * Premium design system — Glassmorphism + Ambient Gradients
+ * Aesthetic: Award-winning dark UI inspired by Linear, Stripe, Framer
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================================
+   Design Tokens — Dark Theme (default)
+   ========================================================================= */
+:root {
+  /* Backgrounds — deep layered surfaces with blue undertone */
+  --bg-base:      #06080D;
+  --bg-surface:   #0C0F16;
+  --bg-elevated:  #12151E;
+  --bg-overlay:   #1A1D28;
+  --bg-glass:     rgba(255, 255, 255, 0.03);
+
+  /* Borders — barely visible glass edges */
+  --border-subtle:  rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong:  rgba(255, 255, 255, 0.14);
+  --border-glow:    rgba(45, 212, 191, 0.20);
+
+  /* Text — high contrast hierarchy */
+  --text-primary:   #F0F2F5;
+  --text-secondary: #8B95A5;
+  --text-muted:     #505868;
+  --text-inverse:   #06080D;
+
+  /* Accent — teal with glow variants */
+  --accent:         #2DD4BF;
+  --accent-dim:     rgba(45, 212, 191, 0.10);
+  --accent-hover:   #5EEAD4;
+  --accent-glow:    rgba(45, 212, 191, 0.15);
+  --accent-strong:  rgba(45, 212, 191, 0.25);
+
+  /* Clinical states */
+  --state-normal:   #34D399;
+  --state-warning:  #FBBF24;
+  --state-critical: #F87171;
+  --state-info:     #60A5FA;
+
+  /* Data / Monospace surfaces */
+  --mono-bg:        rgba(45, 212, 191, 0.05);
+  --mono-border:    rgba(45, 212, 191, 0.20);
+
+  /* Layout */
+  --header-height:  64px;
+  --sticky-height:  72px;
+  --sidebar-width:  220px;
+
+  /* Shadows — layered for depth */
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.4), 0 0 1px rgba(0,0,0,0.3);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.3);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.6), 0 0 1px rgba(0,0,0,0.3);
+  --shadow-glow: 0 0 20px rgba(45, 212, 191, 0.08);
+
+  /* Glass effect */
+  --glass-blur: 16px;
+  --glass-bg: rgba(12, 15, 22, 0.70);
+  --glass-border: rgba(255, 255, 255, 0.06);
+
+  /* Ambient gradient orbs */
+  --gradient-1: radial-gradient(600px circle at 20% 30%, rgba(45, 212, 191, 0.06), transparent 70%);
+  --gradient-2: radial-gradient(500px circle at 80% 60%, rgba(96, 165, 250, 0.04), transparent 70%);
+  --gradient-3: radial-gradient(400px circle at 50% 80%, rgba(167, 139, 250, 0.04), transparent 70%);
+
+  /* Touch targets */
+  --touch-target: 44px;
+
+  /* Sticky header */
+  --bg-sticky-header: rgba(6, 8, 13, 0.85);
+
+  /* Transitions */
+  --ease-out-expo:   cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast: 120ms var(--ease-out-expo);
+  --transition-base: 200ms var(--ease-out-expo);
+}
+
+/* =========================================================================
+   Light Theme
+   ========================================================================= */
+[data-theme="light"] {
+  --bg-base:      #F8F9FC;
+  --bg-surface:   #FFFFFF;
+  --bg-elevated:  #F1F3F9;
+  --bg-overlay:   #E8EBF2;
+  --bg-glass:     rgba(255, 255, 255, 0.70);
+
+  --border-subtle:  rgba(0, 0, 0, 0.04);
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-strong:  rgba(0, 0, 0, 0.14);
+  --border-glow:    rgba(45, 212, 191, 0.15);
+
+  --text-primary:   #0F1729;
+  --text-secondary: #5E6880;
+  --text-muted:     #9CA3B0;
+  --text-inverse:   #F8F9FC;
+
+  --glass-bg: rgba(255, 255, 255, 0.70);
+  --glass-border: rgba(0, 0, 0, 0.06);
+
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.04);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.04);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.10), 0 0 1px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 20px rgba(45, 212, 191, 0.06);
+
+  --bg-sticky-header: rgba(248, 249, 252, 0.85);
+
+  --gradient-1: radial-gradient(600px circle at 20% 30%, rgba(45, 212, 191, 0.04), transparent 70%);
+  --gradient-2: radial-gradient(500px circle at 80% 60%, rgba(96, 165, 250, 0.03), transparent 70%);
+  --gradient-3: radial-gradient(400px circle at 50% 80%, rgba(167, 139, 250, 0.03), transparent 70%);
+}
+
+/* =========================================================================
+   Base Resets
+   ========================================================================= */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-jakarta), system-ui, sans-serif;
+  line-height: 1.6;
+}
+
+/* =========================================================================
+   Ambient Background — gradient orbs behind all content
+   ========================================================================= */
+.ambient-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg-base);
+  background-image: var(--gradient-1), var(--gradient-2), var(--gradient-3);
+  pointer-events: none;
+}
+
+/* =========================================================================
+   Glassmorphism Cards
+   ========================================================================= */
+@layer components {
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .glass-card-hover {
+    transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 250ms ease;
+  }
+
+  .glass-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+    border-color: var(--border-strong);
+  }
+
+  .glass-card-accent {
+    border-color: var(--border-glow);
+    box-shadow: var(--shadow-md), var(--shadow-glow);
+  }
+
+  .glass-input {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    color: var(--text-primary);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    outline: none;
+  }
+
+  .glass-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+}
+
+/* =========================================================================
+   Typography Scale
+   ========================================================================= */
+@layer utilities {
+  .text-display  { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; color: var(--text-primary); }
+  .text-heading  { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; color: var(--text-primary); }
+  .text-subhead  { font-size: 14px; font-weight: 600; letter-spacing: -0.005em; line-height: 1.4; color: var(--text-primary); }
+  .text-body     { font-size: 14px; font-weight: 400; line-height: 1.6; color: var(--text-secondary); }
+  .text-caption  { font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--text-secondary); }
+  .text-overline { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+
+  .font-jakarta   { font-family: var(--font-jakarta), system-ui, sans-serif; }
+  .font-mono-data { font-family: var(--font-mono), monospace; }
+}
+
+/* =========================================================================
+   Navigation
+   ========================================================================= */
+@layer utilities {
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid transparent;
+    position: relative;
+  }
+
+  .nav-item:hover {
+    background: var(--bg-glass);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+  }
+
+  .nav-item.active {
+    background: var(--accent-glow);
+    color: var(--text-primary);
+    border-color: var(--border-glow);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 8px 0;
+  }
+}
+
+/* =========================================================================
+   Interactive Utilities
+   ========================================================================= */
+@layer utilities {
+  .hover-row {
+    background: transparent;
+    transition: background 200ms ease, box-shadow 200ms ease;
+    cursor: pointer;
+  }
+  .hover-row:hover {
+    background: var(--bg-glass);
+  }
+
+  .hover-card {
+    transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 250ms ease,
+                box-shadow 250ms ease;
+  }
+  .hover-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-lg), var(--shadow-glow);
+  }
+
+  .hover-btn {
+    transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+  }
+  .hover-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  .input-focus {
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    outline: none;
+  }
+  .input-focus:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .hover-danger {
+    transition: color 200ms ease;
+  }
+  .hover-danger:hover {
+    color: var(--state-critical);
+  }
+
+  .hover-laterality {
+    transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
+  }
+  .hover-laterality:hover {
+    background: var(--accent-glow);
+    border-color: var(--border-glow);
+    color: var(--accent);
+  }
+}
+
+/* =========================================================================
+   Data Display
+   ========================================================================= */
+@layer utilities {
+  .rx-value {
+    font-family: var(--font-mono), monospace;
+    background: var(--mono-bg);
+    border: 1px solid var(--mono-border);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+
+  .data-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .data-value {
+    font-family: var(--font-mono), monospace;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-dot-pulse {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+}
+
+/* =========================================================================
+   Scrollbar
+   ========================================================================= */
+@layer utilities {
+  ::-webkit-scrollbar        { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track  { background: transparent; }
+  ::-webkit-scrollbar-thumb  { background: var(--border-strong); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+}
+
+/* =========================================================================
+   Tablet / Touch Target Enforcement
+   ========================================================================= */
+@media (pointer: coarse) {
+  .nav-item { min-height: var(--touch-target); }
+  .hover-row { min-height: var(--touch-target); }
+  button, [role="button"], a[href] { min-height: var(--touch-target); }
+  input, select, textarea { min-height: var(--touch-target); }
+}
+
+/* =========================================================================
+   Animations
+   ========================================================================= */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-enter { animation: fade-in-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+.stagger > * { animation: fade-in-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 50ms; }
+.stagger > *:nth-child(2) { animation-delay: 100ms; }
+.stagger > *:nth-child(3) { animation-delay: 150ms; }
+.stagger > *:nth-child(4) { animation-delay: 200ms; }
+.stagger > *:nth-child(5) { animation-delay: 250ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 350ms; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(45, 212, 191, 0); }
+}
+.animate-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down { animation: slide-down 200ms var(--ease-out-expo) both; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-in { animation: fade-in 200ms ease both; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.animate-pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+@keyframes spin-arc {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-arc { animation: spin-arc 0.8s linear infinite; }
+
+/* =========================================================================
+   RefractionGrid — prescription cell styles
+   ========================================================================= */
+input[id^="rx-cell-"]::-webkit-outer-spin-button,
+input[id^="rx-cell-"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[id^="rx-cell-"] { -moz-appearance: textfield; }
+
+input[id^="rx-cell-"]::placeholder {
+  font-family: var(--font-mono), monospace;
+  color: var(--text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+}
+
+input[id^="rx-cell-"]:focus-visible { outline: none; }
+
+input[id^="rx-cell-"]::selection {
+  background: rgba(45, 212, 191, 0.25);
+  color: var(--text-primary);
+}
+
+input[id^="rx-cell-"]:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
