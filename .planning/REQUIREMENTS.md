@@ -23,11 +23,11 @@ Requirements for the full MVP. Each maps to roadmap phases.
 ### Infrastructure
 
 - [ ] **INF-01**: Python backend relocated from app/ to backend/ directory (resolves Next.js namespace conflict)
-- [ ] **INF-02**: Alembic initialized with async migration environment for existing SQLAlchemy models
-- [ ] **INF-03**: Initial Alembic migration generated from current model state (baseline migration)
-- [ ] **INF-04**: Next.js BFF route handler for audit log API (/api/audit-logs proxying to FastAPI)
-- [ ] **INF-05**: Next.js BFF route handler for AI Scribe accept endpoint (/api/ai-scribe/accept proxying to FastAPI)
-- [ ] **INF-06**: Supabase Custom Access Token Hook injects tenant_id and role into JWT claims
+- [x] **INF-02**: Alembic initialized with async migration environment for existing SQLAlchemy models
+- [x] **INF-03**: Initial Alembic migration generated from current model state (baseline migration)
+- [x] **INF-04**: Next.js BFF route handler for audit log API (/api/audit-logs proxying to FastAPI)
+- [x] **INF-05**: Next.js BFF route handler for AI Scribe accept endpoint (/api/ai-scribe/accept proxying to FastAPI)
+- [x] **INF-06**: Supabase Custom Access Token Hook injects tenant_id and role into JWT claims
 
 ### API Integration
 
@@ -138,11 +138,11 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SEC-09 | Phase 1 | Pending |
 | SEC-10 | Phase 1 | Pending |
 | INF-01 | Phase 1 | Pending |
-| INF-02 | Phase 1 | Pending |
-| INF-03 | Phase 1 | Pending |
-| INF-04 | Phase 1 | Pending |
-| INF-05 | Phase 1 | Pending |
-| INF-06 | Phase 1 | Pending |
+| INF-02 | Phase 1 | Complete |
+| INF-03 | Phase 1 | Complete |
+| INF-04 | Phase 1 | Complete |
+| INF-05 | Phase 1 | Complete |
+| INF-06 | Phase 1 | Complete |
 | API-01 | Phase 2 | Pending |
 | API-02 | Phase 2 | Pending |
 | API-03 | Phase 2 | Pending |

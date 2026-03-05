@@ -32,10 +32,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can log out and all clinical data is cleared from browser storage (localStorage, Zustand state)
   4. FastAPI rejects all requests when Supabase JWT secret is missing — no dev bypass path exists
   5. Python backend files live in backend/ directory with no files in app/ conflicting with Next.js routes
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — Backend relocation + security hardening (INF-01, SEC-01-03, SEC-09-10)
+- [x] 01-01-PLAN.md — Backend relocation + security hardening (INF-01, SEC-01-03, SEC-09-10)
 - [ ] 01-02-PLAN.md — Alembic setup, BFF route handlers, Custom Access Token Hook (INF-02-06)
 - [ ] 01-03-PLAN.md — Supabase Auth end-to-end (SEC-04-08: login, middleware, session, logout, timeout)
 
@@ -135,7 +135,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Security & Auth Foundation | 0/3 | Planning complete | - |
+| 1. Security & Auth Foundation | 2/3 | In Progress|  |
 | 2. API Integration & HIPAA Compliance | 0/2 | Not started | - |
 | 3. Scheduling | 0/2 | Not started | - |
 | 4. Billing & Coding | 0/2 | Not started | - |
