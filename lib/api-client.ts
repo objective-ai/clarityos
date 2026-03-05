@@ -1,15 +1,47 @@
 /**
  * Authenticated API client for FastAPI backend.
  *
- * Reads the Supabase access token from the client and attaches it
- * as a Bearer token to every request.
+ * Features:
+ * - SSR-safe Supabase auth via createClient() from lib/supabase/client (API-08)
+ * - Automatic retry with exponential backoff (default 3 retries)
+ * - Transparent camelCase <-> snake_case conversion for payloads and responses
  */
 
-import { supabase } from "./supabase";
+import { createClient } from "@/lib/supabase/client";
+import { camelizeKeys, snakifyKeys } from "@/lib/case-convert";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * Retries an async function with exponential backoff.
+ * Base delay: 500ms. Delays: 500ms, 1000ms, 2000ms for retries 1, 2, 3.
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = 3,
+  baseDelayMs: number = 500
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Returns Authorization and Content-Type headers using the SSR-safe
+ * createClient() factory (not the legacy singleton).
+ */
 async function getAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = createClient();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -25,21 +57,50 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
+export interface ApiFetchOptions extends RequestInit {
+  /** Number of retry attempts on network/server errors. Default: 3. */
+  retries?: number;
+}
+
+/**
+ * Authenticated fetch wrapper for FastAPI backend.
+ *
+ * - Converts camelCase request body keys to snake_case before sending.
+ * - Converts snake_case response keys to camelCase before returning.
+ * - Retries failed requests with exponential backoff.
+ */
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {}
 ): Promise<T> {
+  const { retries = 3, ...fetchOptions } = options;
+
   const headers = await getAuthHeaders();
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { ...headers, ...(options.headers as Record<string, string>) },
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail ?? `API error ${res.status}`);
+  // Convert camelCase body keys to snake_case for the Python backend
+  let body = fetchOptions.body;
+  if (typeof body === "string") {
+    try {
+      const parsed = JSON.parse(body);
+      body = JSON.stringify(snakifyKeys(parsed));
+    } catch {
+      // Not JSON — leave body as-is (e.g. FormData, raw string)
+    }
   }
 
-  return res.json() as Promise<T>;
+  return withRetry<T>(async () => {
+    const res = await fetch(`${API_URL}${path}`, {
+      ...fetchOptions,
+      body,
+      headers: { ...headers, ...(fetchOptions.headers as Record<string, string>) },
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error((errBody as { detail?: string }).detail ?? `API error ${res.status}`);
+    }
+
+    const json = await res.json();
+    return camelizeKeys<T>(json);
+  }, retries);
 }
