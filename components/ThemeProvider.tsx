@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useThemeStore } from "@/store/themeStore";
 import { useTenantCustomizationStore } from "@/store/tenantCustomizationStore";
 import { hexToRgb, lightenHex } from "@/lib/color-utils";
 
 export function ThemeProvider() {
+  const [mounted, setMounted] = useState(false);
   const theme = useThemeStore((s) => s.theme);
   const accentColor = useTenantCustomizationStore((s) => s.accentColor);
 
+  useEffect(() => setMounted(true), []);
+
   // Theme sync
   useEffect(() => {
+    if (!mounted) return;
     document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
   // Accent color sync
   useEffect(() => {
+    if (!mounted) return;
     const { r, g, b } = hexToRgb(accentColor);
     const root = document.documentElement.style;
 
@@ -28,7 +33,7 @@ export function ThemeProvider() {
     root.setProperty("--mono-border", `rgba(${r}, ${g}, ${b}, 0.20)`);
     root.setProperty("--border-glow", `rgba(${r}, ${g}, ${b}, 0.20)`);
     root.setProperty("--shadow-glow", `0 0 20px rgba(${r}, ${g}, ${b}, 0.08)`);
-  }, [accentColor]);
+  }, [accentColor, mounted]);
 
   return null;
 }
