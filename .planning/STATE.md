@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-05T21:54:55.199Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-05T22:32:20.844Z"
 last_activity: 2026-03-05 — Plan 01-03 complete (Supabase Auth integration)
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
 ---
 
 ---
@@ -65,6 +65,7 @@ Progress: [=.........] 14%
 - Trend: Accelerating
 
 *Updated after each plan completion*
+| Phase 02 P01 | 12 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,10 @@ Recent decisions affecting current work:
 - 01-03: Middleware uses getUser() for server-side JWT verification (security best practice)
 - 01-03: ePHI cleanup clears 6 clinical stores + localStorage keys matching draft-transcript-*, encounter-*, clinical-*
 - 01-03: subscribeWithSelector(devtools(...)) composition order for stores with action names
+- [Phase 02-01]: SSR-safe Supabase createClient factory replaces legacy singleton in api-client (API-08)
+- [Phase 02-01]: withRetry exponential backoff: 500ms base, retries at 500ms, 1000ms, 2000ms
+- [Phase 02-01]: Encounter-level GET logging sufficient for vitals PHI (vitals loaded inline from encounter response, no standalone GET)
+- [Phase 02-01]: exam_findings GET required standalone log_action(READ) — separate PHI endpoint, fixed as Rule 2 auto-fix
 
 ### Pending Todos
 
@@ -95,6 +100,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T21:54:55.196Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-api-integration-hipaa-compliance/02-CONTEXT.md
+Last session: 2026-03-05T22:32:20.840Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
