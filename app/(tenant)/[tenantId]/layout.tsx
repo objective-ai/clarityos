@@ -6,6 +6,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { TopNav } from "@/components/TopNav";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import { PatientStickyHeader } from "@/components/PatientStickyHeader";
+import { AuthProvider } from "@/components/auth/AuthProvider";
+import { SessionTimeoutModal } from "@/components/auth/SessionTimeoutModal";
 import { useEncounterStore } from "@/store/encounterStore";
 import { getPatientById, getPatientIdForEncounter } from "@/lib/mock-patient-data";
 import { getPatientIdForAppointment } from "@/lib/mock-schedule-data";
@@ -61,32 +63,36 @@ export default function TenantLayout({
   }, []);
 
   return (
-    <div className="min-h-screen ambient-bg">
-      <Sidebar
-        tenantId={params.tenantId}
-        isCollapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
-      />
+    <AuthProvider>
+      <div className="min-h-screen ambient-bg">
+        <SessionTimeoutModal />
 
-      <div
-        className="relative z-10"
-        style={{
-          paddingLeft: sidebarCollapsed ? "60px" : "var(--sidebar-width)",
-          transition: "padding-left 200ms var(--ease-out-expo)",
-        }}
-      >
-        <TopNav tenantId={params.tenantId} patient={isEncounterRoute ? patientHeader : null} />
+        <Sidebar
+          tenantId={params.tenantId}
+          isCollapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((c) => !c)}
+        />
 
-        {!isEncounterRoute && patientHeader && (
-          <PatientStickyHeader patient={patientHeader} />
-        )}
+        <div
+          className="relative z-10"
+          style={{
+            paddingLeft: sidebarCollapsed ? "60px" : "var(--sidebar-width)",
+            transition: "padding-left 200ms var(--ease-out-expo)",
+          }}
+        >
+          <TopNav tenantId={params.tenantId} patient={isEncounterRoute ? patientHeader : null} />
 
-        <main className="p-6 lg:p-8">
-          <SidebarProvider value={sidebarCollapsed}>
-            {children}
-          </SidebarProvider>
-        </main>
+          {!isEncounterRoute && patientHeader && (
+            <PatientStickyHeader patient={patientHeader} />
+          )}
+
+          <main className="p-6 lg:p-8">
+            <SidebarProvider value={sidebarCollapsed}>
+              {children}
+            </SidebarProvider>
+          </main>
+        </div>
       </div>
-    </div>
+    </AuthProvider>
   );
 }

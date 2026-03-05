@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { useCurrentUser, useCurrentTenant } from "@/store/sessionStore";
@@ -264,6 +265,10 @@ export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
             </div>
           </div>
         )}
+        <LogoutButton
+          collapsed={isCollapsed}
+          className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        />
       </div>
     </aside>
   );

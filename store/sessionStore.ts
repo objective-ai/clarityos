@@ -8,14 +8,13 @@
  * read from this store via the useSession() selector or the useEntitlements() hook.
  *
  * Store shape:
- *   session    : AppSession | null — null means the user is not authenticated
- *   isLoading  : boolean — true during the initial session hydration
+ *   session    : AppSession | null -- null means the user is not authenticated
+ *   isLoading  : boolean -- true during the initial session hydration
  *   setSession : (session: AppSession) => void
  *   clearSession : () => void
  *
- * Development: The store is pre-loaded with a mock session.
- * Production:  The store starts null.  After /api/v1/global/auth/login returns
- *              a JWT, the auth flow calls setSession(hydrateRealSession(jwt)).
+ * The store starts null with isLoading: true. AuthProvider hydrates it from
+ * Supabase Auth on mount via onAuthStateChange.
  *
  * Why Zustand instead of Context?
  *   - No Provider wrapper around the entire tree (no re-render cascade on login)
@@ -27,7 +26,8 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { AppSession } from "@/types/session";
-import { getMockSession } from "@/lib/auth/mock-session";
+
+const isDev = process.env.NODE_ENV === "development";
 
 // ---------------------------------------------------------------------------
 // Store interface
@@ -52,15 +52,12 @@ export const useSessionStore = create<SessionState>()(
   devtools(
     (set, get) => ({
       /**
-       * DEVELOPMENT: Pre-populate with a mock session so every page renders
-       * immediately without an auth flow.
-       *
-       * PRODUCTION: Change this to `null` and initialize via setSession()
-       * after the /auth/login API call succeeds.
+       * Starts null -- hydrated from Supabase Auth via AuthProvider.
+       * isLoading is true until the auth state listener resolves.
        */
-      session: getMockSession("premium_doctor"),
+      session: null,
 
-      isLoading: false,
+      isLoading: true,
 
       setSession: (session) => {
         set({ session, isLoading: false }, false, "setSession");
@@ -68,8 +65,6 @@ export const useSessionStore = create<SessionState>()(
 
       clearSession: () => {
         set({ session: null, isLoading: false }, false, "clearSession");
-        // In production: clear cookies, redirect to /login
-        // router.push('/login')
       },
 
       isExpired: () => {
@@ -78,7 +73,7 @@ export const useSessionStore = create<SessionState>()(
         return new Date() > session.expiresAt;
       },
     }),
-    { name: "ClarityOS/Session" }
+    { name: "ClarityOS/Session", enabled: isDev }
   )
 );
 
