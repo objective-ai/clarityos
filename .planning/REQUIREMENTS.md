@@ -9,20 +9,20 @@ Requirements for the full MVP. Each maps to roadmap phases.
 
 ### Security & Auth
 
-- [ ] **SEC-01**: Dev auth bypass removed — backend requires valid JWT at startup, no fallback identity when SUPABASE_JWT_SECRET is empty
-- [ ] **SEC-02**: Hardcoded SECRET_KEY default removed — startup fails if SECRET_KEY env var is unset
-- [ ] **SEC-03**: Hardcoded Supabase project reference in config.py replaced with env var
-- [ ] **SEC-04**: User can log in with email/password via Supabase Auth on a dedicated /login page
-- [ ] **SEC-05**: User can log out and all ePHI is cleared from localStorage (SOAP notes, encounter data, clinical transcripts)
-- [ ] **SEC-06**: User session persists across browser refresh via Supabase JWT cookie
-- [ ] **SEC-07**: Next.js middleware protects all tenant routes — unauthenticated users redirected to /login
-- [ ] **SEC-08**: sessionStore hydrates from real Supabase JWT claims (role, tenant_id, entitlements) instead of mock session
-- [ ] **SEC-09**: Security headers added to Next.js config (CSP, X-Frame-Options, X-Content-Type-Options)
-- [ ] **SEC-10**: Zustand devtools disabled in production builds
+- [x] **SEC-01**: Dev auth bypass removed — backend requires valid JWT at startup, no fallback identity when SUPABASE_JWT_SECRET is empty
+- [x] **SEC-02**: Hardcoded SECRET_KEY default removed — startup fails if SECRET_KEY env var is unset
+- [x] **SEC-03**: Hardcoded Supabase project reference in config.py replaced with env var
+- [x] **SEC-04**: User can log in with email/password via Supabase Auth on a dedicated /login page
+- [x] **SEC-05**: User can log out and all ePHI is cleared from localStorage (SOAP notes, encounter data, clinical transcripts)
+- [x] **SEC-06**: User session persists across browser refresh via Supabase JWT cookie
+- [x] **SEC-07**: Next.js middleware protects all tenant routes — unauthenticated users redirected to /login
+- [x] **SEC-08**: sessionStore hydrates from real Supabase JWT claims (role, tenant_id, entitlements) instead of mock session
+- [x] **SEC-09**: Security headers added to Next.js config (CSP, X-Frame-Options, X-Content-Type-Options)
+- [x] **SEC-10**: Zustand devtools disabled in production builds
 
 ### Infrastructure
 
-- [ ] **INF-01**: Python backend relocated from app/ to backend/ directory (resolves Next.js namespace conflict)
+- [x] **INF-01**: Python backend relocated from app/ to backend/ directory (resolves Next.js namespace conflict)
 - [x] **INF-02**: Alembic initialized with async migration environment for existing SQLAlchemy models
 - [x] **INF-03**: Initial Alembic migration generated from current model state (baseline migration)
 - [x] **INF-04**: Next.js BFF route handler for audit log API (/api/audit-logs proxying to FastAPI)
@@ -127,17 +127,17 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 1 | Pending |
-| SEC-02 | Phase 1 | Pending |
-| SEC-03 | Phase 1 | Pending |
-| SEC-04 | Phase 1 | Pending |
-| SEC-05 | Phase 1 | Pending |
-| SEC-06 | Phase 1 | Pending |
-| SEC-07 | Phase 1 | Pending |
-| SEC-08 | Phase 1 | Pending |
-| SEC-09 | Phase 1 | Pending |
-| SEC-10 | Phase 1 | Pending |
-| INF-01 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
+| SEC-02 | Phase 1 | Complete |
+| SEC-03 | Phase 1 | Complete |
+| SEC-04 | Phase 1 | Complete |
+| SEC-05 | Phase 1 | Complete |
+| SEC-06 | Phase 1 | Complete |
+| SEC-07 | Phase 1 | Complete |
+| SEC-08 | Phase 1 | Complete |
+| SEC-09 | Phase 1 | Complete |
+| SEC-10 | Phase 1 | Complete |
+| INF-01 | Phase 1 | Complete |
 | INF-02 | Phase 1 | Complete |
 | INF-03 | Phase 1 | Complete |
 | INF-04 | Phase 1 | Complete |

@@ -12,7 +12,7 @@ ClarityOS has a fully built frontend running on mock data and a FastAPI backend 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Security & Auth Foundation** - Close security gaps, wire Supabase Auth, relocate backend, set up Alembic
+- [x] **Phase 1: Security & Auth Foundation** - Close security gaps, wire Supabase Auth, relocate backend, set up Alembic
 - [ ] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging
 - [ ] **Phase 3: Scheduling** - Real appointment system with check-in workflow and encounter creation
 - [ ] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator
@@ -32,12 +32,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can log out and all clinical data is cleared from browser storage (localStorage, Zustand state)
   4. FastAPI rejects all requests when Supabase JWT secret is missing — no dev bypass path exists
   5. Python backend files live in backend/ directory with no files in app/ conflicting with Next.js routes
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 - [x] 01-01-PLAN.md — Backend relocation + security hardening (INF-01, SEC-01-03, SEC-09-10)
-- [ ] 01-02-PLAN.md — Alembic setup, BFF route handlers, Custom Access Token Hook (INF-02-06)
-- [ ] 01-03-PLAN.md — Supabase Auth end-to-end (SEC-04-08: login, middleware, session, logout, timeout)
+- [x] 01-02-PLAN.md — Alembic setup, BFF route handlers, Custom Access Token Hook (INF-02-06)
+- [x] 01-03-PLAN.md — Supabase Auth end-to-end (SEC-04-08: login, middleware, session, logout, timeout)
 
 ### Phase 2: API Integration & HIPAA Compliance
 **Goal**: The application runs entirely on real data from FastAPI — every mock import removed, every clinical GET endpoint logged for HIPAA

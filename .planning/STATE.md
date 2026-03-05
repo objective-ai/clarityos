@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 01-02 complete
-last_updated: "2026-03-05T21:24:21Z"
-last_activity: 2026-03-05 — Plan 01-02 complete (Alembic + BFF routes + Custom Access Token Hook)
+stopped_at: Plan 01-03 complete (Phase 1 done)
+last_updated: "2026-03-05T21:32:00Z"
+last_activity: 2026-03-05 — Plan 01-03 complete (Supabase Auth integration)
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 10
+  completed_plans: 3
+  percent: 14
 ---
 
 # Project State
@@ -25,28 +25,28 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 1 of 7 (Security & Auth Foundation)
-Plan: 2 of 3 in current phase
-Status: Executing Wave 2
-Last activity: 2026-03-05 — Plan 01-02 complete (Alembic + BFF routes + Custom Access Token Hook)
+Phase: 1 of 7 (Security & Auth Foundation) -- COMPLETE
+Plan: 3 of 3 in current phase (all done)
+Status: Phase 1 complete, ready for Phase 2
+Last activity: 2026-03-05 — Plan 01-03 complete (Supabase Auth integration)
 
-Progress: [=.........] 10%
+Progress: [=.........] 14%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: ~15min
-- Total execution time: ~0.5 hours
+- Total plans completed: 3
+- Average duration: ~14min
+- Total execution time: ~0.7 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2/3 | ~30min | ~15min |
+| 01 | 3/3 | ~41min | ~14min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (~25min), 01-02 (~5min)
+- Last 5 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min)
 - Trend: Accelerating
 
 *Updated after each plan completion*
@@ -64,6 +64,10 @@ Recent decisions affecting current work:
 - 01-02: Baseline migration is no-op (schema exists via Supabase)
 - 01-02: BFF proxy pattern uses getUser() auth check then getSession() for token forwarding
 - 01-02: Custom Access Token Hook uses LIMIT 1 for single-tenant-per-user MVP
+- 01-03: Browser client uses @supabase/ssr createBrowserClient (not legacy singleton)
+- 01-03: Middleware uses getUser() for server-side JWT verification (security best practice)
+- 01-03: ePHI cleanup clears 6 clinical stores + localStorage keys matching draft-transcript-*, encounter-*, clinical-*
+- 01-03: subscribeWithSelector(devtools(...)) composition order for stores with action names
 
 ### Pending Todos
 
@@ -76,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T21:24:21Z
-Stopped at: Completed 01-02-PLAN.md
-Resume file: .planning/phases/01-security-auth-foundation/01-02-SUMMARY.md
+Last session: 2026-03-05T21:32:00Z
+Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
+Resume file: .planning/phases/01-security-auth-foundation/01-03-SUMMARY.md
