@@ -13,7 +13,7 @@ ClarityOS has a fully built frontend running on mock data and a FastAPI backend 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Security & Auth Foundation** - Close security gaps, wire Supabase Auth, relocate backend, set up Alembic
-- [ ] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging
+- [x] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging (completed 2026-03-05)
 - [ ] **Phase 3: Scheduling** - Real appointment system with check-in workflow and encounter creation
 - [ ] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator
 - [ ] **Phase 5: Patient Profile** - Patient CRUD, detail page, encounter timeline, clinical flowsheets, AI Prep Me
@@ -49,7 +49,7 @@ Plans:
   3. The audit trail sidebar in the encounter view displays real audit log entries from the API (no 404 errors)
   4. Session automatically times out after 30 minutes of inactivity, clearing ePHI and redirecting to /login
   5. No file in the production bundle imports from any mock data module
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 02-01-PLAN.md — API client upgrade, skeleton/status UI, audit-logs BFF route, PHI logging (API-08, HIPAA-01, HIPAA-02)
@@ -137,7 +137,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Security & Auth Foundation | 3/3 | Complete | 2026-03-05 |
-| 2. API Integration & HIPAA Compliance | 2/3 | In Progress|  |
+| 2. API Integration & HIPAA Compliance | 3/3 | Complete   | 2026-03-05 |
 | 3. Scheduling | 0/2 | Not started | - |
 | 4. Billing & Coding | 0/2 | Not started | - |
 | 5. Patient Profile | 0/2 | Not started | - |

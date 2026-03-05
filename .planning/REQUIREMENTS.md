@@ -37,7 +37,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **API-04**: examFindingsStore migrated from mock data to real apiFetch() calls
 - [x] **API-05**: diagnosisStore migrated from mock data to real apiFetch() calls
 - [x] **API-06**: problemListStore migrated from mock data to real apiFetch() calls
-- [ ] **API-07**: Mock persona seed imports removed from all 9 production pages
+- [x] **API-07**: Mock persona seed imports removed from all 9 production pages
 - [x] **API-08**: apiFetch() updated to use Supabase session token for Authorization header
 
 ### Scheduling
@@ -52,7 +52,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 
 - [x] **HIPAA-01**: PHI read logging on all GET endpoints that return patient/encounter data
 - [x] **HIPAA-02**: Audit trail sidebar in encounter view wired to real audit log API (currently 404s)
-- [ ] **HIPAA-03**: Automatic session timeout after 30 minutes of inactivity
+- [x] **HIPAA-03**: Automatic session timeout after 30 minutes of inactivity
 
 ### Billing & Coding (Revenue Engine)
 
@@ -149,11 +149,11 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | API-04 | Phase 2 | Complete |
 | API-05 | Phase 2 | Complete |
 | API-06 | Phase 2 | Complete |
-| API-07 | Phase 2 | Pending |
+| API-07 | Phase 2 | Complete |
 | API-08 | Phase 2 | Complete |
 | HIPAA-01 | Phase 2 | Complete |
 | HIPAA-02 | Phase 2 | Complete |
-| HIPAA-03 | Phase 2 | Pending |
+| HIPAA-03 | Phase 2 | Complete |
 | SCHED-01 | Phase 3 | Pending |
 | SCHED-02 | Phase 3 | Pending |
 | SCHED-03 | Phase 3 | Pending |
