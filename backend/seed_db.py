@@ -79,9 +79,9 @@ from sqlalchemy.orm import Session
 
 # ── Our models ─────────────────────────────────────────────────────────────
 # Public schema (SaaS control plane)
-from app.db.base import PublicBase, TenantBase
+from backend.db.base import PublicBase, TenantBase
 
-from app.db.models.public.saas import (
+from backend.db.models.public.saas import (
     GlobalUser,
     PlanInterval,
     SubscriptionPlan,
@@ -92,7 +92,7 @@ from app.db.models.public.saas import (
 
 # Tenant schema (clinical data plane) — ALL models imported so that
 # TenantBase.metadata is fully populated before create_all() is called.
-from app.db.models.tenant.clinical import (
+from backend.db.models.tenant.clinical import (
     Appointment,
     AppointmentStatus,
     AppointmentType,
@@ -111,7 +111,7 @@ from app.db.models.tenant.clinical import (
 )
 
 # Feature key constants
-from app.core.entitlements import Entitlement
+from backend.core.entitlements import Entitlement
 
 # ══════════════════════════════════════════════════════════════════════════
 # Configuration
