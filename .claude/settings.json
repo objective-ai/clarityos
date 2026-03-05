@@ -28,8 +28,34 @@
       "Bash(npx:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__get_project_url",
+      "mcp__claude_ai_Supabase__get_publishable_keys",
+      "Bash(python -c \"from app.main import app; print\\(''OK:'', [r.path for r in app.routes]\\)\")",
+      "Bash(pip install asyncpg pydantic-settings)",
+      "mcp__claude_ai_Supabase__get_project",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(python -c \"from app.main import app; print\\(''OK -'', len\\(app.routes\\), ''routes''\\)\")",
+      "Bash(python -c \"from app.main import app; routes = [r.path for r in app.routes if hasattr\\(r, ''path''\\)]; print\\(''\\\\n''.join\\(sorted\\(routes\\)\\)\\)\")",
+      "Bash(python -c \"from app.main import app; print\\(f''Routes: {len\\(app.routes\\)}''\\)\")",
+      "Bash(python -c \"from app.db.models.tenant.clinical import PatientProblem; print\\(f''Model: {PatientProblem.__tablename__}''\\)\")",
+      "mcp__claude_ai_Supabase__get_advisors",
+      "Bash(python -c \"from app.main import app; print\\(f''{len\\(app.routes\\)} routes loaded''\\)\")",
+      "Read(//c/Users/duytr/.claude/projects//**)",
+      "Bash(python3 -m json.tool)",
+      "Read(//c/Users/duytr/.claude/**)",
+      "Read(//c/Users/duytr/**)",
+      "Bash(python -c \"from app.main import app; print\\(''OK:'', len\\(app.routes\\), ''routes''\\)\")"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "c:\\Users\\duytr\\OneDrive\\Desktop\\clarityos-erp\\.claude",
+      "c:\\Users\\duytr\\OneDrive\\Desktop\\clarityos-erp\\app\\(tenant)\\[tenantId]\\admin",
+      "c:\\Users\\duytr\\OneDrive\\Desktop\\clarityos-erp\\app\\(tenant)\\[tenantId]\\settings",
+      "C:\\Users\\duytr\\.claude",
+      "C:\\Users\\duytr\\.claude\\agents"
+    ]
   }
 }
