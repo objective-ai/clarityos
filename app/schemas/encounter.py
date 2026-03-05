@@ -32,7 +32,7 @@ from decimal import Decimal
 
 from pydantic import Field, field_validator
 
-from app.db.models.tenant.clinical import AppointmentStatus, EyeAffected, FindingCategory
+from app.db.models.tenant.clinical import AppointmentStatus, EyeAffected
 from app.schemas.common import AppBaseModel
 from app.schemas.refraction import RefractionSummary
 
@@ -289,8 +289,13 @@ class ExamFindingsResponse(AppBaseModel):
     """Embedded exam findings response in encounter detail."""
 
     id: uuid.UUID
-    category: FindingCategory
-    details_jsonb: dict
+    encounter_id: uuid.UUID
+    patient_id: uuid.UUID
+    exam_section: str
+    is_normal_wnl: bool
+    findings_od: dict | None = None
+    findings_os: dict | None = None
+    provider_notes: str | None = None
     recorded_by_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
@@ -371,6 +376,31 @@ class EncounterCreateRequest(AppBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Encounter: Update Request
+# ---------------------------------------------------------------------------
+
+
+class EncounterUpdateRequest(AppBaseModel):
+    """
+    Strictly typed payload for PATCH /encounters/{id}.
+
+    Only clinical narrative fields are allowed — structural fields (patient_id,
+    provider_id, encounter_date) cannot be changed after creation.
+    """
+
+    chief_complaint: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="The patient's primary reason for the visit.",
+    )
+    assessment_and_plan: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="Doctor's assessment and clinical plan (updated incrementally).",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Encounter: Finalize Request
 # ---------------------------------------------------------------------------
 
@@ -437,6 +467,9 @@ class EncounterResponse(AppBaseModel):
 
     is_finalized: bool
     finalized_at: datetime | None = None
+    signed_by_id: uuid.UUID | None = None
+    signed_at: datetime | None = None
+    signed_by_name: str | None = None
     is_deleted: bool
 
     # Sub-resources embedded for the exam room single-page fetch
