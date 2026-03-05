@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Settings, Sun, Moon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -16,7 +17,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { useCurrentUser, useSessionStore } from "@/store/sessionStore";
 import { getMockSession, type MockScenario } from "@/lib/auth/mock-session";
-import type { StaffRole } from "@/types/session";
+import type { PatientHeaderData, StaffRole } from "@/types/session";
 
 const ROLE_COLORS: Record<StaffRole, { bg: string; text: string; border: string }> = {
   doctor:       { bg: "rgba(45,212,191,0.12)",  text: "#2DD4BF", border: "rgba(45,212,191,0.3)"  },
@@ -26,8 +27,22 @@ const ROLE_COLORS: Record<StaffRole, { bg: string; text: string; border: string 
   owner:        { bg: "rgba(251,113,133,0.12)", text: "#FB7185", border: "rgba(251,113,133,0.3)" },
 };
 
+function calculateAge(dob: string): number {
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+function formatSex(sex: PatientHeaderData["sex"]): string {
+  return { male: "M", female: "F", other: "O", prefer_not_to_say: "—" }[sex];
+}
+
 interface TopNavProps {
   tenantId: string;
+  patient?: PatientHeaderData | null;
 }
 
 function getPageTitle(pathname: string): string {
@@ -47,7 +62,7 @@ const SCENARIO_LABELS: [MockScenario, string][] = [
   ["owner", "Owner"],
 ];
 
-export function TopNav({ tenantId }: TopNavProps) {
+export function TopNav({ tenantId, patient }: TopNavProps) {
   const pathname = usePathname();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -75,8 +90,29 @@ export function TopNav({ tenantId }: TopNavProps) {
         borderBottom: "1px solid var(--glass-border)",
       }}
     >
-      <div className="flex items-center gap-3">
-        <h1 className="text-heading">{pageTitle}</h1>
+      <div className="flex items-center gap-3 min-w-0">
+        {patient ? (
+          <>
+            <h1 className="text-sm font-semibold truncate text-[var(--text-primary)]">
+              {patient.lastName}, {patient.firstName}
+            </h1>
+            <span className="text-[11px] text-[var(--text-secondary)] flex-shrink-0">
+              {formatSex(patient.sex)} &middot; {calculateAge(patient.dob)}y &middot;{" "}
+              {new Date(patient.dob + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </span>
+            {patient.alerts.filter((a) => a.severity === "critical").map((a) => (
+              <Badge key={a.id} variant="destructive" className="gap-1 flex-shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse-dot bg-current" />
+                {a.label}
+              </Badge>
+            ))}
+            {patient.alerts.filter((a) => a.severity === "warning").map((a) => (
+              <Badge key={a.id} variant="warning" className="flex-shrink-0">{a.label}</Badge>
+            ))}
+          </>
+        ) : (
+          <h1 className="text-heading">{pageTitle}</h1>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
@@ -127,7 +163,7 @@ export function TopNav({ tenantId }: TopNavProps) {
           </Button>
         </Link>
 
-        {(() => {
+        {!patient && (() => {
           const roleKey = user?.role ?? "doctor";
           const colors = ROLE_COLORS[roleKey] ?? ROLE_COLORS.doctor;
           return (

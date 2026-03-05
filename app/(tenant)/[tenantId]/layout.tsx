@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { TopNav } from "@/components/TopNav";
+import { SidebarProvider } from "@/contexts/SidebarContext";
 import { PatientStickyHeader } from "@/components/PatientStickyHeader";
 import { useEncounterStore } from "@/store/encounterStore";
 import { getPatientById, getPatientIdForEncounter } from "@/lib/mock-patient-data";
@@ -73,14 +74,16 @@ export default function TenantLayout({
           transition: "padding-left 200ms var(--ease-out-expo)",
         }}
       >
-        <TopNav tenantId={params.tenantId} />
+        <TopNav tenantId={params.tenantId} patient={isEncounterRoute ? patientHeader : null} />
 
-        {isEncounterRoute && patientHeader && (
+        {!isEncounterRoute && patientHeader && (
           <PatientStickyHeader patient={patientHeader} />
         )}
 
         <main className="p-6 lg:p-8">
-          {children}
+          <SidebarProvider value={sidebarCollapsed}>
+            {children}
+          </SidebarProvider>
         </main>
       </div>
     </div>

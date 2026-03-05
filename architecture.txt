@@ -1,6 +1,6 @@
-This is exactly the right way to start. As an architect, the most common mistake I see is jumping straight into the codebase before the domain model and system architecture are fully baked. Leveraging an AI assistant like Claude to build out an ERP is a powerful approach. Since you already have experience architecting software concepts and putting together business MVPs with AI, we can dive straight into high-level system design and structure our planning so that, when we are ready, Claude can generate highly modular, production-ready components.
+This is exactly the right way to start. As an architect, the most common mistake I see is jumping straight into the codebase before the domain model and system architecture are fully baked. Leveraging an AI assistant like Claude to build out an EHR is a powerful approach. Since you already have experience architecting software concepts and putting together business MVPs with AI, we can dive straight into high-level system design and structure our planning so that, when we are ready, Claude can generate highly modular, production-ready components.
 
-An Optometry ERP (often blending into an EHR/EMR—Electronic Health Record/Electronic Medical Record) is a complex beast because it bridges retail (selling glasses/contacts) with clinical healthcare (exams, diagnoses) and heavy administrative workflows (insurance, billing).
+An Optometry EHR (often blending into an EHR/EMR—Electronic Health Record/Electronic Medical Record) is a complex beast because it bridges retail (selling glasses/contacts) with clinical healthcare (exams, diagnoses) and heavy administrative workflows (insurance, billing).
 
 To get our brainstorm going, here is a high-level breakdown of the typical feature sets we will need to consider.
 
@@ -14,7 +14,7 @@ To get our brainstorm going, here is a high-level breakdown of the typical featu
 
 ### 2. Architectural Considerations
 
-* **System Design:** Should we start with a modular monolith to keep initial deployment simple, or go straight to microservices? For an ERP, a modular monolith often prevents premature complexity while keeping the domains separated.
+* **System Design:** Should we start with a modular monolith to keep initial deployment simple, or go straight to microservices? For an EHR, a modular monolith often prevents premature complexity while keeping the domains separated.
 * **Database:** A relational database like PostgreSQL is almost mandatory here due to the highly relational nature of patient records, billing, and inventory.
 * **Security & Compliance:** If this is operating in the US, HIPAA compliance is non-negotiable. We'll need to architect for encryption at rest and in transit, audit logging (who looked at what patient record and when), and role-based access control (RBAC).
 
@@ -188,7 +188,7 @@ Moving straight into the API layer is the logical next step. Now that we have a 
 
 Given that we are building this in Python, **FastAPI** is the absolute best choice for our backend framework. It is asynchronous by default (which we need for our AI tasks), automatically generates OpenAPI (Swagger) documentation, and enforces strict data validation using Pydantic models. Claude is exceptionally good at writing Pydantic models if you give it the database schema.
 
-Here is how we should architect the API layer for our Optometry ERP.
+Here is how we should architect the API layer for our Optometry EHR.
 
 ### 1. The Tenant Routing Middleware (The Gatekeeper)
 
@@ -272,7 +272,7 @@ Using the modern Next.js App Router gives us a fantastic way to separate the pub
 
 ### 2. Core Clinical Components (The Exam Room)
 
-The `Encounter` view is the most critical page in the entire ERP. Instead of forcing the doctor to click through multiple separate pages, we should build a unified, single-page dashboard using modular React components.
+The `Encounter` view is the most critical page in the entire EHR. Instead of forcing the doctor to click through multiple separate pages, we should build a unified, single-page dashboard using modular React components.
 
 Here are the primary components we need to plan for:
 

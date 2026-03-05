@@ -439,7 +439,7 @@ export const useExamFindingsStore = create<ExamFindingsStore>()(
         );
       },
     })),
-    { name: "OptometryERP/ExamFindings" },
+    { name: "ClarityOS/ExamFindings" },
   ),
 );
 

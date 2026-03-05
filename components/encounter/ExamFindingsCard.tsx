@@ -24,6 +24,8 @@ const SECTIONS: { key: ExamSection; label: string }[] = [
 
 interface ExamFindingsCardProps {
   encounterId: string;
+  /** Render only this section. Omit to render both. */
+  section?: ExamSection;
   initialAnterior?: Partial<FindingsDraft>;
   initialPosterior?: Partial<FindingsDraft>;
 }
@@ -34,6 +36,7 @@ interface ExamFindingsCardProps {
 
 export function ExamFindingsCard({
   encounterId,
+  section: filterSection,
   initialAnterior,
   initialPosterior,
 }: ExamFindingsCardProps) {
@@ -45,10 +48,14 @@ export function ExamFindingsCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
+  const sections = filterSection
+    ? SECTIONS.filter((s) => s.key === filterSection)
+    : SECTIONS;
+
   return (
     <div className="space-y-3">
-      <h2 className="section-title">Exam Findings</h2>
-      {SECTIONS.map((sec) => (
+      {!filterSection && <h2 className="section-title">Exam Findings</h2>}
+      {sections.map((sec) => (
         <ReadOnlySection
           key={sec.key}
           encounterId={encounterId}

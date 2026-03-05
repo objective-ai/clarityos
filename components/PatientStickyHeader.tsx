@@ -9,13 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useVitalsDraft } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,10 +97,8 @@ export function PatientStickyHeader({
   const encounterId = params.encounterId ?? null;
 
   const [chartOpen, setChartOpen] = useState(false);
-  const [confirmFinalize, setConfirmFinalize] = useState(false);
-  const [assessmentPlan, setAssessmentPlan] = useState("");
   const advanceStatus = useEncounterStore((s) => s.advanceStatus);
-  const finalizeEncounter = useEncounterStore((s) => s.finalizeEncounter);
+  const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
   const encounter = useEncounterStore((s) =>
     encounterId ? s.encounters[encounterId] : undefined
   );
@@ -124,21 +115,10 @@ export function PatientStickyHeader({
   const handleAdvance = () => {
     if (!encounterId || !encounter) return;
     if (encounter.status === "in_exam") {
-      setConfirmFinalize(true);
+      setFinalizeModalOpen(true);
     } else {
       advanceStatus(encounterId);
     }
-  };
-
-  const handleConfirmFinalize = () => {
-    if (!encounterId || assessmentPlan.trim().length < 10) return;
-    finalizeEncounter(
-      encounterId,
-      encounter?.providerName ?? "Unknown Provider",
-      new Date().toISOString(),
-    );
-    setConfirmFinalize(false);
-    setAssessmentPlan("");
   };
 
   const criticalAlerts = patient.alerts.filter((a) => a.severity === "critical");
@@ -270,55 +250,6 @@ export function PatientStickyHeader({
         onOpenChange={setChartOpen}
       />
 
-      {/* Finalization confirmation */}
-      <Dialog open={confirmFinalize} onOpenChange={(open) => {
-        setConfirmFinalize(open);
-        if (!open) setAssessmentPlan("");
-      }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Sign &amp; Finalize Encounter</DialogTitle>
-            <DialogDescription>
-              This will lock all fields for this encounter. Refraction, exam findings, and diagnoses will become read-only.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4 px-6 pb-6">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="ap-finalize" className="text-xs font-medium text-[var(--text-secondary)]">
-                Assessment &amp; Plan <span className="text-[var(--state-danger)]">*</span>
-              </label>
-              <textarea
-                id="ap-finalize"
-                value={assessmentPlan}
-                onChange={(e) => setAssessmentPlan(e.target.value)}
-                placeholder="Clinical assessment and plan (min 10 characters)..."
-                rows={4}
-                className="w-full rounded-xl px-4 py-3 text-sm resize-none bg-[var(--bg-glass)] text-[var(--text-primary)] border border-[var(--glass-border)] input-focus placeholder:text-[var(--text-muted)]"
-              />
-              <span className="text-[10px] text-[var(--text-muted)] text-right">
-                {assessmentPlan.trim().length}/10 min
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleConfirmFinalize}
-                disabled={assessmentPlan.trim().length < 10}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Sign &amp; Finalize
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmFinalize(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium hover-btn bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </header>
   );
 }

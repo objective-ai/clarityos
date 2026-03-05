@@ -76,22 +76,62 @@ additional_notes: str | None  # max 5,000 chars — optional
 
 ### 1.5 Frontend Finalization Flow
 
-1. Doctor clicks **"Finalize"** in the sticky header
-2. Dialog opens with **Assessment & Plan** textarea (minimum 10 characters required)
-3. **"Sign & Finalize"** button is disabled until threshold is met
-4. On confirmation: `finalizeEncounter(id, signedByName, signedAt)` is called in the Zustand store
-5. All clinical fields (vitals, refractions, exam findings, diagnoses) become **read-only**
-6. Banner displays: **"Signed and finalized by Dr. Sarah Lin, OD on Mar 4, 2026"**
-7. Navigation links appear: **"Back to Patient"** and **"Schedule"**
+1. Doctor clicks **"Finalize"** in the PatientStickyHeader status button OR EncounterBottomTabs action button
+2. Both trigger `useEncounterStore.setFinalizeModalOpen(true)` — a single `<FinalizeModal>` rendered at the encounter page level opens (no duplicate modals in the React tree)
+3. Modal displays a **5-section clinical summary** pulled from Zustand stores:
+   - **Chief Complaint** — read-only text from `encounterStore`
+   - **Vitals** — IOP OD/OS (with elevation alert if > 21 mmHg) and Blood Pressure from `vitalsStore`
+   - **Diagnoses** — Active ICD-10 codes with laterality badges from `diagnosisStore`
+   - **Final Rx** — OD/OS table (Sph/Cyl/Axis/Add) from `refractionStore` column 3
+   - **Assessment & Plan** — Editable textarea (min 10 characters, matches backend validation)
+4. **Diagnosis guardrail:** "Sign & Seal Chart" button is disabled if `activeDiagnoses.length === 0` — a chart cannot be legally billed without at least one ICD-10 code
+5. **Attestation checkpoint:** Required checkbox — "I attest that I have reviewed this encounter and the clinical data is accurate"
+6. **Submit gate:** Button enabled only when `attested && assessmentPlan.length >= 10 && hasDiagnoses && !isSubmitting`
+7. On confirmation: `POST /api/encounters/{id}/finalize` with `{ assessment_and_plan }` via `apiFetch`
+8. On success: `finalizeEncounter(id, response.signed_by_name, response.signed_at)` updates Zustand store
+9. **Post-finalization lockdown:**
+   - All clinical fields (vitals, refractions, exam findings, diagnoses) become **read-only**
+   - AI Scribe widget replaced with read-only saved summary (sans-serif prose, not monospace)
+   - Banner displays: **"Signed and finalized by Dr. Sarah Lin, OD on Mar 4, 2026"**
+   - Navigation links appear: **"Back to Patient"** and **"Schedule"**
 
-### 1.6 Immutability Guarantees
+### 1.6 Dirty State Guard & Auto-Save
+
+ClarityOS protects in-progress clinical work from accidental data loss via two mechanisms on the AI Scribe transcript:
+
+**Exit Guard (`beforeunload`):**
+
+The `AiScribeWidget` component registers a `beforeunload` event listener on the browser `window`. When the transcript contains unsaved text and the encounter is not finalized, the browser displays a native confirmation dialog on tab close, refresh, or navigation away.
+
+```typescript
+const isDirty = transcript.trim().length > 0 && !isFinalized;
+// Registered from child component — attaches to global window
+window.addEventListener("beforeunload", handleBeforeUnload);
+```
+
+**localStorage Auto-Save:**
+
+The transcript is continuously synced to `localStorage` keyed by encounter ID. On component mount, any existing draft is recovered automatically.
+
+| Event | Action | Key |
+|-------|--------|-----|
+| Keystroke (non-empty) | `localStorage.setItem(key, transcript)` | `draft-transcript-${encounterId}` |
+| Keystroke (empty) | `localStorage.removeItem(key)` | Prevents stale draft recovery |
+| Component mount | Recover saved draft if present | Auto-restore on refresh/crash |
+| Encounter finalized | `isDirty` forced `false` | Guard deactivates |
+
+**Performance constraint:** All state is scoped to `AiScribeWidget`. The parent `EncounterPage` does not re-render on keystrokes — heavy clinical grids (vitals, refractions, exam findings) are unaffected.
+
+**File:** `app/(tenant)/[tenantId]/encounter/[encounterId]/page.tsx` — `AiScribeWidget` (lines 130–175)
+
+### 1.7 Immutability Guarantees
 
 - **Backend:** Every `PATCH /encounters/{id}` checks `is_finalized` and returns `409 Conflict` if locked
 - **Backend:** Every sub-resource mutation (vitals, refractions, diagnoses, exam findings) checks parent encounter finalization
 - **Frontend:** All form components accept `isReadOnly` prop, derived from `encounterState.isFinalized`
 - **Database:** `SoftDeleteMixin` ensures no clinical record is ever hard-deleted — `is_deleted` flag + `deleted_at` timestamp preserve full history
 
-### 1.7 Timestamp Integrity
+### 1.8 Timestamp Integrity
 
 All timestamps use PostgreSQL `server_default=func.now()` — the database server clock is the source of truth, not the application layer. This prevents clock-skew attacks or client-side timestamp manipulation.
 
@@ -478,3 +518,11 @@ patient_problems         — master problem list (longitudinal, per patient)
 | `POST` | `/patients/{id}/problems` | Add problem to MPPL |
 | `PATCH` | `/patients/{id}/problems/{problem_id}` | Update problem |
 | `DELETE` | `/patients/{id}/problems/{problem_id}` | Soft-delete problem |
+| `POST` | `/encounters/{id}/ai-scribe` | Stream AI SOAP note + structured JSON (SSE) |
+| `POST` | `/encounters/{id}/ai-scribe/accept` | Log AI autofill acceptance with diff |
+| `GET` | `/encounters/{id}/audit-logs` | Encounter-level audit trail |
+| `GET` | `/audit-logs` | Tenant-wide audit logs (paginated, filterable) |
+| `GET` | `/audit-logs/export` | CSV export of audit logs |
+| `GET` | `/staff` | List clinic staff (admin/owner) |
+| `POST` | `/staff` | Create staff member |
+| `PATCH` | `/staff/{id}` | Update staff role/profile |

@@ -55,6 +55,6 @@ export const useTenantCustomizationStore = create<TenantCustomizationState>()(
       }),
       { name: "clarity-tenant-customization" }
     ),
-    { name: "OptometryERP/TenantCustomization" }
+    { name: "ClarityOS/TenantCustomization" }
   )
 );

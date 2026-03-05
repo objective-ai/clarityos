@@ -5,6 +5,7 @@ export interface MockAppointment {
   patient: string;
   patientId: string;
   type: string;
+  reason?: string; // Chief Complaint
   status: "completed" | "in_progress" | "scheduled";
   provider: string;
 }
@@ -65,7 +66,7 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   { id: "apt-107", date: "2026-03-02", time: "3:30 PM", patient: "David Brown", patientId: "pat-006", type: "Retinal Photo Review", status: "completed", provider: "Dr. Morgan" },
 
   // ── Tuesday 2026-03-03 (10 appts) ──
-  { id: "apt-110", date: "2026-03-03", time: "8:00 AM", patient: "Margaret Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-110", date: "2026-03-03", time: "8:00 AM", patient: "Linda Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
   { id: "apt-111", date: "2026-03-03", time: "8:30 AM", patient: "Michael Torres", patientId: "pat-008", type: "Contact Lens Follow-up", status: "completed", provider: "Dr. Morgan" },
   { id: "apt-112", date: "2026-03-03", time: "9:15 AM", patient: "James Wilson", patientId: "pat-004", type: "Diabetic Eye Exam", status: "completed", provider: "Dr. Morgan" },
   { id: "apt-113", date: "2026-03-03", time: "10:00 AM", patient: "Lisa Park", patientId: "pat-005", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
@@ -76,21 +77,26 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   { id: "apt-118", date: "2026-03-03", time: "3:00 PM", patient: "Sarah Johnson", patientId: "pat-003", type: "Post-Op Check", status: "completed", provider: "Dr. Morgan" },
   { id: "apt-119", date: "2026-03-03", time: "4:00 PM", patient: "Karen White", patientId: "pat-009", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
 
-  // ── Wednesday 2026-03-04 — TODAY (11 appts) ──
-  { id: "apt-001", date: "2026-03-04", time: "8:00 AM", patient: "James Wilson", patientId: "pat-004", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
-  { id: "apt-002", date: "2026-03-04", time: "9:00 AM", patient: "Lisa Park", patientId: "pat-005", type: "Contact Lens Follow-up", status: "completed", provider: "Dr. Morgan" },
-  { id: "apt-003", date: "2026-03-04", time: "9:30 AM", patient: "David Brown", patientId: "pat-006", type: "Glaucoma Check", status: "completed", provider: "Dr. Morgan" },
-  { id: "apt-004", date: "2026-03-04", time: "10:15 AM", patient: "Emily Davis", patientId: "pat-007", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
-  { id: "apt-005", date: "2026-03-04", time: "11:00 AM", patient: "Robert Kim", patientId: "pat-002", type: "Comprehensive Eye Exam", status: "completed", provider: "Dr. Morgan" },
-  { id: "apt-006", date: "2026-03-04", time: "11:30 AM", patient: "Anna Lopez", patientId: "pat-010", type: "Dry Eye Evaluation", status: "completed", provider: "Dr. Morgan" },
-  { id: "apt-007", date: "2026-03-04", time: "1:15 PM", patient: "Margaret Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "in_progress", provider: "Dr. Morgan" },
-  { id: "apt-008", date: "2026-03-04", time: "2:30 PM", patient: "Robert Kim", patientId: "pat-002", type: "Retinal Photo Review", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-009", date: "2026-03-04", time: "3:00 PM", patient: "Sarah Johnson", patientId: "pat-003", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-010", date: "2026-03-04", time: "3:45 PM", patient: "Michael Torres", patientId: "pat-008", type: "Contact Lens Fitting", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-011", date: "2026-03-04", time: "4:30 PM", patient: "Karen White", patientId: "pat-009", type: "Post-Op Check", status: "scheduled", provider: "Dr. Morgan" },
+  // ── Wednesday 2026-03-04 — TODAY (11 regular + 3 clinical demo personas) ──
+  // Clinical demo personas — use encounter IDs as appointment IDs so
+  // getPatientIdForAppointment resolves the patient as a fallback.
+  { id: "enc-P01", date: "2026-03-04", time: "1:00 PM", patient: "Margaret Chen (demo)", patientId: "pat-101", type: "Comprehensive Eye Exam", status: "in_progress", provider: "Dr. Morgan" },
+  { id: "enc-P02", date: "2026-03-04", time: "2:00 PM", patient: "James Wilson (demo)", patientId: "pat-102", type: "Glaucoma Follow-Up", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "enc-P03", date: "2026-03-04", time: "3:00 PM", patient: "Elena Rodriguez (demo)", patientId: "pat-103", type: "Urgent: Red Eye OD", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-001", date: "2026-03-04", time: "8:00 AM", patient: "James Wilson", patientId: "pat-004", type: "Comprehensive Eye Exam", reason: "Annual eye exam, mild blur at distance", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-002", date: "2026-03-04", time: "9:00 AM", patient: "Lisa Park", patientId: "pat-005", type: "Contact Lens Follow-up", reason: "Lens discomfort, end-of-day dryness", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-003", date: "2026-03-04", time: "9:30 AM", patient: "David Brown", patientId: "pat-006", type: "Glaucoma Check", reason: "Routine IOP monitoring", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-004", date: "2026-03-04", time: "10:15 AM", patient: "Emily Davis", patientId: "pat-007", type: "Comprehensive Eye Exam", reason: "Difficulty reading fine print", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-005", date: "2026-03-04", time: "11:00 AM", patient: "Robert Kim", patientId: "pat-002", type: "Comprehensive Eye Exam", reason: "Annual exam, new glasses needed", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-006", date: "2026-03-04", time: "11:30 AM", patient: "Anna Lopez", patientId: "pat-010", type: "Dry Eye Evaluation", reason: "Persistent gritty sensation both eyes", status: "completed", provider: "Dr. Morgan" },
+  { id: "apt-007", date: "2026-03-04", time: "1:15 PM", patient: "Linda Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", reason: "Blurry vision, headaches after screen time", status: "in_progress", provider: "Dr. Morgan" },
+  { id: "apt-008", date: "2026-03-04", time: "2:30 PM", patient: "Robert Kim", patientId: "pat-002", type: "Retinal Photo Review", reason: "Follow-up diabetic retinopathy screening", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-009", date: "2026-03-04", time: "3:00 PM", patient: "Sarah Johnson", patientId: "pat-003", type: "Comprehensive Eye Exam", reason: "Red eye, light sensitivity since yesterday", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-010", date: "2026-03-04", time: "3:45 PM", patient: "Michael Torres", patientId: "pat-008", type: "Contact Lens Fitting", reason: "First-time contact lens wearer", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-011", date: "2026-03-04", time: "4:30 PM", patient: "Karen White", patientId: "pat-009", type: "Post-Op Check", reason: "2-week post cataract surgery check", status: "scheduled", provider: "Dr. Morgan" },
 
   // ── Thursday 2026-03-05 (9 appts) ──
-  { id: "apt-120", date: "2026-03-05", time: "8:00 AM", patient: "Margaret Chen", patientId: "pat-001", type: "Glaucoma Follow-up", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-120", date: "2026-03-05", time: "8:00 AM", patient: "Linda Chen", patientId: "pat-001", type: "Glaucoma Follow-up", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-121", date: "2026-03-05", time: "8:45 AM", patient: "Anna Lopez", patientId: "pat-010", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-122", date: "2026-03-05", time: "9:30 AM", patient: "Michael Torres", patientId: "pat-008", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-123", date: "2026-03-05", time: "10:15 AM", patient: "Karen White", patientId: "pat-009", type: "Dry Eye Evaluation", status: "scheduled", provider: "Dr. Morgan" },
@@ -103,7 +109,7 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   // ── Friday 2026-03-06 (10 appts) ──
   { id: "apt-130", date: "2026-03-06", time: "8:00 AM", patient: "Sarah Johnson", patientId: "pat-003", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-131", date: "2026-03-06", time: "8:45 AM", patient: "David Brown", patientId: "pat-006", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-132", date: "2026-03-06", time: "9:30 AM", patient: "Margaret Chen", patientId: "pat-001", type: "Contact Lens Follow-up", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-132", date: "2026-03-06", time: "9:30 AM", patient: "Linda Chen", patientId: "pat-001", type: "Contact Lens Follow-up", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-133", date: "2026-03-06", time: "10:15 AM", patient: "Robert Kim", patientId: "pat-002", type: "Diabetic Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-134", date: "2026-03-06", time: "11:00 AM", patient: "Emily Davis", patientId: "pat-007", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-135", date: "2026-03-06", time: "11:45 AM", patient: "Karen White", patientId: "pat-009", type: "Glaucoma Check", status: "scheduled", provider: "Dr. Morgan" },
@@ -123,7 +129,7 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   { id: "apt-150", date: "2026-03-09", time: "8:00 AM", patient: "Emily Davis", patientId: "pat-007", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-151", date: "2026-03-09", time: "9:00 AM", patient: "James Wilson", patientId: "pat-004", type: "Contact Lens Follow-up", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-152", date: "2026-03-09", time: "9:45 AM", patient: "Karen White", patientId: "pat-009", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-153", date: "2026-03-09", time: "10:30 AM", patient: "Margaret Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-153", date: "2026-03-09", time: "10:30 AM", patient: "Linda Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-154", date: "2026-03-09", time: "11:15 AM", patient: "Sarah Johnson", patientId: "pat-003", type: "Dry Eye Evaluation", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-155", date: "2026-03-09", time: "1:00 PM", patient: "David Brown", patientId: "pat-006", type: "Glaucoma Check", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-156", date: "2026-03-09", time: "2:00 PM", patient: "Anna Lopez", patientId: "pat-010", type: "Contact Lens Fitting", status: "scheduled", provider: "Dr. Morgan" },
@@ -135,7 +141,7 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   { id: "apt-161", date: "2026-03-10", time: "9:00 AM", patient: "David Brown", patientId: "pat-006", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-162", date: "2026-03-10", time: "10:00 AM", patient: "Emily Davis", patientId: "pat-007", type: "Post-Op Check", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-163", date: "2026-03-10", time: "10:45 AM", patient: "Karen White", patientId: "pat-009", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-164", date: "2026-03-10", time: "11:30 AM", patient: "Margaret Chen", patientId: "pat-001", type: "Dry Eye Evaluation", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-164", date: "2026-03-10", time: "11:30 AM", patient: "Linda Chen", patientId: "pat-001", type: "Dry Eye Evaluation", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-165", date: "2026-03-10", time: "1:00 PM", patient: "James Wilson", patientId: "pat-004", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-166", date: "2026-03-10", time: "2:30 PM", patient: "Sarah Johnson", patientId: "pat-003", type: "Contact Lens Fitting", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-167", date: "2026-03-10", time: "3:30 PM", patient: "Michael Torres", patientId: "pat-008", type: "Glaucoma Check", status: "scheduled", provider: "Dr. Morgan" },
@@ -146,7 +152,7 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   { id: "apt-172", date: "2026-03-11", time: "9:30 AM", patient: "Lisa Park", patientId: "pat-005", type: "Dry Eye Evaluation", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-173", date: "2026-03-11", time: "10:15 AM", patient: "Karen White", patientId: "pat-009", type: "Contact Lens Follow-up", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-174", date: "2026-03-11", time: "11:00 AM", patient: "James Wilson", patientId: "pat-004", type: "Diabetic Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
-  { id: "apt-175", date: "2026-03-11", time: "1:00 PM", patient: "Margaret Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-175", date: "2026-03-11", time: "1:00 PM", patient: "Linda Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-176", date: "2026-03-11", time: "2:00 PM", patient: "David Brown", patientId: "pat-006", type: "Retinal Photo Review", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-177", date: "2026-03-11", time: "3:00 PM", patient: "Emily Davis", patientId: "pat-007", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-178", date: "2026-03-11", time: "3:45 PM", patient: "Sarah Johnson", patientId: "pat-003", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
@@ -162,7 +168,7 @@ export const MOCK_APPOINTMENTS: MockAppointment[] = [
   { id: "apt-186", date: "2026-03-12", time: "3:30 PM", patient: "Emily Davis", patientId: "pat-007", type: "Contact Lens Follow-up", status: "scheduled", provider: "Dr. Morgan" },
 
   // ── Friday 2026-03-13 (8 appts) ──
-  { id: "apt-190", date: "2026-03-13", time: "8:00 AM", patient: "Margaret Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
+  { id: "apt-190", date: "2026-03-13", time: "8:00 AM", patient: "Linda Chen", patientId: "pat-001", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-191", date: "2026-03-13", time: "9:00 AM", patient: "Michael Torres", patientId: "pat-008", type: "Comprehensive Eye Exam", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-192", date: "2026-03-13", time: "10:00 AM", patient: "Sarah Johnson", patientId: "pat-003", type: "Glaucoma Check", status: "scheduled", provider: "Dr. Morgan" },
   { id: "apt-193", date: "2026-03-13", time: "10:45 AM", patient: "Anna Lopez", patientId: "pat-010", type: "Dry Eye Evaluation", status: "scheduled", provider: "Dr. Morgan" },

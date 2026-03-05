@@ -1,4 +1,4 @@
-# ClarityOS ERP — Design Template
+# ClarityOS EHR — Design Template
 
 > Quick-reference for building new pages and components. See `BRAND_GUIDELINES.md` for the full system.
 

@@ -321,7 +321,7 @@ export const useDiagnosisStore = create<DiagnosisStore>()(
         );
       },
     })),
-    { name: "OptometryERP/Diagnoses" },
+    { name: "ClarityOS/Diagnoses" },
   ),
 );
 

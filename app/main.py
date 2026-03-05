@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import diagnosis, encounter, exam_findings, patient_problem, promotion, refraction, staff, vitals
+from app.api.routes import ai_scribe, audit, diagnosis, encounter, exam_findings, patient_problem, promotion, refraction, staff, vitals
 from app.core.config import settings
 
 app = FastAPI(
-    title="Clarity Optometry EHR API",
+    title="ClarityOS API",
     description="Multi-tenant clinical backend — Supabase Postgres + Auth",
     version="0.1.0",
 )
@@ -20,6 +20,11 @@ app.add_middleware(
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────
+app.include_router(
+    ai_scribe.router,
+    prefix="/api/encounters",
+    tags=["AI Scribe"],
+)
 app.include_router(
     encounter.router,
     prefix="/api/encounters",
@@ -60,8 +65,13 @@ app.include_router(
     prefix="/api/staff",
     tags=["Staff"],
 )
+app.include_router(
+    audit.router,
+    prefix="/api",
+    tags=["Audit Logs"],
+)
 
 
 @app.get("/")
 async def root():
-    return {"status": "Clarity EHR API is online", "version": "0.1.0"}
+    return {"status": "ClarityOS API is online", "version": "0.1.0"}

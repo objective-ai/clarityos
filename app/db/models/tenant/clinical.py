@@ -113,6 +113,10 @@ class AuditAction(str, enum.Enum):
     DELETE = "delete"
     FINALIZE = "finalize"
     PROMOTE = "promote"
+    AI_SCRIBE_GENERATED = "ai_scribe_generated"
+    AI_SCRIBE_AUTOFILL = "ai_scribe_autofill"
+    MANUAL_EDIT = "manual_edit"
+    PHI_VIEWED = "phi_viewed"
 
 
 # ---------------------------------------------------------------------------
@@ -801,6 +805,10 @@ class AuditLog(TenantBase):
         UUID(as_uuid=True), nullable=True
     )
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    changes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    metadata_: Mapped[dict | None] = mapped_column(
+        "metadata", JSONB, nullable=True
+    )
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
     # When (server-side, immutable)

@@ -3,7 +3,7 @@ import type { PatientDetail, PastEncounter } from "@/types/patient";
 const PATIENTS: PatientDetail[] = [
   {
     id: "pat-001",
-    firstName: "Margaret",
+    firstName: "Linda",
     lastName: "Chen",
     dob: "1958-03-12",
     sex: "F",
@@ -119,6 +119,47 @@ const PATIENTS: PatientDetail[] = [
     alerts: [],
     insurance: { provider: "Blue Cross", memberId: "BC-445102", group: "GRP-2200" },
   },
+  // ── Clinical demo personas ──────────────────────────────────────────────
+  {
+    id: "pat-101",
+    firstName: "Margaret",
+    lastName: "Chen",
+    dob: "1998-06-15",
+    sex: "F",
+    phone: "(415) 555-0101",
+    email: "margaret.chen@email.com",
+    alerts: [{ id: "p101-a1", severity: "info", label: "Daily contact lens wearer" }],
+    insurance: { provider: "VSP Vision", memberId: "VSP-101001", group: "GRP-TECH" },
+  },
+  {
+    id: "pat-102",
+    firstName: "James",
+    lastName: "Wilson",
+    dob: "1957-11-22",
+    sex: "M",
+    phone: "(415) 555-0102",
+    email: "james.wilson@email.com",
+    alerts: [
+      { id: "p102-a1", severity: "warning", label: "Glaucoma Suspect" },
+      { id: "p102-a2", severity: "warning", label: "Latanoprost QHS \u2014 verify compliance" },
+      { id: "p102-a3", severity: "info", label: "Dilated last visit" },
+    ],
+    insurance: { provider: "Medicare", memberId: "MED-102001" },
+    emergencyContact: { name: "Patricia Wilson", phone: "(415) 555-0199", relation: "Spouse" },
+  },
+  {
+    id: "pat-103",
+    firstName: "Elena",
+    lastName: "Rodriguez",
+    dob: "1983-09-08",
+    sex: "F",
+    phone: "(415) 555-0103",
+    email: "elena.rodriguez@email.com",
+    alerts: [
+      { id: "p103-a1", severity: "critical", label: "Acute Pain \u2014 Right Eye" },
+      { id: "p103-a2", severity: "warning", label: "Red Eye OD \u2014 Rule out ulcer" },
+    ],
+  },
 ];
 
 const ENCOUNTERS: Record<string, PastEncounter[]> = {
@@ -220,6 +261,56 @@ const ENCOUNTERS: Record<string, PastEncounter[]> = {
       chiefComplaint: "AMD follow-up, vision changes",
       diagnoses: ["H35.31 — Dry AMD, bilateral", "H52.4 — Presbyopia"],
       finalRx: { od: "+2.75 -1.25 x060", os: "+3.00 -1.00 x120" },
+    },
+  ],
+
+  // ── Clinical demo encounters ─────────────────────────────────────────────
+  "pat-101": [
+    {
+      id: "enc-P01",
+      date: "2026-03-04",
+      status: "pre_test",
+      provider: "Dr. Morgan",
+      chiefComplaint: "Annual comprehensive eye exam \u2014 contact lens prescription renewal.",
+      diagnoses: [],
+    },
+    {
+      id: "enc-P11",
+      date: "2025-03-10",
+      status: "finalized",
+      provider: "Dr. Morgan",
+      chiefComplaint: "Annual comprehensive eye exam",
+      diagnoses: ["H52.13 \u2014 Myopia, bilateral"],
+      finalRx: { od: "-3.50 sph", os: "-3.00 sph" },
+    },
+  ],
+  "pat-102": [
+    {
+      id: "enc-P02",
+      date: "2026-03-04",
+      status: "pre_test",
+      provider: "Dr. Morgan",
+      chiefComplaint: "Annual comprehensive exam \u2014 IOP monitoring.",
+      diagnoses: [],
+    },
+    {
+      id: "enc-P12",
+      date: "2025-03-01",
+      status: "finalized",
+      provider: "Dr. Morgan",
+      chiefComplaint: "Glaucoma suspect follow-up, IOP monitoring",
+      diagnoses: ["H40.009 \u2014 Glaucoma suspect, OU"],
+      finalRx: { od: "+1.50 -0.75 x030 / Add +2.50", os: "+1.75 -0.50 x150 / Add +2.50" },
+    },
+  ],
+  "pat-103": [
+    {
+      id: "enc-P03",
+      date: "2026-03-04",
+      status: "pre_test",
+      provider: "Dr. Morgan",
+      chiefComplaint: "Acute red eye and pain OD \u2014 new patient.",
+      diagnoses: [],
     },
   ],
 };

@@ -1,16 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { useAiScribe, type ScribeStructuredData } from "@/hooks/useAiScribe";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import type { EntitlementKey } from "@/types/session";
+import type { RowKey } from "@/types/refraction";
+import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/exam-findings";
+import type { EyeLaterality } from "@/types/diagnosis";
 import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
 import { useVitalsStore } from "@/store/vitalsStore";
+import { useExamFindingsStore } from "@/store/examFindingsStore";
+import { useDiagnosisStore } from "@/store/diagnosisStore";
+import { useRefractionStore } from "@/store/refractionStore";
 import { useCurrentUser } from "@/store/sessionStore";
 import { getPatientIdForEncounter } from "@/lib/mock-patient-data";
 import { getPatientIdForAppointment } from "@/lib/mock-schedule-data";
 import { PermissionGate } from "@/components/auth/PermissionGate";
+import { useSidebarCollapsed } from "@/contexts/SidebarContext";
+import { EncounterBottomTabs } from "@/components/encounter/EncounterBottomTabs";
+import { AuditTrailSidebar } from "@/components/encounter/AuditTrailSidebar";
+import { FinalizeModal } from "@/components/encounter/FinalizeModal";
 import { VitalsForm } from "@/components/encounter/VitalsForm";
 import { VitalsCard } from "@/components/encounter/VitalsCard";
 import { RefractionGrid } from "@/components/encounter/RefractionGrid";
@@ -18,8 +29,8 @@ import { ExamFindings } from "@/components/encounter/ExamFindings";
 import { ExamFindingsCard } from "@/components/encounter/ExamFindingsCard";
 import { DiagnosisPicker } from "@/components/encounter/DiagnosisPicker";
 import { ContinuitySidebar } from "@/components/encounter/ContinuitySidebar";
-import { DEMO_REFRACTIONS } from "@/lib/mock-refraction-data";
-import { DEMO_VITALS } from "@/lib/mock-vitals-data";
+import { getInitialStoreState } from "@/lib/mock/personas";
+import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,
   CardHeader,
@@ -102,35 +113,220 @@ function UpsellModal({ feature, onClose }: UpsellModalProps) {
 }
 
 // ---------------------------------------------------------------------------
-// AI Scribe Widget
+// AI Scribe Widget — Ambient Data-Entry Scribe
 // ---------------------------------------------------------------------------
 
-function AiScribeWidget() {
+// Refraction field mapping: AI JSON key → RowKey (includes eye prefix)
+const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
+  sphere:   { od: "od_sphere",   os: "os_sphere" },
+  cylinder: { od: "od_cylinder", os: "os_cylinder" },
+  axis:     { od: "od_axis",     os: "os_axis" },
+  add:      { od: "od_add",      os: "os_add" },
+};
+
+// Final Rx column index in the refraction grid
+const FINAL_RX_COL = 3;
+
+function AiScribeWidget({ encounterId }: { encounterId: string }) {
   const { has } = useEntitlements();
   const hasAiScribe = has(Entitlement.AI_SCRIBE);
   const [showUpsell, setShowUpsell] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generated, setGenerated] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const [accepted, setAccepted] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
-  const handleGenerate = () => {
+  const isFinalized = useEncounterStore(
+    (s) => s.encounters[encounterId]?.isFinalized ?? false
+  );
+
+  // --- Dirty State Guard ---------------------------------------------------
+  const isDirty = transcript.trim().length > 0 && !isFinalized;
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  // --- localStorage Auto-Save ----------------------------------------------
+  const storageKey = `draft-transcript-${encounterId}`;
+
+  // Save or clear draft as they type
+  useEffect(() => {
+    if (transcript.trim().length > 0) {
+      localStorage.setItem(storageKey, transcript);
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  }, [transcript, storageKey]);
+
+  // Recover draft on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved && !transcript) {
+      setTranscript(saved);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { generate, soapText, structuredData, isStreaming, isDone, error, reset } =
+    useAiScribe(encounterId);
+
+  // Store actions for Accept dispatch
+  const setChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
+  const setAiSummary = useEncounterStore((s) => s.setAiSummary);
+  const aiSummaryText = useEncounterStore((s) => s.encounters[encounterId]?.aiSummaryText);
+  const setVitalsField = useVitalsStore((s) => s.setField);
+  const setStructureField = useExamFindingsStore((s) => s.setStructureField);
+  const addDiagnosis = useDiagnosisStore((s) => s.addDiagnosis);
+  const setCellValue = useRefractionStore((s) => s.setCellValue);
+
+  const handleGenerate = useCallback(() => {
     if (!hasAiScribe) {
       setShowUpsell(true);
       return;
     }
-    setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      setGenerated(
-        "SUBJECTIVE: Patient presents for comprehensive eye examination. Chief complaint: blurred vision at distance. " +
-        "Denies diplopia, pain, or flashes.\n\n" +
-        "OBJECTIVE: IOP OD 23 mmHg (elevated), OS 18 mmHg. UCVA 20/200 OD, 20/100 OS. " +
-        "BCVA 20/25 OD, 20/20 OS with manifest refraction.\n\n" +
-        "ASSESSMENT: Myopia, progressive (H52.13). Elevated IOP OD \u2014 glaucoma suspect (H40.001). " +
-        "Recommend OCT optic nerve and visual fields.\n\n" +
-        "PLAN: Updated spectacle prescription dispensed. Refer for glaucoma workup. Follow-up 6 months."
-      );
-    }, 2500);
-  };
+    if (!transcript.trim()) return;
+    setAccepted(false);
+    generate(transcript);
+  }, [hasAiScribe, transcript, generate]);
+
+  const handleAccept = useCallback(() => {
+    try {
+      if (!structuredData) throw new Error("No structured data available.");
+      const data = structuredData;
+      setAcceptError(null);
+
+      // ── Snapshot before/after diff for audit trail ──────────────
+      const diff: Record<string, { old: unknown; new: unknown }> = {};
+
+      // 1. Chief complaint — safe append with pipe separator
+      if (data.chief_complaint) {
+        const existing = useEncounterStore.getState().encounters[encounterId]?.chiefComplaint ?? "";
+        diff["chief_complaint"] = { old: existing, new: data.chief_complaint };
+        const updated = existing.trim() ? `${existing} | ${data.chief_complaint}` : data.chief_complaint;
+        setChiefComplaint(encounterId, updated);
+      }
+
+      // 2. Vitals — skip nulls to avoid overwriting existing values
+      if (data.vitals) {
+        const vitalsDraft = useVitalsStore.getState().encounters[encounterId]?.draft;
+        for (const [field, value] of Object.entries(data.vitals)) {
+          if (value != null) {
+            const oldVal = vitalsDraft?.[field as keyof typeof vitalsDraft] ?? null;
+            diff[`vitals.${field}`] = { old: oldVal, new: value };
+            setVitalsField(encounterId, field as keyof ScribeStructuredData["vitals"] & string, value);
+          }
+        }
+      }
+
+      // 3. Exam findings — dispatch per eye/structure/field
+      if (data.exam_findings) {
+        for (const [section, eyes] of Object.entries(data.exam_findings)) {
+          if (!eyes) continue;
+          for (const [eye, structures] of Object.entries(eyes)) {
+            if (!structures) continue;
+            const eyeLower = eye.toLowerCase() as "od" | "os";
+            const findingsKey = `${encounterId}:${section}` as FindingsStoreKey;
+            const sectionState = useExamFindingsStore.getState().findings[findingsKey];
+            const eyeFindings = eyeLower === "od" ? sectionState?.draft.findings_od : sectionState?.draft.findings_os;
+
+            for (const [structure, fields] of Object.entries(structures)) {
+              if (!fields) continue;
+              const aiFields = fields as Record<string, string | null>;
+              const existing = eyeFindings?.[structure];
+
+              if (aiFields.status != null) {
+                diff[`exam.${section}.${eyeLower}.${structure}.status`] = {
+                  old: existing?.status ?? null, new: aiFields.status,
+                };
+                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "status", aiFields.status);
+              }
+              if (aiFields.notes != null) {
+                diff[`exam.${section}.${eyeLower}.${structure}.finding`] = {
+                  old: existing?.finding ?? null, new: aiFields.notes,
+                };
+                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "finding", aiFields.notes);
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Diagnoses
+      if (data.diagnoses) {
+        for (let i = 0; i < data.diagnoses.length; i++) {
+          const dx = data.diagnoses[i];
+          diff[`diagnoses.${i}`] = {
+            old: null,
+            new: { icdCode: dx.icdCode, description: dx.description, laterality: dx.laterality },
+          };
+          addDiagnosis(encounterId, {
+            icd10_code: dx.icdCode,
+            description: dx.description,
+            eye_affected: (dx.laterality as EyeLaterality) ?? null,
+          });
+        }
+      }
+
+      // 5. Refraction — map to Final Rx column (index 3), with eye-prefixed RowKeys
+      if (data.refraction) {
+        const rxDraft = useRefractionStore.getState().columns[FINAL_RX_COL]?.draft;
+        for (const [eye, rx] of Object.entries(data.refraction)) {
+          if (!rx) continue;
+          for (const [field, value] of Object.entries(rx as Record<string, string>)) {
+            const mapping = RX_FIELD_TO_ROW[field];
+            if (!mapping || value == null) continue;
+            const rowKey = eye === "OD" ? mapping.od : mapping.os;
+            const eyeKey = eye.toLowerCase() as "od" | "os";
+            const oldVal = rxDraft?.[eyeKey]?.[field as keyof (typeof rxDraft)["od"]] ?? null;
+            diff[`refraction.${eye}.${field}`] = { old: oldVal, new: value };
+            setCellValue(FINAL_RX_COL, rowKey, value);
+          }
+        }
+      }
+
+      // 6. Save SOAP narrative to encounter store
+      if (soapText) {
+        setAiSummary(encounterId, soapText);
+      }
+
+      setAccepted(true);
+
+      // Fire-and-forget audit log with before/after diff
+      fetch(`/api/encounters/${encounterId}/ai-scribe/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes: diff }),
+      }).catch((e) => console.error("Audit log failed:", e));
+    } catch (err) {
+      console.error("AI Accept Error:", err);
+      // Fallback: save SOAP text so clinical data isn't lost
+      if (soapText) {
+        setAiSummary(encounterId, soapText);
+      }
+      setAcceptError("Failed to auto-fill grids. The SOAP note has been saved for manual review.");
+    }
+  }, [
+    structuredData, soapText, encounterId,
+    setChiefComplaint, setAiSummary, setVitalsField,
+    setStructureField, addDiagnosis, setCellValue,
+  ]);
+
+  const handleClearAndEdit = useCallback(() => {
+    reset();
+    setAiSummary(encounterId, "");
+    setAccepted(false);
+    setAcceptError(null);
+  }, [reset, encounterId, setAiSummary]);
+
+  // Show saved summary if already accepted in a previous session
+  const savedSummary = !soapText && !isStreaming && aiSummaryText;
 
   return (
     <>
@@ -139,7 +335,9 @@ function AiScribeWidget() {
           <div>
             <CardTitle>AI Scribe</CardTitle>
             <CardDescription>
-              {hasAiScribe ? "Generate SOAP note from encounter data" : "Premium feature \u2014 upgrade to unlock"}
+              {hasAiScribe
+                ? "Paste or dictate a transcript to auto-fill encounter fields"
+                : "Premium feature \u2014 upgrade to unlock"}
             </CardDescription>
           </div>
           <Badge variant={hasAiScribe ? "default" : "outline"}>
@@ -147,70 +345,121 @@ function AiScribeWidget() {
           </Badge>
         </CardHeader>
         <CardContent>
-          {!generated ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-4">
-              <div
-                className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${
-                  hasAiScribe
-                    ? "bg-[var(--accent-dim)] border-[var(--mono-border)]"
-                    : "bg-[var(--bg-elevated)] border-[var(--border-subtle)]"
-                }`}
-              >
-                {isGenerating ? (
-                  <div className="w-6 h-6 rounded-full border-2 animate-spin-arc border-[var(--accent)] border-t-transparent" />
-                ) : (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <path
-                      d="M11 3L13 8.5H18.5L14 11.8L16 17.5L11 14L6 17.5L8 11.8L3.5 8.5H9L11 3Z"
-                      stroke={hasAiScribe ? "var(--accent)" : "var(--text-muted)"}
-                      strokeWidth="1.4"
-                      strokeLinejoin="round"
-                    />
+          {/* Saved summary from previous accept */}
+          {savedSummary ? (
+            <div>
+              <pre className="text-xs leading-relaxed whitespace-pre-wrap p-5 rounded-xl font-mono bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
+                {aiSummaryText}
+              </pre>
+              <div className="flex items-center gap-2 mt-3">
+                <Badge variant="secondary" className="gap-1">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="opacity-70">
+                    <path d="M2 5.5l2 2 4-4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                )}
+                  Accepted
+                </Badge>
+                <button
+                  onClick={handleClearAndEdit}
+                  title="Clears the generated note so you can edit your transcript and try again."
+                  className="text-xs px-3 py-1.5 rounded-xl font-medium text-[var(--text-muted)] border border-[var(--border-subtle)] hover-btn"
+                >
+                  Clear &amp; Edit
+                </button>
+              </div>
+            </div>
+          ) : !soapText && !isStreaming ? (
+            /* Initial state — transcript input */
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="ai-transcript" className="text-overline">
+                  Clinical Transcript
+                </label>
+                <textarea
+                  id="ai-transcript"
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  rows={4}
+                  placeholder="Paste or dictate the clinical transcript here…"
+                  className="w-full px-4 py-3 rounded-xl text-sm resize-y min-h-[6rem] glass-input placeholder:text-[var(--text-muted)]"
+                />
               </div>
 
-              <div className="text-center">
-                <p className="text-subhead mb-1">
-                  {isGenerating ? "Generating SOAP note…" : "Generate AI Visit Summary"}
-                </p>
-                <p className="text-caption text-[var(--text-muted)]">
-                  {isGenerating
-                    ? "Analyzing vitals, refractions, and findings…"
-                    : hasAiScribe
-                    ? "Analyzes the full encounter and writes structured clinical notes"
-                    : "Saves 12\u201315 minutes of documentation time per exam"}
-                </p>
-              </div>
+              {error && (
+                <div className="text-xs text-[var(--state-danger)] px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)]">
+                  {error}
+                </div>
+              )}
 
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating}
-                className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
+                disabled={isStreaming || !transcript.trim()}
+                className={`self-start px-6 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   hasAiScribe
                     ? "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
                     : "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] hover-btn"
                 }`}
               >
-                {hasAiScribe ? (isGenerating ? "Generating…" : "Generate Note") : "Upgrade to Unlock"}
+                {hasAiScribe ? "Generate Note" : "Upgrade to Unlock"}
               </button>
             </div>
           ) : (
+            /* Streaming / done state — show SOAP text */
             <div>
-              <pre className="text-xs leading-relaxed whitespace-pre-wrap p-5 rounded-xl font-mono bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
-                {generated}
+              <pre className="text-xs leading-relaxed whitespace-pre-wrap p-5 rounded-xl font-mono bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)] min-h-[120px]">
+                {soapText}
+                {isStreaming && (
+                  <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 animate-pulse bg-[var(--accent)]" />
+                )}
               </pre>
-              <div className="flex items-center gap-2 mt-4">
-                <button className="text-xs px-4 py-2 rounded-xl font-medium bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)] hover:bg-[var(--accent-strong)] transition-all">
-                  {"\u2713"} Accept note
-                </button>
-                <button
-                  onClick={() => setGenerated(null)}
-                  className="text-xs px-4 py-2 rounded-xl font-medium text-[var(--text-muted)] border border-[var(--border-subtle)] hover-btn"
-                >
-                  Regenerate
-                </button>
-              </div>
+
+              {isDone && !accepted && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleAccept}
+                      disabled={!structuredData}
+                      className="text-xs px-4 py-2 rounded-xl font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {"\u2713"} Accept &amp; Auto-Fill
+                    </button>
+                    <button
+                      onClick={handleClearAndEdit}
+                      title="Clears the generated note so you can edit your transcript and try again."
+                      className="text-xs px-4 py-2 rounded-xl font-medium text-[var(--text-muted)] border border-[var(--border-subtle)] hover-btn"
+                    >
+                      Clear &amp; Edit
+                    </button>
+                  </div>
+                  {acceptError && (
+                    <p className="text-xs text-[var(--state-critical)]">{acceptError}</p>
+                  )}
+                </div>
+              )}
+
+              {accepted && (
+                <div className="flex items-center gap-2 mt-4">
+                  <Badge variant="secondary" className="gap-1">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="opacity-70">
+                      <path d="M2 5.5l2 2 4-4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Fields auto-filled
+                  </Badge>
+                  <button
+                    onClick={handleClearAndEdit}
+                    title="Clears the generated note so you can edit your transcript and try again."
+                    className="text-xs px-3 py-1.5 rounded-xl font-medium text-[var(--text-secondary)] border border-[var(--glass-border)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)] hover-btn transition-colors"
+                  >
+                    Clear &amp; Edit
+                  </button>
+                </div>
+              )}
+
+              {isStreaming && (
+                <div className="flex items-center gap-2 mt-3 text-[11px] text-[var(--text-muted)]">
+                  <div className="w-3 h-3 rounded-full border-2 animate-spin border-[var(--accent)] border-t-transparent" />
+                  Generating SOAP note&hellip;
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -230,18 +479,6 @@ function AiScribeWidget() {
 // Encounter Workflow Header
 // ---------------------------------------------------------------------------
 
-const STATUS_STEPS: { key: EncounterStatus; label: string }[] = [
-  { key: "pre_test", label: "Pre-Test" },
-  { key: "in_exam", label: "In Exam" },
-  { key: "finalized", label: "Finalized" },
-];
-
-const STATUS_ORDER: Record<EncounterStatus, number> = {
-  pre_test: 0,
-  in_exam: 1,
-  finalized: 2,
-};
-
 interface EncounterWorkflowHeaderProps {
   encounterId: string;
   isReadOnly: boolean;
@@ -259,74 +496,32 @@ function EncounterWorkflowHeader({ encounterId, isReadOnly }: EncounterWorkflowH
     return () => clearTimeout(t);
   }, [draft, encounterId, isReadOnly, setChiefComplaint]);
 
-  const currentStep = STATUS_ORDER[encounterState?.status ?? "pre_test"];
-
-  const formattedDate = encounterState?.encounterDate
-    ? new Date(encounterState.encounterDate + "T00:00:00").toLocaleDateString("en-US", {
-        month: "short", day: "numeric", year: "numeric",
-      })
-    : "—";
+  // Sync draft when store changes externally (e.g., AI Scribe append)
+  useEffect(() => {
+    const storeValue = encounterState?.chiefComplaint ?? "";
+    if (storeValue !== draft) setDraft(storeValue);
+    // Only re-sync when the store value changes, not on draft changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encounterState?.chiefComplaint]);
 
   return (
     <Card>
       <CardContent className="p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-          {/* Chief Complaint */}
-          <div className="flex-1 flex flex-col gap-1.5">
-            <div className="text-overline">Chief Complaint</div>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => !isReadOnly && setChiefComplaint(encounterId, draft)}
-              readOnly={isReadOnly}
-              rows={2}
-              placeholder="Reason for visit…"
-              className={`w-full px-4 py-2.5 rounded-xl text-sm resize-none transition-colors ${
-                isReadOnly
-                  ? "bg-transparent border-transparent text-[var(--text-secondary)] cursor-default"
-                  : "glass-input"
-              }`}
-            />
-          </div>
-
-          {/* Right: stepper + provider */}
-          <div className="flex flex-col gap-3 sm:items-end">
-            {/* Status stepper */}
-            <div className="flex items-center gap-1">
-              {STATUS_STEPS.map((step, i) => {
-                const stepIndex = STATUS_ORDER[step.key];
-                const isActive = stepIndex === currentStep;
-                const isDone = stepIndex < currentStep;
-                return (
-                  <div key={step.key} className="flex items-center gap-1">
-                    {i > 0 && (
-                      <div
-                        className="w-6 h-px"
-                        style={{ background: isDone ? "var(--state-normal)" : "var(--border-default)" }}
-                      />
-                    )}
-                    <span
-                      className="px-2.5 py-1 rounded-lg text-xs font-medium border transition-all"
-                      style={
-                        isActive
-                          ? { background: "var(--accent-dim)", color: "var(--accent)", borderColor: "var(--accent)" }
-                          : isDone
-                          ? { background: "rgba(34,197,94,0.08)", color: "var(--state-normal)", borderColor: "rgba(34,197,94,0.2)" }
-                          : { background: "transparent", color: "var(--text-muted)", borderColor: "var(--border-subtle)" }
-                      }
-                    >
-                      {isDone ? "✓ " : ""}{step.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Provider + date */}
-            <div className="text-[11px] text-[var(--text-muted)] text-right">
-              {encounterState?.providerName ?? "—"} &middot; {formattedDate}
-            </div>
-          </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="text-overline">Chief Complaint</div>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => !isReadOnly && setChiefComplaint(encounterId, draft)}
+            readOnly={isReadOnly}
+            rows={3}
+            placeholder="Reason for visit…"
+            className={`w-full px-4 py-2.5 rounded-xl text-sm resize-none transition-colors ${
+              isReadOnly
+                ? "bg-transparent border-transparent text-[var(--text-secondary)] cursor-default"
+                : "glass-input"
+            }`}
+          />
         </div>
       </CardContent>
     </Card>
@@ -343,8 +538,14 @@ export default function EncounterPage({
   params: { tenantId: string; encounterId: string };
 }) {
   const { requireRole } = useEntitlements();
+  const sidebarCollapsed = useSidebarCollapsed();
   const initEncounter = useEncounterStore((s) => s.initEncounter);
+  const advanceStatus = useEncounterStore((s) => s.advanceStatus);
+  const unlockEncounter = useEncounterStore((s) => s.unlockEncounter);
   const initVitals = useVitalsStore((s) => s.init);
+  const initFindings = useExamFindingsStore((s) => s.init);
+  const initDiagnoses = useDiagnosisStore((s) => s.init);
+  const seedProblems = useProblemListStore((s) => s._seedProblems);
   const encounterState = useEncounterStore((s) => s.encounters[params.encounterId]);
   const isFinalized = encounterState?.isFinalized ?? false;
   const user = useCurrentUser();
@@ -356,25 +557,79 @@ export default function EncounterPage({
   // Role-based read-only: technicians + doctors + owners can edit clinical data
   const canEditClinical = requireRole("doctor", "technician", "owner");
   const clinicalReadOnly = isFinalized || !canEditClinical;
+  const canViewAudit = requireRole("admin", "owner");
+  const [auditOpen, setAuditOpen] = useState(false);
+  const finalizeModalOpen = useEncounterStore((s) => s.finalizeModalOpen);
+  const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
 
-  // Initialize encounter + vitals in store on mount
+  // Store setters for revert functionality
+  const revertChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
+  const revertVitalsField = useVitalsStore((s) => s.setField);
+  const revertStructureField = useExamFindingsStore((s) => s.setStructureField);
+  const revertCellValue = useRefractionStore((s) => s.setCellValue);
+
+  const handleRevertField = useCallback((field: string, oldValue: unknown) => {
+    const eid = params.encounterId;
+    if (field === "chief_complaint") {
+      revertChiefComplaint(eid, (oldValue as string) ?? "");
+    } else if (field.startsWith("vitals.")) {
+      const vitalField = field.replace("vitals.", "");
+      revertVitalsField(eid, vitalField as keyof ScribeStructuredData["vitals"] & string, oldValue);
+    } else if (field.startsWith("exam.")) {
+      const [, section, eye, structure, fieldName] = field.split(".");
+      revertStructureField(eid, section as ExamSection, eye as "od" | "os", structure, fieldName as keyof StructureFinding, oldValue as string);
+    } else if (field.startsWith("refraction.")) {
+      const [, eye, rxField] = field.split(".");
+      const mapping = RX_FIELD_TO_ROW[rxField];
+      if (mapping) {
+        const rowKey = eye === "OD" ? mapping.od : mapping.os;
+        revertCellValue(FINAL_RX_COL, rowKey, (oldValue as string) ?? "");
+      }
+    }
+  }, [params.encounterId, revertChiefComplaint, revertVitalsField, revertStructureField, revertCellValue]);
+
+  // Stable persona state — computed once per encounter to avoid re-init on renders
+  const [persona] = useState(() => getInitialStoreState(params.encounterId, patientId));
+
+  // Initialize all encounter stores on mount (all inits are idempotent)
   useEffect(() => {
     initEncounter(params.encounterId, {
       status: "pre_test",
       encounterDate: new Date().toISOString().slice(0, 10),
       providerName: user?.fullName ?? "Dr. Morgan",
       patientId,
+      chiefComplaint: persona.encounter.chiefComplaint,
     });
-    initVitals(params.encounterId, DEMO_VITALS);
-  }, [params.encounterId, initEncounter, initVitals, user, patientId]);
+    initVitals(params.encounterId, persona.vitals);
+    initFindings(params.encounterId, "anterior_segment", persona.anteriorFindings);
+    initFindings(params.encounterId, "posterior_segment", persona.posteriorFindings);
+    initDiagnoses(params.encounterId, persona.diagnoses);
+    seedProblems(patientId, persona.problems);
+  }, [params.encounterId, initEncounter, initVitals, initFindings, initDiagnoses, seedProblems, user, patientId, persona]);
 
   return (
     <div className="flex flex-col gap-6 stagger">
-      {/* Workflow header — chief complaint + status progress */}
-      <EncounterWorkflowHeader
-        encounterId={params.encounterId}
-        isReadOnly={isFinalized}
-      />
+      {/* Workflow header — chief complaint + audit trail toggle */}
+      <div id="section-complaint" className="flex flex-col gap-2">
+        <EncounterWorkflowHeader
+          encounterId={params.encounterId}
+          isReadOnly={isFinalized}
+        />
+        {canViewAudit && (
+          <button
+            type="button"
+            onClick={() => setAuditOpen(true)}
+            className="self-end flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg hover-btn"
+            style={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Audit Trail
+          </button>
+        )}
+      </div>
 
       {/* Finalized banner */}
       {isFinalized && (
@@ -416,22 +671,39 @@ export default function EncounterPage({
         </div>
       )}
 
-      {encounterState?.status === "pre_test" && canEditClinical ? (
-        <VitalsForm encounterId={params.encounterId} />
-      ) : (
-        <VitalsCard encounterId={params.encounterId} isReadOnly={clinicalReadOnly} />
+      {/* Dev-only unlock button */}
+      {isFinalized && process.env.NODE_ENV === "development" && (
+        <div className="flex items-center gap-2 px-1">
+          <button
+            type="button"
+            onClick={() => unlockEncounter(params.encounterId)}
+            className="text-[11px] px-3 py-1.5 rounded-lg font-medium border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--state-critical)] hover:border-[var(--state-critical)] transition-colors"
+          >
+            Dev: Unlock Encounter
+          </button>
+        </div>
       )}
 
+      <div id="section-vitals">
+        {encounterState?.status === "pre_test" && canEditClinical ? (
+          <VitalsForm encounterId={params.encounterId} />
+        ) : (
+          <VitalsCard encounterId={params.encounterId} isReadOnly={clinicalReadOnly} />
+        )}
+      </div>
+
       {/* Refraction */}
-      <Card>
-        <CardContent className="p-6">
-          <RefractionGrid
-            encounterId={params.encounterId}
-            initialRefractions={DEMO_REFRACTIONS}
-            isReadOnly={clinicalReadOnly}
-          />
-        </CardContent>
-      </Card>
+      <div id="section-rx">
+        <Card>
+          <CardContent className="p-6">
+            <RefractionGrid
+              encounterId={params.encounterId}
+              initialRefractions={persona.refractions}
+              isReadOnly={clinicalReadOnly}
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Continuity Sidebar — active master problems */}
       <ContinuitySidebar
@@ -440,34 +712,104 @@ export default function EncounterPage({
         isReadOnly={clinicalReadOnly}
       />
 
-      {/* Exam Findings + Diagnoses — side by side on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Exam Findings — Anterior + Posterior side by side */}
+      <div id="section-exam" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardContent className="p-6">
             {isFinalized || !canEditClinical ? (
-              <ExamFindingsCard encounterId={params.encounterId} />
+              <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
             ) : (
               <PermissionGate roles={["doctor", "owner"]} fallback={
-                <ExamFindingsCard encounterId={params.encounterId} />
+                <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
               }>
-                <ExamFindings encounterId={params.encounterId} isReadOnly={false} />
+                <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="anterior_segment" />
               </PermissionGate>
             )}
           </CardContent>
         </Card>
 
+        <Card>
+          <CardContent className="p-6">
+            {isFinalized || !canEditClinical ? (
+              <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
+            ) : (
+              <PermissionGate roles={["doctor", "owner"]} fallback={
+                <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
+              }>
+                <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="posterior_segment" />
+              </PermissionGate>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Diagnoses — full width, 2-column list */}
+      <div id="section-dx">
         <PermissionGate roles={["doctor", "owner"]}>
           <Card>
             <CardContent className="p-6">
-              <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} />
+              <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} columns={2} />
             </CardContent>
           </Card>
         </PermissionGate>
       </div>
 
-      <PermissionGate roles={["doctor", "owner"]}>
-        <AiScribeWidget />
-      </PermissionGate>
+      <div id="section-plan">
+        <PermissionGate roles={["doctor", "owner"]}>
+          {!isFinalized ? (
+            <AiScribeWidget encounterId={params.encounterId} />
+          ) : encounterState?.aiSummaryText ? (
+            <Card>
+              <CardContent className="p-6">
+                <div className="section-title mb-2">AI Scribe Summary</div>
+                <p
+                  className="text-sm leading-relaxed whitespace-pre-wrap"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {encounterState.aiSummaryText}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+        </PermissionGate>
+      </div>
+
+      {/* Spacer so fixed bottom bar doesn't overlap content */}
+      <div className="h-16" />
+
+      {/* Bottom tab navigation */}
+      <EncounterBottomTabs
+        status={encounterState?.status ?? "pre_test"}
+        isFinalized={isFinalized}
+        sidebarCollapsed={sidebarCollapsed}
+        patientId={patientId}
+        onAdvanceStatus={() => {
+          if (encounterState?.status === "in_exam") {
+            setFinalizeModalOpen(true);
+          } else {
+            advanceStatus(params.encounterId);
+          }
+        }}
+      />
+
+      {/* Audit trail sidebar (admin/owner only) */}
+      {canViewAudit && (
+        <AuditTrailSidebar
+          encounterId={params.encounterId}
+          isOpen={auditOpen}
+          onClose={() => setAuditOpen(false)}
+          isReadOnly={isFinalized}
+          onRevert={handleRevertField}
+        />
+      )}
+
+      {/* Finalize & Sign modal (single instance, triggered via Zustand) */}
+      <FinalizeModal
+        open={finalizeModalOpen}
+        onOpenChange={setFinalizeModalOpen}
+        encounterId={params.encounterId}
+        providerName={encounterState?.providerName ?? "Unknown Provider"}
+      />
     </div>
   );
 }

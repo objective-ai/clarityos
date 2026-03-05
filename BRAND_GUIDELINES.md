@@ -1,4 +1,4 @@
-# ClarityOS ERP — Brand & Design Guidelines
+# ClarityOS EHR — Brand & Design Guidelines
 
 > **Version:** 1.0 | **Updated:** 2026-03-04 | **Status:** Production
 
@@ -8,7 +8,7 @@
 
 | Property | Value |
 |----------|-------|
-| Product | Clarity EHR / ClarityOS ERP |
+| Product | ClarityOS EHR |
 | Domain | Optometry EHR/PMS, multi-tenant SaaS |
 | Design Philosophy | "Surgical Precision" — clinical confidence meets modern aesthetics |
 | Aesthetic | Glassmorphism + Ambient Gradients + Layered Depth |

@@ -30,6 +30,8 @@ const SECTIONS: { key: ExamSection; label: string }[] = [
 interface ExamFindingsProps {
   encounterId: string;
   isReadOnly?: boolean;
+  /** Render only this section. Omit to render both. */
+  section?: ExamSection;
   initialAnterior?: Partial<FindingsDraft>;
   initialPosterior?: Partial<FindingsDraft>;
 }
@@ -41,6 +43,7 @@ interface ExamFindingsProps {
 export function ExamFindings({
   encounterId,
   isReadOnly = false,
+  section: filterSection,
   initialAnterior,
   initialPosterior,
 }: ExamFindingsProps) {
@@ -53,14 +56,22 @@ export function ExamFindings({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
+  const sections = filterSection
+    ? SECTIONS.filter((s) => s.key === filterSection)
+    : SECTIONS;
+
   return (
     <div className="space-y-3">
-      <h2 className="section-title">Exam Findings</h2>
-      <p className="text-caption mt-0.5 text-[var(--text-muted)]">
-        Slit lamp &amp; fundus examination
-      </p>
+      {!filterSection && (
+        <>
+          <h2 className="section-title">Exam Findings</h2>
+          <p className="text-caption mt-0.5 text-[var(--text-muted)]">
+            Slit lamp &amp; fundus examination
+          </p>
+        </>
+      )}
 
-      {SECTIONS.map((sec) => (
+      {sections.map((sec) => (
         <SectionPanel
           key={sec.key}
           encounterId={encounterId}

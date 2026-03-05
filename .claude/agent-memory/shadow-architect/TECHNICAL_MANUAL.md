@@ -326,6 +326,40 @@ Once `is_finalized == True`:
 | POST | `/api/patients/{id}/problems` | `patient_problem.py` | `create_problem` | Add problem |
 | PATCH | `/api/patients/{id}/problems/{id}` | `patient_problem.py` | `update_problem` | Update problem |
 | DELETE | `/api/patients/{id}/problems/{id}` | `patient_problem.py` | `delete_problem` | **Soft delete** |
+| GET | `/api/encounters/{id}/audit-logs` | `audit.py` | `get_encounter_audit_logs` | Encounter-scoped audit history |
+| GET | `/api/audit-logs` | `audit.py` | `list_audit_logs` | Tenant-wide paginated + filterable log |
+| GET | `/api/audit-logs/export` | `audit.py` | `export_audit_logs` | CSV export for compliance review |
+
+**Audit log access:** All three require `VIEW_AUDIT_LOG` permission (`ADMIN`, `OWNER` only).
+
+**Filter parameters** (`GET /api/audit-logs`): `user_id`, `action`, `date_from`, `date_to`, `patient_id`, `page`, `per_page`
+
+**Staff name JOIN:** `AuditLog.user_id` is joined against `Staff` table to resolve human-readable `staff_name` in responses.
+
+**Response schemas** (`app/schemas/audit.py`):
+
+```python
+# Single audit log entry
+class AuditLogResponse(BaseModel):
+    id: UUID
+    timestamp: datetime
+    user_id: UUID
+    staff_name: str | None      # Resolved from Staff table JOIN
+    encounter_id: UUID | None
+    patient_id: UUID | None
+    action_type: str            # AuditAction enum value
+    resource_type: str
+    detail: str
+    changes: dict | None        # Field-level diff payload
+    metadata: dict | None       # e.g. model_version for AI actions
+
+# Paginated list
+class AuditLogListResponse(BaseModel):
+    logs: list[AuditLogResponse]
+    total: int
+    page: int
+    per_page: int
+```
 
 ### Pydantic Validation Ranges (Clinical Rulebook)
 
@@ -375,7 +409,7 @@ ExamFindings store: `setWNL()` populates all 16 anatomical structures with "Norm
 | ExamFindings | `examFindingsStore.ts` | `findings[id:section]` | 1.5s debounce/section | `PUT .../exam-findings/{s}` |
 | Diagnosis | `diagnosisStore.ts` | `encounters[id]` | Explicit (immediate) | `POST/PATCH/DELETE .../diagnoses` |
 | ProblemList | `problemListStore.ts` | `patients[id]` | Explicit (immediate) | `CRUD .../problems` |
-| Encounter | `encounterStore.ts` | `encounters[id]` (status, patientId, chiefComplaint, finalization) | 1.5s debounce (chiefComplaint) | `PATCH .../encounters/{id}` |
+| Encounter | `encounterStore.ts` | `encounters[id]` (status, patientId, chiefComplaint, signedByName, signedAt, aiSummaryText, aiSummaryGeneratedAt, finalizeModalOpen) | 1.5s debounce (chiefComplaint) | `PATCH .../encounters/{id}` |
 | Session | `sessionStore.ts` | `AppSession \| null` | — | Mock in dev |
 | Theme | `themeStore.ts` | `"dark" \| "light"` | localStorage | — |
 | Customization | `tenantCustomizationStore.ts` | `logo, accent` | localStorage | — |
@@ -388,6 +422,33 @@ ExamFindings store: `setWNL()` populates all 16 anatomical structures with "Norm
 | Vitals | IOP 0-80, pulse 30-250, BP regex | Mirrors Pydantic |
 | ExamFindings | None | Server-side JSONB validation |
 | Diagnosis | None | Server-side validation |
+
+### Dirty State Guard & Transcript Auto-Save
+
+The AI Scribe transcript is protected against accidental data loss (tab close, refresh, crash) via two mechanisms implemented entirely inside `AiScribeWidget` — no state is lifted to the parent `EncounterPage`, preserving 60fps typing performance.
+
+**Dirty State Detection:**
+```typescript
+const isDirty = transcript.trim().length > 0 && !isFinalized;
+```
+
+**`beforeunload` Guard:** Registered from within the widget (attaches to the global `window` — works from any mounted child component). Fires the browser's native "Leave site?" confirmation dialog when `isDirty` is true.
+
+**localStorage Auto-Save:**
+- `localStorage.setItem(storageKey, transcript)` on every keystroke when transcript is non-empty
+- `localStorage.removeItem(storageKey)` when transcript is cleared to empty — prevents the "undeleteable draft" bug where stale text reappears after refresh
+- Key format: `draft-transcript-${encounterId}`
+
+**Draft Recovery on Mount:** On component mount, checks localStorage for a saved draft. If found and the current transcript is empty, restores it automatically.
+
+**Cleanup Rules:**
+- Draft is NOT cleared on "Accept" — allows "Clear & Edit" flow to regenerate notes
+- Draft IS cleared when doctor manually empties the textarea (via `removeItem`)
+- `isDirty` forced to `false` when `isFinalized` — no guard on sealed encounters
+
+**Performance Note:** All state (`transcript`, `isDirty`, `storageKey`) is scoped to `AiScribeWidget`. The parent `EncounterPage` does not re-render on keystrokes — heavy components (VitalsForm, RefractionGrid, ExamFindings) are unaffected.
+
+**File:** `app/(tenant)/[tenantId]/encounter/[encounterId]/page.tsx` — `AiScribeWidget` component (lines 130–175)
 
 ### Chief Complaint Save Pattern
 
@@ -448,6 +509,60 @@ const patientHeader = useMemo<PatientHeaderData | null>(() => {
 - `initEncounter()` on mount sets `patientId` in store immediately, so subsequent renders use Tier 1
 
 **Mapping Library:** `getPatientIdForEncounter()` in `lib/mock-patient-data.ts` — iterates `ENCOUNTERS` record, returns `patientId` for a given encounter ID. Will be replaced with API call in production, but the fallback pattern remains the same.
+
+### EncounterStore — Extended State (Phase 2)
+
+These fields were added to `EncounterState` in `store/encounterStore.ts` during Phase 2:
+
+```typescript
+interface EncounterState {
+  // ... existing fields ...
+  aiSummaryText?: string;          // SOAP narrative saved after AI Scribe Accept
+  aiSummaryGeneratedAt?: string;   // ISO timestamp of last generation
+  signedByName?: string;           // Provider display name (resolved at finalization)
+  signedAt?: string;               // UTC timestamp of Sign & Seal (from server)
+  finalizeModalOpen: boolean;      // Drives FinalizeModal visibility
+}
+```
+
+**New actions:**
+- `setAiSummary(id, text)` — persists SOAP narrative on Accept
+- `openFinalizeModal(id)` / `closeFinalizeModal(id)` — dispatched by sticky header, bottom tabs, and FinalizeModal itself
+- `setSignatureData(id, signedByName, signedAt)` — called after successful finalize API response
+
+### Sidebar Collapse Propagation
+
+**Pattern:** Prop-drilling (not React Context). `contexts/SidebarContext.tsx` does **not exist**.
+
+The sidebar collapsed state originates in the `Sidebar` component (or the tenant layout) and is passed down as a `sidebarCollapsed: boolean` prop directly to layout-aware children.
+
+**Used by:** `EncounterBottomTabs` — computes fixed `left` offset:
+- Expanded sidebar: `left: 240px`
+- Collapsed sidebar: `left: 56px`
+
+The prop is passed from the encounter page, which receives it from the tenant layout or from the `Sidebar` component's toggle callback.
+
+### API Client (`lib/api-client.ts`)
+
+The **Supabase JWT → FastAPI Bearer token bridge** that all clinical stores use for real API calls.
+
+**Core function:**
+```typescript
+async function apiFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T>
+```
+
+**Behavior:**
+1. Reads current session from `supabase.auth.getSession()`
+2. Attaches `Authorization: Bearer {access_token}` header
+3. Sets `Content-Type: application/json`
+4. Throws on non-OK responses — error message from `response.detail` with fallback to `response.statusText`
+
+**Base URL:** `process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`
+
+**Mock fallback pattern:** All stores wrap `apiFetch` calls in try/catch — on failure (network error or missing `NEXT_PUBLIC_API_URL`), they fall back to local Zustand state mutations. This is what allows the full app to demo on Vercel without a live FastAPI server.
 
 ---
 
@@ -629,7 +744,7 @@ Every clinical write operation must call `log_action()`. Current coverage:
 
 **Architecture:** Three components work together:
 
-1. **`ClinicalAction`** (StrEnum) — 16 granular actions representing every protected operation
+1. **`ClinicalAction`** (StrEnum) — 17 granular actions representing every protected operation
 2. **`PERMISSION_MATRIX`** (dict) — maps each action to the set of `StaffRole`s allowed to perform it
 3. **`require_permission(action)`** — FastAPI dependency factory that wraps `get_current_tenant` + role check
 
@@ -664,6 +779,7 @@ async def finalize_encounter(
 | `CREATE_DIAGNOSIS` | Y | — | — | — | Y |
 | `DELETE_DIAGNOSIS` | Y | — | — | — | Y |
 | `PROMOTE_PROBLEM` | Y | — | — | — | Y |
+| `GENERATE_AI_SCRIBE` | Y | — | — | — | Y |
 | `VIEW_AUDIT_LOG` | — | — | — | Y | Y |
 | `MANAGE_STAFF` | — | — | — | Y | Y |
 
@@ -765,7 +881,7 @@ return roles.includes(user.role) || (!!user.clinicalRole && roles.includes(user.
 
 **Backend Note:** The `PERMISSION_MATRIX` in `permissions.py` already grants Owner access to all Doctor-level actions (FINALIZE_ENCOUNTER, CREATE_DIAGNOSIS, etc.). The `clinical_role` field primarily extends **frontend** gating — allowing `PermissionGate roles={["doctor"]}` to pass for owner-doctors without needing to list "owner" in every gate.
 
-**Staff Form UI** (`app/(tenant)/[tenantId]/admin/page.tsx`):
+**Staff Form UI** (planned for `app/(tenant)/[tenantId]/admin/page.tsx` — not yet built as a dedicated route):
 - Clinical role picker **only appears** when primary role is "owner"
 - Options: None (admin-only), Doctor (OD/MD), Technician
 - Effective clinical role: `role === "owner" && clinicalRole ? clinicalRole : undefined`
@@ -835,15 +951,17 @@ Admin sets is_active = false
 
 ### D. Frontend Admin Panel
 
-**Location:** `app/(tenant)/[tenantId]/admin/page.tsx`
+**Location:** `app/(tenant)/[tenantId]/admin/page.tsx` — **PLANNED, not yet implemented as a dedicated route.**
 
-**Access Gate:**
+Staff management functionality is planned for this page. Current implementation status: the PATCH `/api/staff/{id}` endpoint exists and is functional; the frontend UI for managing staff is under development.
+
+**Planned access gate:**
 ```tsx
 const { requireRole } = useEntitlements();
 if (!requireRole("admin", "owner")) return <AccessDeniedUI />;
 ```
 
-**Staff Management UI Features:**
+**Planned staff management UI features:**
 - **Staff list** with role badges (5 distinct colors) + dual-role sub-text ("+ Doctor" for owner-practitioners)
 - **Staff form dialog** with conditional clinical role picker (shown only when role="owner")
 - **Role color system:**
@@ -870,3 +988,376 @@ The `PermissionGate` component is the frontend enforcement of HIPAA's "Minimum N
 - **Owner-practitioners** access both admin and clinical workflows via dual-role resolution
 
 This creates a **defense-in-depth** model where both frontend (`PermissionGate`) and backend (`require_permission`) independently enforce the same access rules. Even if the frontend gate is bypassed (e.g., direct API call), the backend rejects unauthorized requests with HTTP 403.
+
+---
+
+## X. AI Scribe — Phase 2 (Ambient Data-Entry Scribe)
+
+### A. Feature Overview
+
+The AI Scribe is the **flagship Premium feature**. It is an **Ambient Data-Entry Scribe** — NOT a post-exam summarizer. The doctor dictates during the encounter; Claude converts that raw transcript into:
+1. A streaming SOAP narrative (visible, word-by-word)
+2. Structured JSON that auto-fills all clinical UI grids (vitals, refraction, exam findings, diagnoses)
+
+**Access Gates:**
+- **Entitlement:** `AI_SCRIBE` (Premium tier only) — upsell modal shown to Core/Plus clinics
+- **RBAC:** `GENERATE_AI_SCRIBE` → Doctor and Owner only (HTTP 403 for all others)
+
+**Model:** `claude-sonnet-4-6-20250514`
+
+### B. Backend Architecture
+
+**New file:** `app/api/routes/ai_scribe.py`
+
+**Endpoint:** `POST /api/encounters/{encounter_id}/ai-scribe`
+
+**Dependency chain:**
+1. Verify encounter exists + belongs to tenant
+2. Check entitlement: `AI_SCRIBE` in `ctx.entitlements[]`
+3. Check RBAC: `require_permission(ClinicalAction.GENERATE_AI_SCRIBE)` → 403 if not doctor/owner
+4. Accept `{ "transcript": "string" }` — raw dictation text
+5. Stream Claude response via SSE (`text/event-stream`)
+6. After stream: save SOAP portion to `encounter.ai_summary_text` + `ai_summary_generated_at`
+7. Audit: `log_action(AuditAction.CREATE, "ai_scribe", encounter.id, ...)`
+
+**Dependencies:**
+- `requirements.txt`: `anthropic>=0.40`
+- `app/core/config.py`: `ANTHROPIC_API_KEY: str = ""`
+- `.env`: `ANTHROPIC_API_KEY=sk-ant-...`
+
+**Streaming pattern:**
+```python
+from anthropic import Anthropic
+from fastapi.responses import StreamingResponse
+
+async def stream():
+    client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    with client.messages.stream(
+        model="claude-sonnet-4-6-20250514",
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": transcript}],
+        max_tokens=4096,
+    ) as s:
+        full_text = ""
+        for text in s.text_stream:
+            full_text += text
+            yield f"data: {json.dumps({'text': text})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    # Save SOAP portion (before delimiter) to DB
+    soap_text = full_text.split("___JSON_START___")[0].strip()
+    encounter.ai_summary_text = soap_text
+    encounter.ai_summary_generated_at = datetime.utcnow()
+    await db.commit()
+
+return StreamingResponse(stream(), media_type="text/event-stream")
+```
+
+**Route registration** (`app/main.py`): `prefix="/api/encounters"`, tag `"AI Scribe"`
+
+### C. Dual-Output Prompt Architecture
+
+Claude outputs **two parts in a single stream**, separated by a fixed delimiter:
+
+```
+[SOAP Narrative — streams word-by-word to UI]
+
+___JSON_START___
+
+[Structured JSON — buffered silently, never shown raw]
+```
+
+**SOAP Narrative:** Clinical third-person prose, SOAP sections (Subjective, Objective, Assessment, Plan)
+
+**Structured JSON schema:**
+```json
+{
+  "chief_complaint": "string",
+  "vitals": {
+    "iop_od": "number | null", "iop_os": "number | null",
+    "va_od_distance": "string | null", "va_os_distance": "string | null",
+    "va_od_near": "string | null", "va_os_near": "string | null",
+    "bp_systolic": "number | null", "bp_diastolic": "number | null",
+    "pupils_od": "string | null", "pupils_os": "string | null"
+  },
+  "exam_findings": {
+    "anterior": {
+      "OD": { "<structure>": { "status": "normal|abnormal", "notes": "" } },
+      "OS": { "<structure>": { "status": "normal|abnormal", "notes": "" } }
+    },
+    "posterior": { "OD": { ... }, "OS": { ... } }
+  },
+  "diagnoses": [
+    { "icdCode": "H52.13", "description": "Myopia, bilateral", "laterality": "OU" }
+  ],
+  "refraction": {
+    "OD": { "sphere": "-2.00", "cylinder": "-0.75", "axis": "180", "add": "+2.00" },
+    "OS": { "sphere": "-1.75", "cylinder": "-0.50", "axis": "175", "add": "+2.00" }
+  }
+}
+```
+
+**Valid structures:**
+- Anterior: `lids_lashes`, `conjunctiva_sclera`, `cornea`, `anterior_chamber`, `iris`, `lens`, `tear_film`, `angles`
+- Posterior: `cup_to_disc_ratio`, `optic_nerve`, `macula`, `vitreous`, `vessels`, `periphery`
+
+**Omission rule:** Only fields explicitly mentioned in the transcript are included. All others are omitted (not set to null).
+
+### D. Frontend — SSE Hook (`useAiScribe`)
+
+**New file:** `hooks/useAiScribe.ts`
+
+**Return shape:**
+```typescript
+interface UseAiScribeReturn {
+  generate: (transcript: string) => void;
+  soapText: string;            // Visible SOAP narrative (streams to UI)
+  structuredData: object | null; // Hidden JSON (parsed after delimiter)
+  isStreaming: boolean;
+  isDone: boolean;
+  error: string | null;
+}
+```
+
+**Dual-stream splitting logic:**
+- Opens `fetch POST /api/encounters/{id}/ai-scribe` with `{ transcript }` body
+- Reads SSE chunks, appending to internal buffer
+- **Before** `___JSON_START___`: chunks appended to `soapText` state (visible, streaming)
+- **After** `___JSON_START___`: chunks accumulated in `jsonBuffer` (hidden from user)
+- On `done` event: `JSON.parse(jsonBuffer)` → stored in `structuredData`
+
+**`AiScribeWidget` UI** (`encounter/page.tsx`):
+- Textarea for transcript / "Paste transcript" area
+- "Generate Note" button → `generate(transcript)`
+- SOAP text streams word-by-word in real-time (cursor blink at end)
+- "Accept" button appears when `isDone` — dispatches `structuredData` to stores
+- "Regenerate" clears state and re-triggers
+- Loading: pulsing icon + "Listening to transcript…"
+- Error: retry button with message
+
+### E. Accept → Auto-Fill Zustand Stores
+
+When user clicks "Accept", `structuredData` is dispatched to all 5 clinical stores:
+
+| Store | Action | File | Data Source |
+|-------|--------|------|-------------|
+| `encounterStore` | `setChiefComplaint(id, text)` | `store/encounterStore.ts` | `data.chief_complaint` |
+| `vitalsStore` | `setField(id, field, value)` | `store/vitalsStore.ts` | `data.vitals` (per non-null field) |
+| `examFindingsStore` | `setStructureField(id, section, eye, structure, field, value)` | `store/examFindingsStore.ts` | `data.exam_findings` (nested) |
+| `diagnosisStore` | `addDiagnosis(id, payload)` | `store/diagnosisStore.ts` | `data.diagnoses[]` |
+| `refractionStore` | `setCellValue(colIndex, rowKey, value)` | `store/refractionStore.ts` | `data.refraction` |
+
+**Critical implementation rules:**
+
+**Refraction column index mapping:**
+```typescript
+const col = eye === "OD" ? 0 : 1;
+refractionStore.setCellValue(col, rowKey, value);
+// ⚠️ setCellValue() takes numeric colIndex — passing "OD" string crashes the store
+```
+
+**Null guard for vitals:**
+```typescript
+for (const [field, value] of Object.entries(data.vitals)) {
+  if (value != null) vitalsStore.setField(encounterId, field, value);
+  // ⚠️ Skip nulls — scribe ADDS data only, never erases existing draft values
+}
+```
+
+### F. EncounterStore Additions
+
+New fields and action added to `store/encounterStore.ts`:
+
+```typescript
+// In EncounterState:
+aiSummaryText?: string;
+aiSummaryGeneratedAt?: string;
+
+// New action:
+setAiSummary: (id: string, text: string) => void;
+```
+
+After Accept: SOAP narrative saved to `encounterStore.setAiSummary(id, soapText)`.
+
+Post-accept UI: AI Scribe card shows saved SOAP narrative (read-only), generation timestamp, badge indicating stores were auto-filled, "Regenerate" option.
+
+### G. Mock Fallback (Vercel / No Backend)
+
+Triggered automatically on first `fetch` failure.
+
+**Behavior:**
+- Detects connection failure on initial request
+- Streams a realistic template-based SOAP note word-by-word
+- Generates `___JSON_START___` + structured JSON using current encounter state from Zustand
+- Accept auto-fill works **identically** to the real flow
+
+**Purpose:** Enables full AI Scribe demo on Vercel without a running FastAPI backend.
+
+### H. Existing Backend Fields (Pre-Phase 2)
+
+These fields existed before Phase 2 and are now fully utilized:
+
+| Location | Field | Type | Purpose |
+|----------|-------|------|---------|
+| `Encounter` model | `ai_summary_text` | Text | Stores SOAP narrative after generation |
+| `Encounter` model | `ai_summary_generated_at` | DateTime(tz) | Timestamp of last generation |
+| `entitlements.py` | `AI_SCRIBE` | Entitlement | Premium feature gate |
+
+### I. ClinicalDiffViewer — Transparent AI Change Review
+
+**Component:** `components/encounter/ClinicalDiffViewer.tsx`
+
+**Purpose:** Before the doctor accepts any AI Scribe autofill, they see a field-by-field comparison of every change the scribe proposes. This is the primary trust mechanism — AI suggestions are never locked in without explicit physician review.
+
+**Props:**
+```typescript
+interface ClinicalDiffViewerProps {
+  diffs: Record<string, DiffEntry>;       // Field name → before/after values
+  diagnoses?: DiagnosisChange[];          // Separate diagnoses diff section
+  onRevert?: (fieldName: string) => void; // Per-field rollback callback
+}
+
+interface DiffEntry {
+  old?: unknown;  // Previous value (undefined = field was empty)
+  new?: unknown;  // Proposed value (undefined = field being cleared)
+}
+```
+
+**Visual conventions:**
+
+| State | Rendering |
+|-------|-----------|
+| Old value | Red text, strikethrough decoration |
+| New value | Green text, bold weight |
+| Field name | Monospace label above the diff pair |
+| Revert button | Ghost button per field row; calls `onRevert(fieldName)` |
+
+**Diagnoses section:** Rendered separately below the field diffs. Each proposed diagnosis is shown as an ICD-10 `<Badge>` chip with code + description. Revert removes the diagnosis from the pending accept payload.
+
+**Integration point:** `AuditTrailSidebar` embeds `ClinicalDiffViewer` inline for any `AI_SCRIBE_AUTOFILL` audit entry, so past autofills are reviewable from the audit timeline (read-only, no revert).
+
+---
+
+### J. FinalizeModal — Sign & Seal Workflow
+
+**Component:** `components/encounter/FinalizeModal.tsx`
+
+**Endpoint:** `POST /api/encounters/{encounter_id}/finalize`
+
+**Purpose:** Guided 5-section clinical summary review that forces the doctor to actively confirm key clinical data before signing. Prevents "click to sign" shortcuts that create audit liability.
+
+**Modal trigger architecture:** `encounterStore.finalizeModalOpen` (boolean, not persisted to localStorage via `partialize`). Both PatientStickyHeader and EncounterBottomTabs call `setFinalizeModalOpen(true)`. The modal is rendered exactly once at the encounter page level — no dual-modal anti-pattern.
+
+**Store reads (selectors):**
+- `useEncounterStore` → `chiefComplaint`
+- `useVitalsDraft(encounterId)` → IOP OD/OS, blood_pressure
+- `useDiagnoses(encounterId)` → active ICD-10 codes
+- `useRefractionStore` → `columns[3]?.draft` (Final Rx OD/OS)
+
+**Section flow (in order):**
+
+| # | Section | Source Store | Gate |
+|---|---------|-------------|------|
+| 1 | Chief complaint (read-only review) | `encounterStore` | No gate — informational |
+| 2 | Vitals summary (IOP OD/OS, BP) | `vitalsStore` | "Not Recorded" warning badge if empty |
+| 3 | Diagnoses list (ICD-10 + laterality) | `diagnosisStore` | **Hard block** — submit disabled if empty |
+| 4 | Final Rx table (OD/OS: Sph/Cyl/Axis/Add) | `refractionStore` | "Not Recorded" warning if empty |
+| 5 | Assessment & Plan textarea | User input | Min 10 characters required |
+
+**Footer:**
+- Attestation checkbox: "I attest that I have reviewed this encounter and the clinical data is accurate."
+- "Sign & Seal Chart" button (disabled until all gates satisfied)
+
+**Gate logic (actual implementation):**
+```typescript
+const canSubmit =
+  attested &&
+  assessmentPlan.trim().length >= 10 &&
+  activeDiagnoses.length > 0 &&  // Diagnosis guardrail — cannot bill without ICD-10
+  !isSubmitting;
+```
+
+**Submit flow:**
+1. `POST /api/encounters/${encounterId}/finalize` via `apiFetch` with `{ assessment_and_plan }`
+2. On success: `finalizeEncounter(id, response.signed_by_name, response.signed_at)` updates Zustand
+3. `setFinalizeModalOpen(false)` closes modal
+
+**Dev fallback:** When backend is unreachable in development, catches the API error and calls `finalizeEncounter()` locally — matching the mock pattern used by vitals and refraction stores.
+
+**Post-finalization state:**
+- All clinical fields become read-only (guarded by `clinicalReadOnly = isFinalized || !canEditClinical`)
+- AI Scribe widget replaced with read-only saved summary (`<p>` with sans-serif prose styling, not `<pre>` monospace)
+- Green confirmation banner: "Signed by [Provider Name] · [UTC timestamp]"
+- Encounter status badge updates to "Finalized" with lock icon in `PatientStickyHeader`
+
+**State reset:** All internal state (assessmentPlan, attested, errorMessage, isSubmitting) resets via `useEffect` when `open` changes to `false`.
+
+**California compliance note:** Attestation checkbox satisfies California Civil Code § 1633.7 (electronic signatures) + B&P 3041 (provider identity linked to record). Diagnosis guardrail prevents charts without ICD-10 codes from being sealed — structurally preventing unbillable encounters.
+
+---
+
+### K. AuditTrailSidebar — AI Action Timeline
+
+**Component:** `components/encounter/AuditTrailSidebar.tsx`
+
+**Purpose:** Chronological timeline of all encounter modifications — human and AI — accessible from the encounter page without leaving the clinical workflow.
+
+**Timeline entry anatomy:**
+- Timestamp (UTC, rendered in local timezone)
+- Actor: Staff name (human) or "AI Scribe" with Bot icon (AI)
+- Action label (e.g., "Exam findings updated", "AI autofill applied")
+- Expandable diff section for AI entries
+
+**Visual distinction for AI actions:**
+- Bot icon replaces the user avatar
+- Entry uses accent color border (teal `--color-accent`) instead of neutral
+- Badge: "AI Scribe" pill, amber or accent-colored
+
+**Embedded ClinicalDiffViewer:**
+For `AI_SCRIBE_AUTOFILL` entries, the sidebar embeds `<ClinicalDiffViewer>` in read-only mode (no `onRevert` — the action is already committed). This allows the doctor to review exactly what the AI changed during any past encounter session.
+
+**New AuditAction enum values** (in `app/db/models/tenant/clinical.py`):
+
+```python
+class AuditAction(StrEnum):
+    # ... existing values ...
+    AI_SCRIBE_GENERATED = "ai_scribe_generated"  # Logged when SOAP stream completes
+    AI_SCRIBE_AUTOFILL  = "ai_scribe_autofill"   # Logged when doctor clicks Accept
+```
+
+**`AI_SCRIBE_AUTOFILL` metadata payload** (stored in `AuditLog.metadata` JSONB):
+```json
+{
+  "model_version": "claude-sonnet-4-6-20250514",
+  "diffs": { "<field_name>": { "old": ..., "new": ... } },
+  "diagnoses_added": ["H40.001 OD", "Z01.01"]
+}
+```
+
+---
+
+### L. Accept Endpoint — Persist AI Autofill
+
+**Route:** `POST /api/encounters/{encounter_id}/ai-scribe/accept`
+
+**Permission:** `require_permission(ClinicalAction.GENERATE_AI_SCRIBE)` → Doctor + Owner only
+
+**Request body:**
+```json
+{
+  "structured_data": { /* Full JSON from useAiScribe structuredData */ },
+  "soap_text": "string"
+}
+```
+
+**Server actions (in order):**
+1. Validate encounter belongs to tenant (tenant isolation check)
+2. Check `encounter.is_finalized == False` — reject 409 if already sealed
+3. Apply structured data to relevant tables (vitals, exam findings, diagnoses, refraction)
+4. Save SOAP narrative to `encounter.ai_summary_text` + `encounter.ai_summary_generated_at`
+5. Compute diff between pre-accept and post-accept state
+6. Log `AuditAction.AI_SCRIBE_AUTOFILL` via `log_action()` with full diff + model version metadata
+7. Return updated encounter summary
+
+**Idempotency:** Multiple accept calls on the same encounter append new audit log entries — they do not overwrite previous autofill records. Each accept call is a distinct, timestamped clinical event.
+| `permissions.py` | `GENERATE_AI_SCRIBE` | ClinicalAction | RBAC: Doctor + Owner only |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentTenant } from "@/store/sessionStore";
 import { useThemeStore } from "@/store/themeStore";
@@ -25,7 +25,7 @@ import {
 // Section definitions
 // ---------------------------------------------------------------------------
 
-type SectionKey = "general" | "staff";
+type SectionKey = "general" | "staff" | "compliance";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -47,6 +47,16 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
         <path d="M1 13c0-2.761 2.015-4.5 4.5-4.5S10 10.239 10 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
         <circle cx="11.5" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.3" />
         <path d="M10 13c0-2.21 1.343-3.5 3-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    key: "compliance",
+    label: "Compliance",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1.5L2.5 4v4c0 3.314 2.343 5.431 5.5 6.5 3.157-1.069 5.5-3.186 5.5-6.5V4L8 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M5.5 8l2 2 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
@@ -757,6 +767,236 @@ function StaffManagementSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Compliance & Audit Section
+// ---------------------------------------------------------------------------
+
+interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  user_id: string;
+  staff_name: string | null;
+  encounter_id: string | null;
+  patient_id: string | null;
+  action_type: string;
+  resource_type: string;
+  detail: string | null;
+  changes: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+}
+
+interface AuditLogPage {
+  logs: AuditLogEntry[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+const ACTION_OPTIONS = [
+  { value: "", label: "All Actions" },
+  { value: "create", label: "Create" },
+  { value: "update", label: "Update" },
+  { value: "delete", label: "Delete" },
+  { value: "finalize", label: "Finalize" },
+  { value: "ai_scribe_generated", label: "AI Scribe Generated" },
+  { value: "ai_scribe_autofill", label: "AI Scribe Auto-Fill" },
+  { value: "manual_edit", label: "Manual Edit" },
+  { value: "phi_viewed", label: "PHI Viewed" },
+];
+
+function ComplianceSection() {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters
+  const [actionFilter, setActionFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const perPage = 25;
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("per_page", String(perPage));
+      if (actionFilter) params.set("action", actionFilter);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+
+      const res = await fetch(`/api/audit-logs?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: AuditLogPage = await res.json();
+      setLogs(data.logs);
+      setTotal(data.total);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, actionFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  const totalPages = Math.ceil(total / perPage);
+
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (actionFilter) params.set("action", actionFilter);
+    if (dateFrom) params.set("date_from", dateFrom);
+    if (dateTo) params.set("date_to", dateTo);
+    window.open(`/api/audit-logs/export?${params}`, "_blank");
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="text-body text-[var(--text-secondary)]">
+          HIPAA compliance audit trail. All clinical data access and modifications are logged.
+        </p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-overline">Action</label>
+          <select
+            value={actionFilter}
+            onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
+            className="px-3 h-10 rounded-xl text-sm bg-[var(--bg-glass)] border border-[var(--glass-border)] text-[var(--text-primary)] cursor-pointer"
+          >
+            {ACTION_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-overline">From</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            className="px-3 h-10 rounded-xl text-sm glass-input"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-overline">To</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            className="px-3 h-10 rounded-xl text-sm glass-input"
+          />
+        </div>
+
+        <Button variant="outline" size="sm" onClick={handleExport} className="h-10">
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Error state */}
+      {error && (
+        <p className="text-sm text-[var(--state-critical)]">Failed to load: {error}</p>
+      )}
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border-default)]">
+                <th className="text-left px-5 py-3.5 text-overline">Timestamp</th>
+                <th className="text-left px-4 py-3.5 text-overline">User</th>
+                <th className="text-left px-4 py-3.5 text-overline">Action</th>
+                <th className="text-left px-4 py-3.5 text-overline">Resource</th>
+                <th className="text-left px-4 py-3.5 text-overline">Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="px-5 py-12 text-center text-caption text-[var(--text-muted)]">
+                    Loading...
+                  </td>
+                </tr>
+              )}
+              {!loading && logs.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-5 py-12 text-center text-caption text-[var(--text-muted)]">
+                    No audit logs found for the selected filters.
+                  </td>
+                </tr>
+              )}
+              {!loading && logs.map((log) => {
+                const isAi = log.action_type.startsWith("ai_scribe");
+                return (
+                  <tr key={log.id} className="hover-row border-t border-[var(--border-subtle)]">
+                    <td className="px-5 py-3 whitespace-nowrap text-[var(--text-secondary)]">
+                      {new Date(log.timestamp).toLocaleString("en-US", {
+                        month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true,
+                      })}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-[var(--text-primary)] font-medium">
+                      {log.staff_name ?? "System"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={isAi ? "default" : "secondary"}>
+                        {isAi && "AI "}{ACTION_OPTIONS.find((a) => a.value === log.action_type)?.label ?? log.action_type}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">
+                      {log.resource_type}
+                    </td>
+                    <td className="px-4 py-3 text-[var(--text-muted)] max-w-xs truncate">
+                      {log.detail ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-[var(--text-muted)]">
+            {total} total entries &middot; Page {page} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Admin Page
 // ---------------------------------------------------------------------------
 
@@ -814,6 +1054,7 @@ export default function AdminPage() {
         <div className="flex-1 min-w-0">
           {activeSection === "general" && <GeneralSettingsSection />}
           {activeSection === "staff" && <StaffManagementSection />}
+          {activeSection === "compliance" && <ComplianceSection />}
         </div>
       </div>
     </div>

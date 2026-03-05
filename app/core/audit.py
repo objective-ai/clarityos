@@ -28,6 +28,8 @@ async def log_action(
     encounter_id: UUID | None = None,
     patient_id: UUID | None = None,
     detail: str | None = None,
+    changes: dict | None = None,
+    metadata: dict | None = None,
     ip_address: str | None = None,
 ) -> None:
     """Append an immutable audit log entry.
@@ -39,7 +41,7 @@ async def log_action(
     ctx : TenantContext
         The authenticated user's identity.
     action : AuditAction
-        What happened (create, read, update, delete, finalize, promote).
+        What happened (create, read, update, delete, finalize, promote, etc.).
     resource_type : str
         The entity type (e.g., "encounter", "vitals", "diagnosis").
     resource_id : UUID
@@ -52,6 +54,10 @@ async def log_action(
         Patient for scoped queries.
     detail : str | None
         Human-readable description (e.g., "Finalized encounter").
+    changes : dict | None
+        Before/after snapshot: ``{ field: { old: x, new: y } }``.
+    metadata : dict | None
+        Contextual data (IP, user agent, AI model version).
     ip_address : str | None
         Client IP from ``request.client.host``.
     """
@@ -65,6 +71,8 @@ async def log_action(
         encounter_id=encounter_id,
         patient_id=patient_id,
         detail=detail,
+        changes=changes,
+        metadata_=metadata,
         ip_address=ip_address,
     )
     db.add(entry)

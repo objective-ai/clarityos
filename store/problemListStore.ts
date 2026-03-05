@@ -59,6 +59,12 @@ interface ProblemListStoreActions {
     encounterId: string,
     problemId: string,
   ) => Promise<Diagnosis | null>;
+
+  /**
+   * Seed mock problems for development/demo purposes.
+   * Idempotent — skips if patient data is already loaded or loading.
+   */
+  _seedProblems: (patientId: string, problems: PatientProblem[]) => void;
 }
 
 type ProblemListStore = ProblemListStoreState & ProblemListStoreActions;
@@ -101,6 +107,9 @@ export const useProblemListStore = create<ProblemListStore>()(
             `/api/patients/${patientId}/problems`,
           );
 
+          // Don't overwrite if already seeded while we were fetching
+          if (get().patients[patientId]?.loadStatus === "loaded") return;
+
           set(
             (state) => ({
               patients: {
@@ -117,6 +126,9 @@ export const useProblemListStore = create<ProblemListStore>()(
             "fetchProblems/loaded",
           );
         } catch (err) {
+          // Don't overwrite if already seeded while we were fetching
+          if (get().patients[patientId]?.loadStatus === "loaded") return;
+
           set(
             (state) => ({
               patients: {
@@ -335,8 +347,23 @@ export const useProblemListStore = create<ProblemListStore>()(
           return null;
         }
       },
+
+      _seedProblems(patientId, problems) {
+        const existing = get().patients[patientId];
+        if (existing?.loadStatus === "loaded") return;
+        set(
+          (state) => ({
+            patients: {
+              ...state.patients,
+              [patientId]: { problems, loadStatus: "loaded", saveStatus: "idle", error: null },
+            },
+          }),
+          false,
+          "_seedProblems",
+        );
+      },
     })),
-    { name: "OptometryERP/ProblemList" },
+    { name: "ClarityOS/ProblemList" },
   ),
 );
 

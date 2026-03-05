@@ -51,6 +51,8 @@ const COMMON_CODES: ICD10Code[] = [
 interface DiagnosisPickerProps {
   encounterId: string;
   isReadOnly?: boolean;
+  /** Display diagnoses in N columns (default 1) */
+  columns?: 1 | 2;
   initialDiagnoses?: Diagnosis[];
 }
 
@@ -61,6 +63,7 @@ interface DiagnosisPickerProps {
 export function DiagnosisPicker({
   encounterId,
   isReadOnly = false,
+  columns = 1,
   initialDiagnoses,
 }: DiagnosisPickerProps) {
   const store = useDiagnosisStore();
@@ -135,12 +138,17 @@ export function DiagnosisPicker({
 
       {/* Current diagnoses */}
       {diagnoses.length > 0 && (
-        <div className="rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+        <div className={columns === 2
+          ? "grid grid-cols-1 md:grid-cols-2 gap-3"
+          : "rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]"
+        }>
           {diagnoses.map((dx, i) => (
             <div
               key={dx.id}
               className={`flex items-center gap-3 px-5 py-3 ${
-                i > 0 ? "border-t border-[var(--border-subtle)]" : ""
+                columns === 2
+                  ? "rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)]"
+                  : i > 0 ? "border-t border-[var(--border-subtle)]" : ""
               }`}
             >
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)]">

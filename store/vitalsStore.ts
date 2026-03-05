@@ -311,7 +311,7 @@ export const useVitalsStore = create<VitalsStore>()(
         );
       },
     })),
-    { name: "OptometryERP/Vitals" }
+    { name: "ClarityOS/Vitals" }
   )
 );
 

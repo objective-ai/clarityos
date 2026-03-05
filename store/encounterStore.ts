@@ -17,14 +17,20 @@ export interface EncounterState {
   chiefComplaint?: string;
   signedByName?: string;
   signedAt?: string;
+  aiSummaryText?: string;
+  aiSummaryGeneratedAt?: string;
 }
 
 interface EncounterStoreState {
   encounters: Record<string, EncounterState>;
+  finalizeModalOpen: boolean;
   initEncounter: (id: string, data: Omit<EncounterState, "isFinalized">) => void;
   advanceStatus: (id: string) => void;
   setChiefComplaint: (id: string, text: string) => void;
   finalizeEncounter: (id: string, signedByName: string, signedAt: string) => void;
+  unlockEncounter: (id: string) => void;
+  setFinalizeModalOpen: (open: boolean) => void;
+  setAiSummary: (id: string, text: string) => void;
   getEncounter: (id: string) => EncounterState | undefined;
 }
 
@@ -50,6 +56,7 @@ export const useEncounterStore = create<EncounterStoreState>()(
     persist(
       (set, get) => ({
         encounters: {},
+        finalizeModalOpen: false,
 
         initEncounter: (id, data) => {
           const existing = get().encounters[id];
@@ -99,6 +106,10 @@ export const useEncounterStore = create<EncounterStoreState>()(
           );
         },
 
+        setFinalizeModalOpen: (open) => {
+          set({ finalizeModalOpen: open }, false, "setFinalizeModalOpen");
+        },
+
         finalizeEncounter: (id, signedByName, signedAt) => {
           const enc = get().encounters[id];
           if (!enc || enc.isFinalized) return;
@@ -120,10 +131,50 @@ export const useEncounterStore = create<EncounterStoreState>()(
           );
         },
 
+        // Dev-only: reset a finalized encounter back to in_exam for testing
+        unlockEncounter: (id) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: {
+                  ...state.encounters[id],
+                  status: "in_exam" as EncounterStatus,
+                  isFinalized: false,
+                  signedByName: undefined,
+                  signedAt: undefined,
+                },
+              },
+            }),
+            false,
+            "unlockEncounter"
+          );
+        },
+
+        setAiSummary: (id, text) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: {
+                  ...state.encounters[id],
+                  aiSummaryText: text,
+                  aiSummaryGeneratedAt: new Date().toISOString(),
+                },
+              },
+            }),
+            false,
+            "setAiSummary"
+          );
+        },
+
         getEncounter: (id) => get().encounters[id],
       }),
-      { name: "clarity-encounters" }
+      {
+        name: "clarity-encounters",
+        partialize: (state) => ({ encounters: state.encounters }),
+      }
     ),
-    { name: "OptometryERP/Encounters" }
+    { name: "ClarityOS/Encounters" }
   )
 );

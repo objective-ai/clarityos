@@ -33,7 +33,7 @@ export const useThemeStore = create<ThemeState>()(
       }),
       { name: "clarity-theme" }
     ),
-    { name: "OptometryERP/Theme" }
+    { name: "ClarityOS/Theme" }
   )
 );
 

@@ -48,6 +48,9 @@ class ClinicalAction(StrEnum):
     DELETE_DIAGNOSIS = "delete_diagnosis"
     PROMOTE_PROBLEM = "promote_problem"
 
+    # AI Scribe
+    GENERATE_AI_SCRIBE = "generate_ai_scribe"
+
     # Admin
     VIEW_AUDIT_LOG = "view_audit_log"
     MANAGE_STAFF = "manage_staff"
@@ -87,6 +90,9 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     ClinicalAction.CREATE_DIAGNOSIS:    {_D, _O},
     ClinicalAction.DELETE_DIAGNOSIS:    {_D, _O},
     ClinicalAction.PROMOTE_PROBLEM:     {_D, _O},
+
+    # AI Scribe
+    ClinicalAction.GENERATE_AI_SCRIBE: {_D, _O},
 
     # Admin
     ClinicalAction.VIEW_AUDIT_LOG:      {_A, _O},

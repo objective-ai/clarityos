@@ -6,6 +6,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentTenant } from "@/store/sessionStore";
 import { useCurrentUser } from "@/store/sessionStore";
 import { useEncounterStore } from "@/store/encounterStore";
+import { getPatientById } from "@/lib/mock-patient-data";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { PatientChartModal } from "@/components/PatientChartModal";
@@ -54,7 +55,7 @@ const QUICK_ACTIONS = [
 ];
 
 const FALLBACK_ENCOUNTERS = [
-  { name: "Margaret Chen", date: "Today, 1:15 PM", status: "in_exam", id: "enc-001" },
+  { name: "Linda Chen", date: "Today, 1:15 PM", status: "in_exam", id: "enc-001" },
   { name: "Robert Kim", date: "Today, 11:30 AM", status: "finalized", id: "enc-002" },
   { name: "Sarah Johnson", date: "Yesterday, 3:45 PM", status: "finalized", id: "enc-003" },
   { name: "Emily Davis", date: "Yesterday, 2:00 PM", status: "finalized", id: "enc-004" },
@@ -88,9 +89,13 @@ export default function DashboardPage({
   const encounters = useEncounterStore((s) => s.encounters);
 
   const stats = useMemo(() => {
-    const all = Object.values(encounters);
-    const total = all.length;
-    const finalized = all.filter((e) => e.isFinalized).length;
+    const now = new Date();
+    const today = now.toDateString();
+    const todayEncounters = Object.values(encounters).filter(
+      (e) => new Date(e.encounterDate).toDateString() === today
+    );
+    const total = todayEncounters.length;
+    const finalized = todayEncounters.filter((e) => e.isFinalized).length;
     const pending = total - finalized;
     return { total, finalized, pending };
   }, [encounters]);
@@ -99,12 +104,15 @@ export default function DashboardPage({
     const entries = Object.entries(encounters);
     if (entries.length === 0) return null; // use fallback
     return entries
-      .map(([id, enc]) => ({
-        id,
-        name: enc.providerName,
-        date: formatEncounterDate(enc.encounterDate),
-        status: enc.status,
-      }))
+      .map(([id, enc]) => {
+        const patient = enc.patientId ? getPatientById(enc.patientId) : null;
+        return {
+          id,
+          name: patient ? `${patient.firstName} ${patient.lastName}` : "Unknown Patient",
+          date: formatEncounterDate(enc.encounterDate),
+          status: enc.status,
+        };
+      })
       .sort((a, b) => {
         const encA = encounters[a.id];
         const encB = encounters[b.id];
@@ -118,22 +126,24 @@ export default function DashboardPage({
   return (
     <div className="flex flex-col gap-6 stagger">
       {/* Welcome Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-display">
-            Welcome back, {user?.fullName?.split(" ")[0] ?? "Doctor"}
-          </h1>
-          <p className="text-body mt-1">
-            {tenant?.clinicName ?? "Clinic"} &middot;{" "}
-            {new Date().toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
-        </div>
-        <Badge variant="default">{planName} Plan</Badge>
+      <div>
+        <h1 className="text-display">
+          Welcome back,{" "}
+          {(() => {
+            const parts = user?.fullName?.split(" ") ?? [];
+            const hasTitle = parts[0]?.endsWith(".");
+            return hasTitle ? parts.slice(0, 2).join(" ") : (parts[0] ?? "Doctor");
+          })()}
+        </h1>
+        <p className="text-body mt-1">
+          {tenant?.clinicName ?? "Clinic"} &middot;{" "}
+          {new Date().toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </p>
       </div>
 
       {/* Stats Grid */}

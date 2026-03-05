@@ -1,6 +1,6 @@
-# ClarityOS ERP — System Architecture
+# ClarityOS EHR — System Architecture
 
-> **Version:** 1.0 | **Updated:** 2026-03-04 | **Status:** Phase 3 Complete (Frontend MVP)
+> **Version:** 2.0 | **Updated:** 2026-03-04 | **Status:** Phase 2 Complete (Backend + AI Scribe + Finalize)
 
 ---
 
@@ -8,15 +8,15 @@
 
 | Property | Value |
 |----------|-------|
-| Product | Clarity EHR / ClarityOS ERP |
+| Product | ClarityOS EHR |
 | Domain | Optometry EHR/PMS (Electronic Health Record / Practice Management System) |
 | Model | Multi-tenant SaaS (schema-per-tenant PostgreSQL) |
 | Frontend | Next.js 14 (App Router) + React 18 + TypeScript 5.5 strict |
 | Styling | Tailwind CSS 3.4 + shadcn/ui + CSS custom properties |
 | State | Zustand 4.5 with devtools + persist middleware |
-| Backend (planned) | Python FastAPI + PostgreSQL + Redis/Celery |
-| Auth (current) | Mock JWT sessions (4 role scenarios) |
-| Auth (planned) | JWT with entitlements payload from FastAPI |
+| Backend | Python FastAPI + PostgreSQL (schema-per-tenant) + Supabase Auth |
+| Auth (current) | Supabase JWT (HS256) with mock fallback in dev |
+| AI | Anthropic Claude API (claude-sonnet-4-6) for AI Scribe |
 
 ---
 
@@ -71,7 +71,16 @@ components/
 ├── encounter/
 │   ├── RefractionGrid.tsx                  Keyboard-optimized Rx entry (4×12 grid)
 │   ├── ExamFindings.tsx                    Anterior/posterior accordion
-│   └── DiagnosisPicker.tsx                 ICD-10 search + OD/OS/OU laterality
+│   ├── DiagnosisPicker.tsx                 ICD-10 search + OD/OS/OU laterality
+│   ├── FinalizeModal.tsx                   Sign & Seal clinical summary modal
+│   ├── ClinicalDiffViewer.tsx              AI change diff with per-field revert
+│   ├── AuditTrailSidebar.tsx               Encounter audit timeline sidebar
+│   ├── AiScribeWidget.tsx                  AI dictation → SOAP + structured autofill
+│   ├── VitalsForm.tsx                      Editable vitals entry form
+│   ├── VitalsCard.tsx                      Read-only vitals display
+│   ├── ExamFindingsCard.tsx                Read-only exam findings display
+│   ├── EncounterBottomTabs.tsx             Bottom tab navigation + status actions
+│   └── ContinuitySidebar.tsx               Master Problem List sidebar
 └── ui/
     ├── card.tsx                            shadcn Card (glass-card base)
     ├── badge.tsx                           7 variants (pill-shaped)
@@ -81,11 +90,16 @@ components/
 
 hooks/
 ├── useEntitlements.ts                      Feature gating (has/hasAll/hasAny/requireRole)
-└── useRefractionKeyboard.ts                Grid keyboard navigation
+├── useRefractionKeyboard.ts                Grid keyboard navigation
+└── useAiScribe.ts                          AI Scribe SSE streaming + structured data parsing
 
 store/
 ├── sessionStore.ts                         JWT + auth state (mock in dev)
+├── encounterStore.ts                       Encounter state + finalize modal toggle
 ├── refractionStore.ts                      Draft/committed Rx with debounced save
+├── vitalsStore.ts                          Draft/committed vitals with debounced save
+├── examFindingsStore.ts                    Per-section exam findings with WNL workflow
+├── diagnosisStore.ts                       ICD-10 diagnoses per encounter
 ├── themeStore.ts                           Dark/light preference
 └── tenantCustomizationStore.ts             Logo URL + accent color
 
@@ -492,6 +506,8 @@ AI jobs use Celery + Redis queue. WebSocket option for real-time streaming.
 | `ARCHITECTURE.md` | This file — current system architecture |
 | `BRAND_GUIDELINES.md` | Full design system (colors, typography, components, motion) |
 | `DESIGN_TEMPLATE.md` | Quick-reference templates for building new pages |
+| `docs/technical-specification.md` | Phase 1 California-compliant technical spec |
+| `docs/pitch-california.md` | Market positioning & feature pitch for CA optometrists |
 
 ---
 
@@ -502,16 +518,20 @@ AI jobs use Celery + Redis queue. WebSocket option for real-time streaming.
 - Phase 2: Tenant layout, Dashboard, Schedule, Patients pages
 - Phase 3: ExamFindings, DiagnosisPicker, encounter page
 - UI: Glassmorphism redesign, shadcn/ui components, settings page
+- Backend: FastAPI + PostgreSQL clinical core (encounters, vitals, refractions, diagnoses, exam findings, MPPL)
+- RBAC: 16-action permission matrix, 5 roles, PermissionGate component
+- Audit: HIPAA-compliant audit log (append-only, timestamped, staff-linked)
+- AI Scribe: Streaming SOAP + structured autofill, Clinical Diff Viewer, accept endpoint
+- Finalize & Sign: Guided modal with clinical summary, attestation, diagnosis guardrail, API integration
 
 ### Next
 - Patient detail page with Rx history (`/patients/[patientId]`)
-- Encounter status flow (Pre-Test → In Exam → Finalized)
-- FastAPI backend skeleton
-- Real auth flow replacing mock sessions
+- Encounter addenda (timestamped amendments without reopening)
+- Real auth flow replacing mock sessions (Supabase Auth integration)
 
 ### Future
-- AI Scribe (async Celery job + WebSocket streaming)
+- OCT & visual field integration (device import)
+- FHIR R4 export endpoints
 - Advanced Analytics (Rx trends, revenue dashboards)
-- Equipment Import (autorefractor/OCT via Local Agent)
 - Optical POS & Inventory (frame/lens matrix)
 - Billing & Insurance (clearinghouse integration)

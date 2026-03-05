@@ -172,7 +172,7 @@ export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
           <img
             src={logoUrl}
             alt="Clinic logo"
-            className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+            className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
           />
         ) : (
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--accent-dim)] border border-[var(--mono-border)]">

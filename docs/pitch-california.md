@@ -95,7 +95,22 @@ The **Patient Sticky Header** — visible at the top of every encounter page —
 
 ---
 
-## 6. Refraction Grid — Keyboard-First Prescription Entry
+## 6. Zero-Loss Data Protection — Auto-Save & Exit Guards
+
+**The problem:** A doctor dictates three minutes of clinical notes into the AI Scribe, then accidentally closes the browser tab. In most EHR systems, that work is gone. Retyping from memory introduces errors and costs time.
+
+**How ClarityOS solves it:**
+
+- **Auto-save to local storage** — Every keystroke in the AI Scribe transcript is continuously backed up to the browser's local storage. If the tab crashes, the browser updates, or the doctor accidentally refreshes — the transcript is silently restored on the next load. No "Save Draft" button. No manual action required.
+- **Exit guard** — If the doctor has unsaved transcript text and tries to close the tab or navigate away, the browser prompts "Leave site? Changes you made may not be lost." This is the same confirmation dialog used by Gmail, Google Docs, and other enterprise tools. It catches the 90% case: accidental refreshes and tab closures.
+- **Finalization-aware** — Once an encounter is signed and sealed, the exit guard deactivates. A finalized chart has nothing to lose — the doctor navigates freely without interruption.
+- **Performance-first architecture** — The auto-save runs entirely within the AI Scribe component. It does not trigger re-renders on the vitals grid, refraction table, or exam findings panels. Typing latency is zero — the doctor never waits for a save cycle.
+
+**What this means in practice:** Your doctors dictate without anxiety. If something goes wrong — a browser crash, an accidental Command+W, a power blip — their work is waiting for them when they come back.
+
+---
+
+## 7. Refraction Grid — Keyboard-First Prescription Entry
 
 **The problem:** Entering a manifest refraction with a mouse means clicking through 14+ fields. With a phoropter in one hand and a patient waiting, that's too slow.
 
@@ -109,7 +124,7 @@ The **Patient Sticky Header** — visible at the top of every encounter page —
 
 ---
 
-## 7. Multi-Tenant Security — Your Data, Your Schema
+## 8. Multi-Tenant Security — Your Data, Your Schema
 
 **The problem:** Shared-database EHR systems create anxiety about data isolation. "Can another clinic see my patients?" should never be a question.
 
@@ -146,12 +161,83 @@ This enforcement is **dual-layered**: the server rejects unauthorized API reques
 
 ---
 
+## 9. Phase 2: Intelligent Clinical Workflow
+
+### AI Scribe — Ambient Dictation Engine
+
+**The problem:** Between pre-test data entry, exam findings, diagnoses, refractions, and the SOAP note, a single encounter can require 40+ discrete field entries. Time spent documenting is time not spent with patients.
+
+**How ClarityOS solves it:**
+
+The AI Scribe is an **ambient data-entry engine**, not a post-exam summarizer. The doctor dictates naturally during the exam — "IOP is 14 and 16, BCVA 20/25 both eyes, anterior segments clear, cup-to-disc 0.3 OU, impression glaucoma suspect" — and Claude does the rest.
+
+- **Streaming SOAP note** — A complete, structured note streams to the screen word-by-word in real time, in standard SOAP format. No waiting.
+- **Simultaneous structured autofill** — While the narrative streams, Claude silently extracts structured data: IOP values go to the vitals grid, cup-to-disc ratio goes to the posterior segment findings, glaucoma suspect populates the ICD-10 diagnosis picker.
+- **Covers all 5 clinical grids** — Vitals, refraction, anterior/posterior exam findings, diagnoses, and chief complaint are all auto-populated in a single dictation session.
+- **Full audit trail** — Every field the scribe touched is logged with a diff: what it was before, what it set it to. Model version (`claude-sonnet-4-6`) is recorded in the audit entry.
+- **Premium entitlement gate** — Available on the Doctor and Owner roles. Upsell modal for Core/Plus subscribers.
+
+---
+
+### Clinical Diff Viewer — Transparent AI Review
+
+**The problem:** AI autofill without review is a documentation liability. If a model misheard a value, the doctor needs to catch it before it's in the record.
+
+**How ClarityOS solves it:**
+
+Before the doctor accepts any AI suggestion, they see a **field-by-field comparison** of every proposed change:
+
+- **Red strikethrough** = what was in the field before
+- **Green bold** = what the AI is proposing
+- **Per-field revert button** — Reject any individual change without canceling the whole autofill. Keep the IOP, revert the wrong axis value.
+- **Diagnoses reviewed separately** — Each proposed ICD-10 code appears as a reviewable chip. The doctor confirms or removes each one individually.
+- **AI never locks in changes** — The "Accept" button dispatches all accepted diffs simultaneously. Until Accept is clicked, nothing has changed.
+
+**For audit purposes:** Past autofill events in the AuditTrailSidebar embed a read-only version of the diff viewer. Any reviewer can see exactly what the AI changed in any past session.
+
+---
+
+### Finalize Modal — Sign & Seal Workflow
+
+**The problem:** "Click to sign" is a liability. Rushed finalization with missing diagnoses, unsigned assessment sections, or unreviewed IOP alerts is exactly what creates malpractice exposure and Board inquiries.
+
+**How ClarityOS solves it:**
+
+The Finalize Modal is a **guided 7-step review** that the doctor must walk through before the encounter is sealed:
+
+1. **Chief complaint** — Read-only review of what was recorded
+2. **Vitals summary** — Flags IOP > 21 mmHg with an alert badge (glaucoma risk threshold)
+3. **Diagnoses** — **Hard block** if no diagnoses have been recorded — the "Sign & Seal Chart" button cannot be clicked. A chart without at least one ICD-10 code cannot be legally billed or audited. ClarityOS prevents this structurally, not with a warning
+4. **Final Rx** — OD and OS prescription columns, side by side
+5. **Assessment & Plan** — Free-text field, minimum 10 characters enforced (no blank A&P fields)
+6. **Attestation** — "I attest this documentation is accurate and complete" — required checkbox
+7. **Sign & Seal Chart** — Disabled until A&P and attestation gates are both satisfied
+
+**After signing:** Every field locks. The encounter becomes read-only. The AI Scribe widget is replaced with a read-only saved summary. A confirmation banner displays the signer's name and UTC timestamp.
+
+**Gate logic (actual code):**
+```typescript
+const canSubmit =
+  attested &&
+  assessmentPlan.trim().length >= 10 &&
+  activeDiagnoses.length > 0 &&  // Diagnosis guardrail
+  !isSubmitting;
+```
+
+**Architectural note:** The Finalize Modal is rendered exactly once in the React tree at the encounter page level, triggered via a Zustand store toggle (`encounterStore.finalizeModalOpen`). Both the sticky header and bottom tabs dispatch to the same modal — no duplicate component instances.
+
+**California compliance:** Attestation satisfies Civil Code § 1633.7 (electronic signatures). Provider identity linked to the sealed record satisfies B&P 3041 (license number + NPI on file).
+
+---
+
 ## Roadmap — What's Coming
 
 | Phase | Feature | Status |
 |-------|---------|--------|
 | **Phase 1** | Core EHR (vitals, refractions, exam findings, diagnoses, MPPL, finalization) | Complete |
-| **Phase 2** | AI Scribe — Generate SOAP notes from encounter data in seconds | In Development |
+| **Phase 2** | AI Scribe — Ambient dictation → streaming SOAP + structured autofill | **Complete** |
+| **Phase 2** | Clinical Diff Viewer — Field-level AI change review with per-field revert | **Complete** |
+| **Phase 2** | Finalize Modal — Guided 7-step Sign & Seal workflow | **Complete** |
 | **Phase 2** | Patient detail page with Rx history and encounter timeline | Planned |
 | **Phase 2** | Encounter addenda (timestamped amendments without reopening) | Planned |
 | **Phase 3** | OCT & visual field integration (device import) | Planned |

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
 
+    # ── Anthropic (AI Scribe) ──────────────────────────────────────────────
+    ANTHROPIC_API_KEY: str = ""
+
     # ── Security ──────────────────────────────────────────────────────────
     SECRET_KEY: str = "your-super-secret-key-for-us-saas-2026"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week

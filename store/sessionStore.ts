@@ -78,7 +78,7 @@ export const useSessionStore = create<SessionState>()(
         return new Date() > session.expiresAt;
       },
     }),
-    { name: "OptometryERP/Session" }
+    { name: "ClarityOS/Session" }
   )
 );
 

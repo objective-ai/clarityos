@@ -361,7 +361,7 @@ export const useRefractionStore = create<RefractionStore>()(
         );
       },
     })),
-    { name: "OptometryERP/Refraction" }
+    { name: "ClarityOS/Refraction" }
   )
 );
 

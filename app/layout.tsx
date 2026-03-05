@@ -26,8 +26,8 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | Clarity EHR",
-    default: "Clarity EHR — Optometry Practice Management",
+    template: "%s | ClarityOS",
+    default: "ClarityOS — Optometry Practice Management",
   },
   description: "Clinical workflow management for modern optometry practices.",
 };
