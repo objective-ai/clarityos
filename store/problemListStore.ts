@@ -61,12 +61,6 @@ interface ProblemListStoreActions {
     encounterId: string,
     problemId: string,
   ) => Promise<Diagnosis | null>;
-
-  /**
-   * Seed mock problems for development/demo purposes.
-   * Idempotent — skips if patient data is already loaded or loading.
-   */
-  _seedProblems: (patientId: string, problems: PatientProblem[]) => void;
 }
 
 type ProblemListStore = ProblemListStoreState & ProblemListStoreActions;
@@ -107,9 +101,6 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
             `/api/patients/${patientId}/problems`,
           );
 
-          // Don't overwrite if already seeded while we were fetching
-          if (get().patients[patientId]?.loadStatus === "loaded") return;
-
           set(
             (state) => ({
               patients: {
@@ -126,8 +117,6 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
             "fetchProblems/loaded",
           );
         } catch (err) {
-          // Don't overwrite if already seeded while we were fetching
-          if (get().patients[patientId]?.loadStatus === "loaded") return;
 
           set(
             (state) => ({
@@ -187,41 +176,20 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
             "addProblem/saved",
           );
         } catch (err) {
-          // Mock fallback
-          const mock: PatientProblem = {
-            id: crypto.randomUUID(),
-            patient_id: patientId,
-            icd10_code: payload.icd10_code,
-            description: payload.description,
-            eye_affected: payload.eye_affected ?? null,
-            severity: payload.severity ?? null,
-            status: payload.status ?? "active",
-            onset_date: payload.onset_date ?? null,
-            resolved_date: null,
-            source_encounter_id: payload.source_encounter_id ?? null,
-            notes: payload.notes ?? null,
-            is_deleted: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
+          // Surface error — no mock fallback
           set(
-            (state) => {
-              const slice = state.patients[patientId] ?? emptySlice();
-              return {
-                patients: {
-                  ...state.patients,
-                  [patientId]: {
-                    ...slice,
-                    problems: [mock, ...slice.problems],
-                    saveStatus: "idle",
-                    error: err instanceof Error ? err.message : "Failed to save",
-                  },
+            (state) => ({
+              patients: {
+                ...state.patients,
+                [patientId]: {
+                  ...(state.patients[patientId] ?? emptySlice()),
+                  saveStatus: "error",
+                  error: err instanceof Error ? err.message : "Failed to save problem",
                 },
-              };
-            },
+              },
+            }),
             false,
-            "addProblem/mock-fallback",
+            "addProblem/error",
           );
         }
       },
@@ -269,34 +237,20 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
             "updateProblem/saved",
           );
         } catch (err) {
-          // Optimistic local update
+          // Surface error — no mock fallback
           set(
-            (state) => {
-              const slice = state.patients[patientId] ?? emptySlice();
-              return {
-                patients: {
-                  ...state.patients,
-                  [patientId]: {
-                    ...slice,
-                    problems: slice.problems.map((p) => {
-                      if (p.id !== problemId) return p;
-                      const updated = { ...p, updated_at: new Date().toISOString() };
-                      if (payload.eye_affected !== undefined) updated.eye_affected = payload.eye_affected ?? null;
-                      if (payload.severity !== undefined) updated.severity = payload.severity ?? null;
-                      if (payload.status != null) updated.status = payload.status;
-                      if (payload.onset_date !== undefined) updated.onset_date = payload.onset_date ?? null;
-                      if (payload.resolved_date !== undefined) updated.resolved_date = payload.resolved_date ?? null;
-                      if (payload.notes !== undefined) updated.notes = payload.notes ?? null;
-                      return updated;
-                    }),
-                    saveStatus: "idle",
-                    error: err instanceof Error ? err.message : "Failed to update",
-                  },
+            (state) => ({
+              patients: {
+                ...state.patients,
+                [patientId]: {
+                  ...(state.patients[patientId] ?? emptySlice()),
+                  saveStatus: "error",
+                  error: err instanceof Error ? err.message : "Failed to update problem",
                 },
-              };
-            },
+              },
+            }),
             false,
-            "updateProblem/mock-fallback",
+            "updateProblem/error",
           );
         }
       },
@@ -310,30 +264,44 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
 
       async deleteProblem(patientId, problemId) {
         try {
+          // Real API call — no silent removal on failure
           await apiFetch(
             `/api/patients/${patientId}/problems/${problemId}`,
             { method: "DELETE" },
           );
-        } catch {
-          // Proceed with local removal
-        }
 
-        set(
-          (state) => {
-            const slice = state.patients[patientId] ?? emptySlice();
-            return {
+          set(
+            (state) => {
+              const slice = state.patients[patientId] ?? emptySlice();
+              return {
+                patients: {
+                  ...state.patients,
+                  [patientId]: {
+                    ...slice,
+                    problems: slice.problems.filter((p) => p.id !== problemId),
+                  },
+                },
+              };
+            },
+            false,
+            "deleteProblem/done",
+          );
+        } catch (err) {
+          set(
+            (state) => ({
               patients: {
                 ...state.patients,
                 [patientId]: {
-                  ...slice,
-                  problems: slice.problems.filter((p) => p.id !== problemId),
+                  ...(state.patients[patientId] ?? emptySlice()),
+                  saveStatus: "error",
+                  error: err instanceof Error ? err.message : "Failed to delete problem",
                 },
               },
-            };
-          },
-          false,
-          "deleteProblem/done",
-        );
+            }),
+            false,
+            "deleteProblem/error",
+          );
+        }
       },
 
       async promoteToDiagnosis(encounterId, problemId) {
@@ -348,20 +316,6 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
         }
       },
 
-      _seedProblems(patientId, problems) {
-        const existing = get().patients[patientId];
-        if (existing?.loadStatus === "loaded") return;
-        set(
-          (state) => ({
-            patients: {
-              ...state.patients,
-              [patientId]: { problems, loadStatus: "loaded", saveStatus: "idle", error: null },
-            },
-          }),
-          false,
-          "_seedProblems",
-        );
-      },
     }), { name: "ClarityOS/ProblemList", enabled: isDev }));
 
 export const useProblemListStore = create<ProblemListStore>()(

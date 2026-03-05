@@ -42,6 +42,9 @@ interface ExamFindingsStoreState {
 }
 
 interface ExamFindingsStoreActions {
+  /** Load findings from the API for an encounter+section */
+  loadFindings: (encounterId: string, section: ExamSection) => Promise<void>;
+
   /** Initialize findings for an encounter+section (idempotent) */
   init: (encounterId: string, section: ExamSection, initialData?: Partial<FindingsDraft>) => void;
 
@@ -110,42 +113,37 @@ async function saveFindingsToAPI(
   actions._setStatus(key, "saving");
 
   try {
+    // Build payload using camelCase keys — api-client converts to snake_case automatically
     const payload = {
-      is_normal_wnl: state.draft.is_normal_wnl,
-      findings_od: state.draft.findings_od,
-      findings_os: state.draft.findings_os,
-      provider_notes: state.draft.provider_notes || null,
+      isNormalWnl: state.draft.is_normal_wnl,
+      findingsOd: state.draft.findings_od,
+      findingsOs: state.draft.findings_os,
+      providerNotes: state.draft.provider_notes || null,
     };
 
-    let saved: FindingsDraft;
+    // Real API call — no mock fallback
+    const res = await apiFetch<{
+      isNormalWnl: boolean;
+      findingsOd: Record<string, StructureFinding> | null;
+      findingsOs: Record<string, StructureFinding> | null;
+      providerNotes: string | null;
+    }>(
+      `/api/encounters/${encounterId}/exam-findings/${section}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
 
-    try {
-      const res = await apiFetch<{
-        is_normal_wnl: boolean;
-        findings_od: Record<string, StructureFinding> | null;
-        findings_os: Record<string, StructureFinding> | null;
-        provider_notes: string | null;
-      }>(
-        `/api/encounters/${encounterId}/exam-findings/${section}`,
-        { method: "PUT", body: JSON.stringify(payload) },
-      );
-      saved = {
-        is_normal_wnl: res.is_normal_wnl,
-        findings_od: res.findings_od ?? state.draft.findings_od,
-        findings_os: res.findings_os ?? state.draft.findings_os,
-        provider_notes: res.provider_notes ?? "",
-      };
-    } catch {
-      // Mock fallback when backend is unavailable
-      await new Promise((r) => setTimeout(r, 400));
-      saved = { ...state.draft };
-    }
+    const saved: FindingsDraft = {
+      is_normal_wnl: res.isNormalWnl,
+      findings_od: res.findingsOd ?? state.draft.findings_od,
+      findings_os: res.findingsOs ?? state.draft.findings_os,
+      provider_notes: res.providerNotes ?? "",
+    };
 
     actions.commit(key, saved);
     setTimeout(() => actions.resetStatus(key), 2000);
-  } catch {
+  } catch (err) {
     actions.setError(key, [
-      { field: "_findings", message: "Network error — will retry on next change" },
+      { field: "_findings", message: err instanceof Error ? err.message : "Network error — will retry on next change" },
     ]);
   }
 }
@@ -156,6 +154,79 @@ async function saveFindingsToAPI(
 
 const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>((set, get) => ({
       findings: {},
+
+      async loadFindings(encounterId, section) {
+        const key = makeKey(encounterId, section);
+
+        // Initialize slot with idle state before loading
+        set(
+          (state) => ({
+            findings: {
+              ...state.findings,
+              [key]: {
+                draft: state.findings[key]?.draft ?? blankDraft(section),
+                committed: state.findings[key]?.committed ?? null,
+                saveStatus: "idle" as FindingsSaveStatus,
+                errors: [],
+                lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
+              },
+            },
+          }),
+          false,
+          "loadFindings/loading"
+        );
+
+        try {
+          // apiFetch returns camelCase keys from the standalone GET endpoint
+          const res = await apiFetch<{
+            isNormalWnl: boolean;
+            findingsOd: Record<string, StructureFinding> | null;
+            findingsOs: Record<string, StructureFinding> | null;
+            providerNotes: string | null;
+          }>(`/api/encounters/${encounterId}/exam-findings/${section}`);
+
+          const draft: FindingsDraft = {
+            is_normal_wnl: res.isNormalWnl,
+            findings_od: res.findingsOd ?? blankDraft(section).findings_od,
+            findings_os: res.findingsOs ?? blankDraft(section).findings_os,
+            provider_notes: res.providerNotes ?? "",
+          };
+
+          set(
+            (state) => ({
+              findings: {
+                ...state.findings,
+                [key]: {
+                  draft,
+                  committed: { ...draft },
+                  saveStatus: "idle" as FindingsSaveStatus,
+                  errors: [],
+                  lastSavedAt: null,
+                },
+              },
+            }),
+            false,
+            "loadFindings/loaded"
+          );
+        } catch (err) {
+          set(
+            (state) => ({
+              findings: {
+                ...state.findings,
+                [key]: {
+                  draft: state.findings[key]?.draft ?? blankDraft(section),
+                  committed: state.findings[key]?.committed ?? null,
+                  saveStatus: "error" as FindingsSaveStatus,
+                  errors: [{ field: "_load", message: err instanceof Error ? err.message : "Could not load exam findings" }],
+                  lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
+                },
+              },
+            }),
+            false,
+            "loadFindings/error"
+          );
+        }
+      },
 
       init(encounterId, section, initialData) {
         const key = makeKey(encounterId, section);

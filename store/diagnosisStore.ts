@@ -21,7 +21,7 @@ import type {
 // Store shape
 // ---------------------------------------------------------------------------
 
-type SaveStatus = "idle" | "saving" | "error";
+type SaveStatus = "idle" | "loading" | "saving" | "error";
 
 interface DiagnosisSlice {
   diagnoses: Diagnosis[];
@@ -34,6 +34,9 @@ interface DiagnosisStoreState {
 }
 
 interface DiagnosisStoreActions {
+  /** Load diagnoses from the API for an encounter */
+  loadDiagnoses: (encounterId: string) => Promise<void>;
+
   /** Initialize diagnoses for an encounter (idempotent) */
   init: (encounterId: string, initial?: Diagnosis[]) => void;
 
@@ -73,6 +76,56 @@ function emptySlice(): DiagnosisSlice {
 
 const diagnosisStoreImpl = subscribeWithSelector(devtools<DiagnosisStore>((set, get) => ({
       encounters: {},
+
+      async loadDiagnoses(encounterId) {
+        set(
+          (state) => ({
+            encounters: {
+              ...state.encounters,
+              [encounterId]: {
+                ...(state.encounters[encounterId] ?? emptySlice()),
+                saveStatus: "loading" as SaveStatus,
+                error: null,
+              },
+            },
+          }),
+          false,
+          "loadDiagnoses/loading"
+        );
+
+        try {
+          const diagnoses = await apiFetch<Diagnosis[]>(`/api/encounters/${encounterId}/diagnoses`);
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [encounterId]: {
+                  diagnoses,
+                  saveStatus: "idle" as SaveStatus,
+                  error: null,
+                },
+              },
+            }),
+            false,
+            "loadDiagnoses/loaded"
+          );
+        } catch (err) {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [encounterId]: {
+                  ...(state.encounters[encounterId] ?? emptySlice()),
+                  saveStatus: "error" as SaveStatus,
+                  error: err instanceof Error ? err.message : "Could not load diagnoses",
+                },
+              },
+            }),
+            false,
+            "loadDiagnoses/error"
+          );
+        }
+      },
 
       init(encounterId, initial) {
         const existing = get().encounters[encounterId];
@@ -134,36 +187,20 @@ const diagnosisStoreImpl = subscribeWithSelector(devtools<DiagnosisStore>((set, 
             "addDiagnosis/saved",
           );
         } catch (err) {
-          // Mock fallback — create local diagnosis
-          const mockDx: Diagnosis = {
-            id: crypto.randomUUID(),
-            encounter_id: encounterId,
-            icd10_code: payload.icd10_code,
-            description: payload.description,
-            eye_affected: payload.eye_affected ?? null,
-            severity: payload.severity ?? null,
-            status: payload.status ?? "Active",
-            notes: payload.notes ?? null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
+          // Surface error — no mock fallback
           set(
-            (state) => {
-              const slice = state.encounters[encounterId] ?? emptySlice();
-              return {
-                encounters: {
-                  ...state.encounters,
-                  [encounterId]: {
-                    diagnoses: [...slice.diagnoses, mockDx],
-                    saveStatus: "idle",
-                    error: err instanceof Error ? err.message : "Failed to save",
-                  },
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [encounterId]: {
+                  ...(state.encounters[encounterId] ?? emptySlice()),
+                  saveStatus: "error" as SaveStatus,
+                  error: err instanceof Error ? err.message : "Failed to save diagnosis",
                 },
-              };
-            },
+              },
+            }),
             false,
-            "addDiagnosis/mock-fallback",
+            "addDiagnosis/error",
           );
         }
       },
@@ -210,31 +247,20 @@ const diagnosisStoreImpl = subscribeWithSelector(devtools<DiagnosisStore>((set, 
             "updateDiagnosis/saved",
           );
         } catch (err) {
-          // Optimistic update locally
+          // Surface error — no mock fallback
           set(
-            (state) => {
-              const slice = state.encounters[encounterId] ?? emptySlice();
-              return {
-                encounters: {
-                  ...state.encounters,
-                  [encounterId]: {
-                    diagnoses: slice.diagnoses.map((dx) => {
-                      if (dx.id !== diagnosisId) return dx;
-                      const updated = { ...dx, updated_at: new Date().toISOString() };
-                      if (payload.eye_affected !== undefined) updated.eye_affected = payload.eye_affected ?? null;
-                      if (payload.severity !== undefined) updated.severity = payload.severity ?? null;
-                      if (payload.status != null) updated.status = payload.status;
-                      if (payload.notes !== undefined) updated.notes = payload.notes ?? null;
-                      return updated;
-                    }),
-                    saveStatus: "idle",
-                    error: err instanceof Error ? err.message : "Failed to update",
-                  },
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [encounterId]: {
+                  ...(state.encounters[encounterId] ?? emptySlice()),
+                  saveStatus: "error" as SaveStatus,
+                  error: err instanceof Error ? err.message : "Failed to update diagnosis",
                 },
-              };
-            },
+              },
+            }),
             false,
-            "updateDiagnosis/mock-fallback",
+            "updateDiagnosis/error",
           );
         }
       },
@@ -256,31 +282,45 @@ const diagnosisStoreImpl = subscribeWithSelector(devtools<DiagnosisStore>((set, 
         );
 
         try {
+          // Real API call — no silent swallow on failure
           await apiFetch(
             `/api/encounters/${encounterId}/diagnoses/${diagnosisId}`,
             { method: "DELETE" },
           );
-        } catch {
-          // Proceed with local removal even on network error
-        }
 
-        set(
-          (state) => {
-            const slice = state.encounters[encounterId] ?? emptySlice();
-            return {
+          set(
+            (state) => {
+              const slice = state.encounters[encounterId] ?? emptySlice();
+              return {
+                encounters: {
+                  ...state.encounters,
+                  [encounterId]: {
+                    diagnoses: slice.diagnoses.filter((dx) => dx.id !== diagnosisId),
+                    saveStatus: "idle",
+                    error: null,
+                  },
+                },
+              };
+            },
+            false,
+            "removeDiagnosis/done",
+          );
+        } catch (err) {
+          set(
+            (state) => ({
               encounters: {
                 ...state.encounters,
                 [encounterId]: {
-                  diagnoses: slice.diagnoses.filter((dx) => dx.id !== diagnosisId),
-                  saveStatus: "idle",
-                  error: null,
+                  ...(state.encounters[encounterId] ?? emptySlice()),
+                  saveStatus: "error" as SaveStatus,
+                  error: err instanceof Error ? err.message : "Failed to remove diagnosis",
                 },
               },
-            };
-          },
-          false,
-          "removeDiagnosis/done",
-        );
+            }),
+            false,
+            "removeDiagnosis/error",
+          );
+        }
       },
 
       _addLocal(encounterId, dx) {
