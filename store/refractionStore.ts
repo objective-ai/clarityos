@@ -33,12 +33,15 @@
 
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
+
+const isDev = process.env.NODE_ENV === "development";
 import {
   blankDraft,
   getDraftValue,
   setDraftValue,
   REFRACTION_COLUMNS,
   type ColumnState,
+  type EyeRxDraft,
   type GridCoord,
   type RefractionDraft,
   type RefractionType,
@@ -69,6 +72,9 @@ interface RefractionStoreState {
 }
 
 interface RefractionStoreActions {
+  /** Load refractions from the real API and initialize all columns */
+  loadRefractions: (encounterId: string, isReadOnly: boolean) => Promise<void>;
+
   /** Called once when the component mounts with encounter data from the server */
   init: (encounterId: string, initialRefractions: RefractionDraft[], isReadOnly: boolean) => void;
 
@@ -108,6 +114,47 @@ type RefractionStore = RefractionStoreState & RefractionStoreActions;
 
 const debounceTimers: Record<number, ReturnType<typeof setTimeout>> = {};
 const DEBOUNCE_MS = 1500;
+
+// ---------------------------------------------------------------------------
+// Converter: camelCase API response → snake_case RefractionDraft
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a camelCase API refraction response to the snake_case RefractionDraft shape.
+ * apiFetch() returns camelCase keys; the store/components use snake_case internally.
+ */
+function refractionSummaryToDraft(data: Record<string, unknown>): RefractionDraft {
+  const od = (data.od ?? {}) as Record<string, unknown>;
+  const os = (data.os ?? {}) as Record<string, unknown>;
+  return {
+    id: (data.id as string) ?? null,
+    refraction_type: (data.refractionType as RefractionType) ?? "habitual",
+    od: {
+      sphere: (od.sphere as number) ?? null,
+      cylinder: (od.cylinder as number) ?? null,
+      axis: (od.axis as number) ?? null,
+      add: (od.add as number) ?? null,
+      prism: (od.prism as number) ?? null,
+      prism_base: (od.prismBase as EyeRxDraft["prism_base"]) ?? null,
+      visual_acuity: (od.visualAcuity as string) ?? null,
+    },
+    os: {
+      sphere: (os.sphere as number) ?? null,
+      cylinder: (os.cylinder as number) ?? null,
+      axis: (os.axis as number) ?? null,
+      add: (os.add as number) ?? null,
+      prism: (os.prism as number) ?? null,
+      prism_base: (os.prismBase as EyeRxDraft["prism_base"]) ?? null,
+      visual_acuity: (os.visualAcuity as string) ?? null,
+    },
+    pd_distance: (data.pdDistance as number) ?? null,
+    pd_near: (data.pdNear as number) ?? null,
+    pd_od: (data.pdOd as number) ?? null,
+    pd_os: (data.pdOs as number) ?? null,
+    is_final_rx: (data.isFinalRx as boolean) ?? false,
+    notes: (data.notes as string) ?? null,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // API call — kept here so the store is self-contained
@@ -165,26 +212,18 @@ async function saveColumnToAPI(
       return;
     }
 
-    let savedDraft: RefractionDraft;
-
-    try {
-      // Real API — PATCH /api/encounters/{id}/column/{col}
-      const json = await apiFetch<{ id: string }>(
-        `/api/encounters/${encounterId}/column/${colIndex}`,
-        { method: "PATCH", body: JSON.stringify(body) },
-      );
-      savedDraft = { ...draft, id: json.id ?? draft.id };
-    } catch {
-      // Fallback to mock when backend is unavailable
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      savedDraft = { ...draft, id: draft.id ?? `mock-rx-${draft.refraction_type}-${Date.now()}` };
-    }
+    // Real API — PATCH /api/encounters/{id}/column/{col} — no mock fallback
+    const json = await apiFetch<{ id: string }>(
+      `/api/encounters/${encounterId}/column/${colIndex}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    );
+    const savedDraft: RefractionDraft = { ...draft, id: json.id ?? draft.id };
 
     actions.commitColumn(colIndex, savedDraft);
     setTimeout(() => actions.resetStatus(colIndex), 2000);
   } catch (err) {
     actions.setColumnError(colIndex, [
-      { field: "_column", message: "Network error — will retry on next change" },
+      { field: "_column", message: err instanceof Error ? err.message : "Network error — will retry on next change" },
     ]);
   }
 }
@@ -209,6 +248,60 @@ export const useRefractionStore = create<RefractionStore>()(
       isReadOnly:  false,
 
       // ── Actions ────────────────────────────────────────────────────────
+
+      async loadRefractions(encounterId, isReadOnly) {
+        // Set encounterId and all columns to a neutral loading state
+        set(
+          (state) => ({
+            encounterId,
+            isReadOnly,
+            columns: state.columns.map((col) => ({
+              ...col,
+              saveStatus: "idle" as SaveStatus,
+              errors: [],
+            })),
+          }),
+          false,
+          "loadRefractions/loading"
+        );
+
+        try {
+          // Parse refractions from the encounter response
+          const encounter = await apiFetch<{ refractions?: Record<string, unknown>[] }>(
+            `/api/encounters/${encounterId}`,
+          );
+          const rawRefractions: Record<string, unknown>[] = encounter.refractions ?? [];
+
+          // Convert camelCase API response to snake_case RefractionDraft
+          const converted = rawRefractions.map(refractionSummaryToDraft);
+
+          const columns: ColumnState[] = REFRACTION_COLUMNS.map((type) => {
+            const existing = converted.find((r) => r.refraction_type === type);
+            const draft = existing ?? blankDraft(type);
+            return {
+              draft,
+              committed: existing ?? null,
+              saveStatus: "idle" as SaveStatus,
+              errors: [],
+              lastSavedAt: null,
+            };
+          });
+
+          set({ columns, encounterId, isReadOnly }, false, "loadRefractions/loaded");
+        } catch (err) {
+          set(
+            (state) => ({
+              columns: state.columns.map((col) => ({
+                ...col,
+                saveStatus: "error" as SaveStatus,
+                errors: [{ field: "_load", message: err instanceof Error ? err.message : "Could not load refractions" }],
+              })),
+            }),
+            false,
+            "loadRefractions/error"
+          );
+        }
+      },
 
       init(encounterId, initialRefractions, isReadOnly) {
         const columns: ColumnState[] = REFRACTION_COLUMNS.map((type, i) => {
@@ -361,7 +454,7 @@ export const useRefractionStore = create<RefractionStore>()(
         );
       },
     })),
-    { name: "ClarityOS/Refraction" }
+    { name: "ClarityOS/Refraction", enabled: isDev }
   )
 );
 

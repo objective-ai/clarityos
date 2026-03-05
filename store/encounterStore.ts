@@ -1,12 +1,17 @@
 import { create } from "zustand";
 import { persist, devtools } from "zustand/middleware";
+
+const isDev = process.env.NODE_ENV === "development";
 import type { EncounterStatus } from "@/types/encounter";
+import { apiFetch } from "@/lib/api-client";
 
 export type { EncounterStatus };
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type EncounterLoadStatus = "idle" | "loading" | "loaded" | "error";
 
 export interface EncounterState {
   status: EncounterStatus;
@@ -19,11 +24,31 @@ export interface EncounterState {
   signedAt?: string;
   aiSummaryText?: string;
   aiSummaryGeneratedAt?: string;
+  /** Load status for this encounter from the API */
+  loadStatus?: EncounterLoadStatus;
+  loadError?: string;
+}
+
+// Shape of the API response from GET /api/encounters/:id
+interface EncounterApiResponse {
+  id: string;
+  patientId: string;
+  providerId: string;
+  providerName?: string;
+  status: EncounterStatus;
+  chiefComplaint?: string;
+  encounterDate: string;
+  signedByName?: string;
+  signedAt?: string;
+  aiSummaryText?: string;
+  aiSummaryGeneratedAt?: string;
 }
 
 interface EncounterStoreState {
   encounters: Record<string, EncounterState>;
   finalizeModalOpen: boolean;
+  /** Load an encounter from the real API — force-overwrites persisted state */
+  loadEncounter: (id: string) => Promise<void>;
   initEncounter: (id: string, data: Omit<EncounterState, "isFinalized">) => void;
   advanceStatus: (id: string) => void;
   setChiefComplaint: (id: string, text: string) => void;
@@ -57,6 +82,79 @@ export const useEncounterStore = create<EncounterStoreState>()(
       (set, get) => ({
         encounters: {},
         finalizeModalOpen: false,
+
+        async loadEncounter(id) {
+          // Set loading state — force-overwrite any persisted data
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: {
+                  ...(state.encounters[id] ?? {
+                    status: "pre_test" as EncounterStatus,
+                    isFinalized: false,
+                    encounterDate: "",
+                    providerName: "",
+                  }),
+                  loadStatus: "loading",
+                  loadError: undefined,
+                },
+              },
+            }),
+            false,
+            "loadEncounter/loading"
+          );
+
+          try {
+            const data = await apiFetch<EncounterApiResponse>(`/api/encounters/${id}`);
+
+            // Force-overwrite: use set() directly, NOT initEncounter()
+            // initEncounter() has an idempotency guard that would skip stale persisted data
+            set(
+              (state) => ({
+                encounters: {
+                  ...state.encounters,
+                  [id]: {
+                    status: data.status,
+                    isFinalized: data.status === "finalized",
+                    encounterDate: data.encounterDate,
+                    providerName: data.providerName ?? "",
+                    patientId: data.patientId,
+                    chiefComplaint: data.chiefComplaint,
+                    signedByName: data.signedByName,
+                    signedAt: data.signedAt,
+                    aiSummaryText: data.aiSummaryText,
+                    aiSummaryGeneratedAt: data.aiSummaryGeneratedAt,
+                    loadStatus: "loaded",
+                    loadError: undefined,
+                  },
+                },
+              }),
+              false,
+              "loadEncounter/loaded"
+            );
+          } catch (err) {
+            set(
+              (state) => ({
+                encounters: {
+                  ...state.encounters,
+                  [id]: {
+                    ...(state.encounters[id] ?? {
+                      status: "pre_test" as EncounterStatus,
+                      isFinalized: false,
+                      encounterDate: "",
+                      providerName: "",
+                    }),
+                    loadStatus: "error",
+                    loadError: err instanceof Error ? err.message : "Failed to load encounter",
+                  },
+                },
+              }),
+              false,
+              "loadEncounter/error"
+            );
+          }
+        },
 
         initEncounter: (id, data) => {
           const existing = get().encounters[id];
@@ -175,6 +273,6 @@ export const useEncounterStore = create<EncounterStoreState>()(
         partialize: (state) => ({ encounters: state.encounters }),
       }
     ),
-    { name: "ClarityOS/Encounters" }
+    { name: "ClarityOS/Encounters", enabled: isDev }
   )
 );

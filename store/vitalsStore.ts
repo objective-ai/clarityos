@@ -12,7 +12,7 @@
  *                                      |
  *                                saveStatus = "saving"
  *                                      |
- *                           mock API (dev) / real API (prod)
+ *                           real API (FastAPI backend)
  *                                      |
  *                  success: committed = draft, status = "saved"
  *                  error:   committed unchanged, status = "error"
@@ -42,6 +42,9 @@ interface VitalsStoreState {
 }
 
 interface VitalsStoreActions {
+  /** Load vitals from the API for an encounter */
+  loadVitals: (encounterId: string) => Promise<void>;
+
   /** Initialize vitals for an encounter (idempotent) */
   init: (encounterId: string, initialData?: Partial<VitalsDraft>) => void;
 
@@ -77,7 +80,7 @@ const debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const DEBOUNCE_MS = 1500;
 
 // ---------------------------------------------------------------------------
-// Mock API save
+// API save — real API only, no mock fallback
 // ---------------------------------------------------------------------------
 
 async function saveVitalsToAPI(
@@ -106,45 +109,37 @@ async function saveVitalsToAPI(
       return;
     }
 
-    // Build payload (snake_case keys matching FastAPI schema)
+    // Build payload using camelCase keys — api-client converts to snake_case automatically
     const payload = {
-      iop_od: draft.iop_od,
-      iop_os: draft.iop_os,
-      iop_method: draft.iop_method,
-      ucva_od: draft.ucva_od,
-      ucva_os: draft.ucva_os,
-      bcva_od: draft.bcva_od,
-      bcva_os: draft.bcva_os,
-      near_va_od: draft.near_va_od,
-      near_va_os: draft.near_va_os,
-      blood_pressure: draft.blood_pressure,
+      iopOd: draft.iop_od,
+      iopOs: draft.iop_os,
+      iopMethod: draft.iop_method,
+      ucvaOd: draft.ucva_od,
+      ucvaOs: draft.ucva_os,
+      bcvaOd: draft.bcva_od,
+      bcvaOs: draft.bcva_os,
+      nearVaOd: draft.near_va_od,
+      nearVaOs: draft.near_va_os,
+      bloodPressure: draft.blood_pressure,
       pulse: draft.pulse,
-      pupils_equal_round_reactive: draft.pupils_equal_round_reactive,
-      relative_afferent_pupillary_defect: draft.relative_afferent_pupillary_defect,
-      cover_test_notes: draft.cover_test_notes,
-      technician_notes: draft.technician_notes,
+      pupilsEqualRoundReactive: draft.pupils_equal_round_reactive,
+      relativeAfferentPupillaryDefect: draft.relative_afferent_pupillary_defect,
+      coverTestNotes: draft.cover_test_notes,
+      technicianNotes: draft.technician_notes,
     };
 
-    let savedDraft: VitalsDraft;
+    // Real API call — no mock fallback
+    const res = await apiFetch<{ id: string; encounterId: string }>(
+      `/api/encounters/${encounterId}/vitals`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
 
-    try {
-      // Real API call to FastAPI backend
-      const res = await apiFetch<{ id: string; encounter_id: string }>(
-        `/api/encounters/${encounterId}/vitals`,
-        { method: "PUT", body: JSON.stringify(payload) },
-      );
-      savedDraft = { ...draft, id: res.id };
-    } catch {
-      // Fallback to mock save when backend is unavailable
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      savedDraft = { ...draft, id: draft.id ?? `mock-vitals-${Date.now()}` };
-    }
-
+    const savedDraft: VitalsDraft = { ...draft, id: res.id };
     actions.commit(encounterId, savedDraft);
     setTimeout(() => actions.resetStatus(encounterId), 2000);
-  } catch {
+  } catch (err) {
     actions.setError(encounterId, [
-      { field: "_vitals", message: "Network error — will retry on next change" },
+      { field: "_vitals", message: err instanceof Error ? err.message : "Network error — will retry on next change" },
     ]);
   }
 }
@@ -155,6 +150,91 @@ async function saveVitalsToAPI(
 
 const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) => ({
       encounters: {},
+
+      async loadVitals(encounterId) {
+        // Set loading state
+        set(
+          (state) => ({
+            encounters: {
+              ...state.encounters,
+              [encounterId]: {
+                ...(state.encounters[encounterId] ?? {
+                  draft: blankVitalsDraft(encounterId),
+                  committed: null,
+                  saveStatus: "idle" as VitalsSaveStatus,
+                  errors: [],
+                  lastSavedAt: null,
+                }),
+                saveStatus: "loading" as VitalsSaveStatus,
+              },
+            },
+          }),
+          false,
+          "loadVitals/loading"
+        );
+
+        try {
+          // apiFetch returns camelCase keys — map to snake_case VitalsDraft fields
+          const data = await apiFetch<Record<string, unknown>>(
+            `/api/encounters/${encounterId}/vitals`,
+            { retries: 2 },
+          );
+          const draft: VitalsDraft = {
+            id: (data.id as string) ?? null,
+            encounter_id: encounterId,
+            iop_od: (data.iopOd as number) ?? null,
+            iop_os: (data.iopOs as number) ?? null,
+            iop_method: (data.iopMethod as VitalsDraft["iop_method"]) ?? null,
+            ucva_od: (data.ucvaOd as string) ?? null,
+            ucva_os: (data.ucvaOs as string) ?? null,
+            bcva_od: (data.bcvaOd as string) ?? null,
+            bcva_os: (data.bcvaOs as string) ?? null,
+            near_va_od: (data.nearVaOd as string) ?? null,
+            near_va_os: (data.nearVaOs as string) ?? null,
+            blood_pressure: (data.bloodPressure as string) ?? null,
+            pulse: (data.pulse as number) ?? null,
+            pupils_equal_round_reactive: (data.pupilsEqualRoundReactive as boolean) ?? true,
+            relative_afferent_pupillary_defect: (data.relativeAfferentPupillaryDefect as boolean) ?? false,
+            cover_test_notes: (data.coverTestNotes as string) ?? null,
+            technician_notes: (data.technicianNotes as string) ?? null,
+          };
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [encounterId]: {
+                  draft,
+                  committed: { ...draft },
+                  saveStatus: "idle" as VitalsSaveStatus,
+                  errors: [],
+                  lastSavedAt: null,
+                },
+              },
+            }),
+            false,
+            "loadVitals/loaded"
+          );
+        } catch {
+          set(
+            (state) => {
+              const enc = state.encounters[encounterId];
+              if (!enc) return state;
+              return {
+                encounters: {
+                  ...state.encounters,
+                  [encounterId]: {
+                    ...enc,
+                    saveStatus: "error" as VitalsSaveStatus,
+                    errors: [{ field: "_load", message: "Could not load vitals" }],
+                  },
+                },
+              };
+            },
+            false,
+            "loadVitals/error"
+          );
+        }
+      },
 
       init(encounterId, initialData) {
         const existing = get().encounters[encounterId];
@@ -225,8 +305,13 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
         const enc = state.encounters[encounterId];
         if (!enc) return;
 
-        // Don't save if nothing changed or already saving
-        if (enc.saveStatus === "idle" || enc.saveStatus === "saving" || enc.saveStatus === "saved") return;
+        // Don't save if nothing changed, already saving, or currently loading
+        if (
+          enc.saveStatus === "idle" ||
+          enc.saveStatus === "saving" ||
+          enc.saveStatus === "saved" ||
+          enc.saveStatus === "loading"
+        ) return;
 
         saveVitalsToAPI(encounterId, enc, {
           commit: state.commit,

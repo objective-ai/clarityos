@@ -34,7 +34,7 @@ export interface VitalsDraft {
   technician_notes: string | null;
 }
 
-export type VitalsSaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
+export type VitalsSaveStatus = "idle" | "loading" | "dirty" | "saving" | "saved" | "error";
 
 export interface VitalsFieldError {
   field: string;
