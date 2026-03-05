@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import { getPatientById, getPatientEncounters } from "@/lib/mock-patient-data";
+import { ProblemListCard } from "@/components/patient/ProblemListCard";
 
 const STATUS_VARIANT: Record<string, "success" | "warning" | "info"> = {
   finalized: "success",
@@ -196,8 +197,11 @@ export default function PatientDetailPage({
           )}
         </div>
 
-        {/* Right — Encounters + Rx */}
+        {/* Right — Problems + Encounters + Rx */}
         <div className="lg:col-span-2 flex flex-col gap-6">
+          {/* Master Problem List */}
+          <ProblemListCard patientId={params.patientId} />
+
           {/* Past Encounters */}
           <Card>
             <CardHeader>

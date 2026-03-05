@@ -65,6 +65,8 @@ export interface JwtPayload {
   schema_name: string;
   /** Staff role within this clinic */
   role: StaffRole;
+  /** Clinical role if the owner also practices (e.g. owner-OD) */
+  clinical_role?: StaffRole;
   /** Union of plan base features + active add-ons */
   entitlements: EntitlementKey[];
   /** Whether this user has cross-tenant superuser access */
@@ -93,6 +95,8 @@ export interface UserSession {
   email: string;
   fullName: string;
   role: StaffRole;
+  /** Set when owner is also a clinician — RBAC checks both role and clinicalRole */
+  clinicalRole?: StaffRole;
   isSuperuser: boolean;
   avatarInitials: string;
 }

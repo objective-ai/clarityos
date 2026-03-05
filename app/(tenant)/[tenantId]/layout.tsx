@@ -1,25 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { TopNav } from "@/components/TopNav";
 import { PatientStickyHeader } from "@/components/PatientStickyHeader";
+import { useEncounterStore } from "@/store/encounterStore";
+import { getPatientById, getPatientIdForEncounter } from "@/lib/mock-patient-data";
+import { getPatientIdForAppointment } from "@/lib/mock-schedule-data";
 import type { PatientHeaderData } from "@/types/session";
-
-const MOCK_PATIENT: PatientHeaderData = {
-  id: "pat-001",
-  firstName: "Margaret",
-  lastName: "Chen",
-  preferredName: "Maggie",
-  dob: "1958-03-12",
-  sex: "female",
-  alerts: [
-    { id: "a1", severity: "critical", label: "Sulfa allergy" },
-    { id: "a2", severity: "warning", label: "Glaucoma suspect" },
-    { id: "a3", severity: "info", label: "Diabetic" },
-  ],
-};
 
 export default function TenantLayout({
   children,
@@ -31,6 +20,32 @@ export default function TenantLayout({
   const pathname = usePathname();
   const isEncounterRoute = /\/encounter\//.test(pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Derive patient for sticky header from encounter store
+  const encounterId = isEncounterRoute
+    ? pathname.split("/encounter/")[1]?.split("/")[0]
+    : null;
+  const encounters = useEncounterStore((s) => s.encounters);
+  const patientHeader = useMemo<PatientHeaderData | null>(() => {
+    if (!encounterId) return null;
+    const enc = encounters[encounterId];
+    const patientId =
+      enc?.patientId ??
+      getPatientIdForEncounter(encounterId) ??
+      getPatientIdForAppointment(encounterId);
+    if (!patientId) return null;
+    const patient = getPatientById(patientId);
+    if (!patient) return null;
+    return {
+      id: patient.id,
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      preferredName: patient.preferredName ?? null,
+      dob: patient.dob,
+      sex: patient.sex === "F" ? "female" : "male",
+      alerts: patient.alerts,
+    };
+  }, [encounterId, encounters]);
 
   // Auto-collapse sidebar on tablet-sized screens
   useEffect(() => {
@@ -60,8 +75,8 @@ export default function TenantLayout({
       >
         <TopNav tenantId={params.tenantId} />
 
-        {isEncounterRoute && (
-          <PatientStickyHeader patient={MOCK_PATIENT} />
+        {isEncounterRoute && patientHeader && (
+          <PatientStickyHeader patient={patientHeader} />
         )}
 
         <main className="p-6 lg:p-8">

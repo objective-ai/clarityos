@@ -81,6 +81,13 @@ const RECEPTIONIST_JWT: JwtPayload = {
   entitlements: [Entitlement.SCHEDULING, Entitlement.PATIENT_DEMOGRAPHICS],
 };
 
+const OWNER_JWT: JwtPayload = {
+  ...PREMIUM_DOCTOR_JWT,
+  sub: "00000000-0000-0000-0000-000000000006",
+  role: "owner",
+  clinical_role: "doctor",
+};
+
 // ---------------------------------------------------------------------------
 // Session hydration — converts a JWT payload into an AppSession
 // ---------------------------------------------------------------------------
@@ -98,10 +105,13 @@ function hydrateSession(payload: JwtPayload, accessToken: string): AppSession {
     "00000000-0000-0000-0000-000000000003": "Alex Morgan",
     "00000000-0000-0000-0000-000000000004": "Sam Rivera",
     "00000000-0000-0000-0000-000000000005": "Jordan Lee",
+    "00000000-0000-0000-0000-000000000006": "Casey Patel",
   };
 
   const rawName = fullNames[payload.sub] ?? "Demo User";
-  const prefix = roleLabels[payload.role] ?? "";
+  // Use clinical role for title prefix (owner-OD gets "Dr." even though their role is "owner")
+  const effectiveRole = payload.clinical_role ?? payload.role;
+  const prefix = roleLabels[effectiveRole] ?? "";
   const fullName = prefix ? `${prefix} ${rawName}` : rawName;
   const initials = rawName
     .split(" ")
@@ -117,6 +127,7 @@ function hydrateSession(payload: JwtPayload, accessToken: string): AppSession {
       email: `${payload.role}@demo-clinic.dev`,
       fullName,
       role: payload.role,
+      clinicalRole: payload.clinical_role,
       isSuperuser: payload.is_superuser,
       avatarInitials: initials,
     },
@@ -145,13 +156,15 @@ export type MockScenario =
   | "premium_doctor"   // Full access — all features active
   | "technician"       // Clinical staff — no AI, no billing
   | "core_plan"        // Core plan only — upsell modals visible for premium features
-  | "receptionist";    // Scheduling only
+  | "receptionist"     // Scheduling only
+  | "owner";           // Full access + admin/staff management
 
 const SCENARIO_JWTS: Record<MockScenario, JwtPayload> = {
   premium_doctor: PREMIUM_DOCTOR_JWT,
   technician: TECHNICIAN_JWT,
   core_plan: CORE_PLAN_DOCTOR_JWT,
   receptionist: RECEPTIONIST_JWT,
+  owner: OWNER_JWT,
 };
 
 /**

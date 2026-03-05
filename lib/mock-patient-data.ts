@@ -224,10 +224,21 @@ const ENCOUNTERS: Record<string, PastEncounter[]> = {
   ],
 };
 
+export function getAllPatients(): PatientDetail[] {
+  return PATIENTS;
+}
+
 export function getPatientById(id: string): PatientDetail | null {
   return PATIENTS.find((p) => p.id === id) ?? null;
 }
 
 export function getPatientEncounters(id: string): PastEncounter[] {
   return ENCOUNTERS[id] ?? [];
+}
+
+export function getPatientIdForEncounter(encounterId: string): string | null {
+  for (const [patientId, encs] of Object.entries(ENCOUNTERS)) {
+    if (encs.some((e) => e.id === encounterId)) return patientId;
+  }
+  return null;
 }

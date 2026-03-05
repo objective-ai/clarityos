@@ -1,196 +1,276 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  useExamFindingsStore,
+  useFindingsState,
+} from "@/store/examFindingsStore";
+import { getFieldMeta } from "@/lib/exam-findings-fields";
+import type {
+  ExamSection,
+  FindingsDraft,
+  StructureFinding,
+} from "@/types/exam-findings";
 
 // ---------------------------------------------------------------------------
-// Types
+// Section metadata
 // ---------------------------------------------------------------------------
 
-type FindingCategory = "slit_lamp_anterior" | "fundus_posterior";
-
-interface FindingField {
-  key: string;
-  label: string;
-  type: "select" | "text";
-  options?: string[];
-  default: string;
-}
-
-interface FindingsData {
-  [key: string]: string;
-}
-
-// ---------------------------------------------------------------------------
-// Field definitions per category
-// ---------------------------------------------------------------------------
-
-const ANTERIOR_FIELDS: FindingField[] = [
-  { key: "lids_od", label: "Lids OD", type: "select", options: ["Normal", "Blepharitis", "Chalazion", "Ptosis", "Other"], default: "Normal" },
-  { key: "lids_os", label: "Lids OS", type: "select", options: ["Normal", "Blepharitis", "Chalazion", "Ptosis", "Other"], default: "Normal" },
-  { key: "conjunctiva_od", label: "Conjunctiva OD", type: "select", options: ["White & quiet", "Injection", "Pinguecula", "Pterygium", "Other"], default: "White & quiet" },
-  { key: "conjunctiva_os", label: "Conjunctiva OS", type: "select", options: ["White & quiet", "Injection", "Pinguecula", "Pterygium", "Other"], default: "White & quiet" },
-  { key: "cornea_od", label: "Cornea OD", type: "select", options: ["Clear", "SPK", "Scar", "Edema", "Arcus", "Other"], default: "Clear" },
-  { key: "cornea_os", label: "Cornea OS", type: "select", options: ["Clear", "SPK", "Scar", "Edema", "Arcus", "Other"], default: "Clear" },
-  { key: "lens_od", label: "Lens OD", type: "select", options: ["Clear", "Trace cataract", "1+ NS", "2+ NS", "3+ NS", "PSC", "Cortical", "IOL"], default: "Clear" },
-  { key: "lens_os", label: "Lens OS", type: "select", options: ["Clear", "Trace cataract", "1+ NS", "2+ NS", "3+ NS", "PSC", "Cortical", "IOL"], default: "Clear" },
-  { key: "angles", label: "Angles", type: "select", options: ["Open (Grade 4)", "Grade 3", "Grade 2", "Narrow (Grade 1)", "Closed"], default: "Open (Grade 4)" },
-  { key: "anterior_notes", label: "Notes", type: "text", default: "" },
+const SECTIONS: { key: ExamSection; label: string }[] = [
+  { key: "anterior_segment", label: "Anterior Segment (Slit Lamp)" },
+  { key: "posterior_segment", label: "Posterior Segment (Fundus)" },
 ];
 
-const POSTERIOR_FIELDS: FindingField[] = [
-  { key: "disc_od", label: "Disc OD", type: "select", options: ["Healthy, pink", "Pallor", "Edema", "Cupping 0.3", "Cupping 0.5", "Cupping 0.7", "Cupping 0.8+"], default: "Healthy, pink" },
-  { key: "disc_os", label: "Disc OS", type: "select", options: ["Healthy, pink", "Pallor", "Edema", "Cupping 0.3", "Cupping 0.5", "Cupping 0.7", "Cupping 0.8+"], default: "Healthy, pink" },
-  { key: "cd_ratio_od", label: "C/D OD", type: "select", options: ["0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9"], default: "0.3" },
-  { key: "cd_ratio_os", label: "C/D OS", type: "select", options: ["0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9"], default: "0.3" },
-  { key: "macula_od", label: "Macula OD", type: "select", options: ["Flat & intact", "Drusen", "Pigment changes", "Edema", "Hemorrhage", "Other"], default: "Flat & intact" },
-  { key: "macula_os", label: "Macula OS", type: "select", options: ["Flat & intact", "Drusen", "Pigment changes", "Edema", "Hemorrhage", "Other"], default: "Flat & intact" },
-  { key: "vessels_od", label: "Vessels OD", type: "select", options: ["Normal A/V ratio", "AV nicking", "Hemorrhage", "Neovascularization", "Other"], default: "Normal A/V ratio" },
-  { key: "vessels_os", label: "Vessels OS", type: "select", options: ["Normal A/V ratio", "AV nicking", "Hemorrhage", "Neovascularization", "Other"], default: "Normal A/V ratio" },
-  { key: "periphery", label: "Periphery", type: "select", options: ["Flat & intact OU", "Lattice", "Hole", "Tear", "Detachment", "Other"], default: "Flat & intact OU" },
-  { key: "posterior_notes", label: "Notes", type: "text", default: "" },
-];
-
-const CATEGORY_META: Record<FindingCategory, { label: string; fields: FindingField[] }> = {
-  slit_lamp_anterior: { label: "Anterior Segment (Slit Lamp)", fields: ANTERIOR_FIELDS },
-  fundus_posterior: { label: "Posterior Segment (Fundus)", fields: POSTERIOR_FIELDS },
-};
-
 // ---------------------------------------------------------------------------
-// Component
+// Props
 // ---------------------------------------------------------------------------
 
 interface ExamFindingsProps {
   encounterId: string;
   isReadOnly?: boolean;
+  initialAnterior?: Partial<FindingsDraft>;
+  initialPosterior?: Partial<FindingsDraft>;
 }
 
-export function ExamFindings({ encounterId, isReadOnly = false }: ExamFindingsProps) {
-  const [expanded, setExpanded] = useState<Record<FindingCategory, boolean>>({
-    slit_lamp_anterior: true,
-    fundus_posterior: false,
-  });
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
-  const [findings, setFindings] = useState<Record<FindingCategory, FindingsData>>(() => {
-    const init: Record<string, FindingsData> = {};
-    for (const [cat, meta] of Object.entries(CATEGORY_META)) {
-      const data: FindingsData = {};
-      for (const f of meta.fields) data[f.key] = f.default;
-      init[cat] = data;
-    }
-    return init as Record<FindingCategory, FindingsData>;
-  });
+export function ExamFindings({
+  encounterId,
+  isReadOnly = false,
+  initialAnterior,
+  initialPosterior,
+}: ExamFindingsProps) {
+  const store = useExamFindingsStore();
 
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleChange = useCallback(
-    (category: FindingCategory, key: string, value: string) => {
-      if (isReadOnly) return;
-      setFindings((prev) => ({
-        ...prev,
-        [category]: { ...prev[category], [key]: value },
-      }));
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      setSaveStatus("idle");
-      debounceRef.current = setTimeout(() => {
-        setSaveStatus("saving");
-        setTimeout(() => setSaveStatus("saved"), 400);
-      }, 1500);
-    },
-    [isReadOnly]
-  );
-
+  // Initialize both sections on mount
   useEffect(() => {
-    if (saveStatus === "saved") {
-      const t = setTimeout(() => setSaveStatus("idle"), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [saveStatus]);
-
-  const toggle = (cat: FindingCategory) => {
-    setExpanded((prev) => ({ ...prev, [cat]: !prev[cat] }));
-  };
+    store.init(encounterId, "anterior_segment", initialAnterior);
+    store.init(encounterId, "posterior_segment", initialPosterior);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encounterId]);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="section-title">Exam Findings</h2>
-          <p className="text-caption mt-0.5 text-[var(--text-muted)]">
-            Slit lamp &amp; fundus examination
-          </p>
+      <h2 className="section-title">Exam Findings</h2>
+      <p className="text-caption mt-0.5 text-[var(--text-muted)]">
+        Slit lamp &amp; fundus examination
+      </p>
+
+      {SECTIONS.map((sec) => (
+        <SectionPanel
+          key={sec.key}
+          encounterId={encounterId}
+          section={sec.key}
+          label={sec.label}
+          isReadOnly={isReadOnly}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section panel (one per anterior / posterior)
+// ---------------------------------------------------------------------------
+
+interface SectionPanelProps {
+  encounterId: string;
+  section: ExamSection;
+  label: string;
+  isReadOnly: boolean;
+}
+
+function SectionPanel({
+  encounterId,
+  section,
+  label,
+  isReadOnly,
+}: SectionPanelProps) {
+  const state = useFindingsState(encounterId, section);
+  const store = useExamFindingsStore();
+  const fields = getFieldMeta(section);
+
+  const handleStatusChange = useCallback(
+    (eye: "od" | "os", structure: string, value: string) => {
+      if (isReadOnly) return;
+      store.setStructureField(encounterId, section, eye, structure, "status", value);
+    },
+    [encounterId, section, isReadOnly, store],
+  );
+
+  const handleFindingChange = useCallback(
+    (eye: "od" | "os", structure: string, value: string) => {
+      if (isReadOnly) return;
+      store.setStructureField(encounterId, section, eye, structure, "finding", value);
+    },
+    [encounterId, section, isReadOnly, store],
+  );
+
+  const handleWNL = useCallback(() => {
+    store.setWNL(encounterId, section);
+  }, [encounterId, section, store]);
+
+  const handleCopyOdToOs = useCallback(() => {
+    store.copyOdToOs(encounterId, section);
+  }, [encounterId, section, store]);
+
+  const handleNotesChange = useCallback(
+    (notes: string) => {
+      if (isReadOnly) return;
+      store.setProviderNotes(encounterId, section, notes);
+    },
+    [encounterId, section, isReadOnly, store],
+  );
+
+  if (!state) return null;
+
+  const { draft, saveStatus } = state;
+
+  return (
+    <div className="rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
+        <div className="flex items-center gap-3">
+          <span className="text-overline text-[var(--text-primary)]">{label}</span>
+          {draft.is_normal_wnl && (
+            <Badge variant="success">WNL</Badge>
+          )}
+          {saveStatus !== "idle" && saveStatus !== "dirty" && (
+            <Badge variant={saveStatus === "saving" ? "info" : saveStatus === "saved" ? "success" : "destructive"}>
+              {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : "Error"}
+            </Badge>
+          )}
         </div>
-        {saveStatus !== "idle" && (
-          <Badge variant={saveStatus === "saving" ? "info" : "success"}>
-            {saveStatus === "saving" ? "Saving…" : "Saved"}
-          </Badge>
+
+        {!isReadOnly && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleWNL}
+              className="text-xs"
+            >
+              Set WNL
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyOdToOs}
+              className="text-xs"
+            >
+              OD → OS
+            </Button>
+          </div>
         )}
       </div>
 
-      {(Object.keys(CATEGORY_META) as FindingCategory[]).map((cat) => {
-        const meta = CATEGORY_META[cat];
-        const isOpen = expanded[cat];
+      {/* OD / OS Grid */}
+      <div className="px-5 pb-4">
+        {/* Column headers */}
+        <div className="grid grid-cols-[140px_1fr_1fr] gap-3 py-2 border-b border-[var(--border-subtle)]">
+          <span className="text-overline text-[var(--text-muted)]">Structure</span>
+          <span className="text-overline text-center text-[var(--text-muted)]">OD (Right)</span>
+          <span className="text-overline text-center text-[var(--text-muted)]">OS (Left)</span>
+        </div>
 
-        return (
-          <div
-            key={cat}
-            className="rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]"
-          >
-            <button
-              type="button"
-              onClick={() => toggle(cat)}
-              className="w-full flex items-center justify-between px-5 py-3 text-left hover-row text-[var(--text-primary)]"
+        {/* Field rows */}
+        {fields.map((field) => {
+          const odFinding: StructureFinding = draft.findings_od[field.key] ?? {
+            status: field.defaultStatus,
+            severity: null,
+            finding: "",
+          };
+          const osFinding: StructureFinding = draft.findings_os[field.key] ?? {
+            status: field.defaultStatus,
+            severity: null,
+            finding: "",
+          };
+
+          const odAbnormal = odFinding.status !== field.defaultStatus;
+          const osAbnormal = osFinding.status !== field.defaultStatus;
+
+          return (
+            <div
+              key={field.key}
+              className="grid grid-cols-[140px_1fr_1fr] gap-3 py-2 border-b border-[var(--border-subtle)] last:border-b-0"
             >
-              <span className="text-overline">{meta.label}</span>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="none"
-                className={`text-[var(--text-secondary)] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-              >
-                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+              <label className="text-xs font-medium text-[var(--text-secondary)] self-center">
+                {field.label}
+              </label>
 
-            {isOpen && (
-              <div className="px-5 pb-5 grid grid-cols-2 gap-4 border-t border-[var(--border-subtle)]">
-                {meta.fields.map((field) => (
-                  <div
-                    key={field.key}
-                    className={field.type === "text" ? "col-span-2" : ""}
-                  >
-                    <label className="block text-overline mb-1.5 mt-3">{field.label}</label>
-                    {field.type === "select" ? (
-                      <select
-                        value={findings[cat][field.key]}
-                        onChange={(e) => handleChange(cat, field.key, e.target.value)}
-                        disabled={isReadOnly}
-                        className="w-full px-3 py-2 rounded-xl text-xs glass-input"
-                      >
-                        {field.options?.map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <textarea
-                        value={findings[cat][field.key]}
-                        onChange={(e) => handleChange(cat, field.key, e.target.value)}
-                        disabled={isReadOnly}
-                        rows={2}
-                        placeholder="Additional notes..."
-                        className="w-full px-3 py-2 rounded-xl text-xs glass-input resize-none"
-                        style={{ minHeight: "80px" }}
-                      />
-                    )}
-                  </div>
-                ))}
+              {/* OD cell */}
+              <div className="space-y-1">
+                <select
+                  value={odFinding.status}
+                  onChange={(e) => handleStatusChange("od", field.key, e.target.value)}
+                  disabled={isReadOnly}
+                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs glass-input ${
+                    odAbnormal ? "ring-1 ring-[var(--state-warning)]" : ""
+                  }`}
+                >
+                  {field.options.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                {odAbnormal && (
+                  <input
+                    type="text"
+                    value={odFinding.finding}
+                    onChange={(e) => handleFindingChange("od", field.key, e.target.value)}
+                    disabled={isReadOnly}
+                    placeholder="Details…"
+                    className="w-full px-2.5 py-1 rounded-lg text-xs glass-input"
+                  />
+                )}
               </div>
-            )}
-          </div>
-        );
-      })}
+
+              {/* OS cell */}
+              <div className="space-y-1">
+                <select
+                  value={osFinding.status}
+                  onChange={(e) => handleStatusChange("os", field.key, e.target.value)}
+                  disabled={isReadOnly}
+                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs glass-input ${
+                    osAbnormal ? "ring-1 ring-[var(--state-warning)]" : ""
+                  }`}
+                >
+                  {field.options.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                {osAbnormal && (
+                  <input
+                    type="text"
+                    value={osFinding.finding}
+                    onChange={(e) => handleFindingChange("os", field.key, e.target.value)}
+                    disabled={isReadOnly}
+                    placeholder="Details…"
+                    className="w-full px-2.5 py-1 rounded-lg text-xs glass-input"
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Provider notes */}
+        <div className="mt-3">
+          <label className="block text-overline mb-1.5">Provider Notes</label>
+          <textarea
+            value={draft.provider_notes}
+            onChange={(e) => handleNotesChange(e.target.value)}
+            disabled={isReadOnly}
+            rows={2}
+            placeholder="Additional notes for this section…"
+            className="w-full px-3 py-2 rounded-xl text-xs glass-input resize-none"
+            style={{ minHeight: "60px" }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

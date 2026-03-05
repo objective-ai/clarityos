@@ -10,6 +10,14 @@ import { useCurrentUser, useCurrentTenant } from "@/store/sessionStore";
 import { useTenantCustomizationStore } from "@/store/tenantCustomizationStore";
 import type { EntitlementKey, StaffRole } from "@/types/session";
 
+const ROLE_COLORS: Record<StaffRole, { bg: string; text: string; border: string }> = {
+  doctor:       { bg: "rgba(45,212,191,0.12)",  text: "#2DD4BF", border: "rgba(45,212,191,0.3)"  },
+  technician:   { bg: "rgba(96,165,250,0.12)",  text: "#60A5FA", border: "rgba(96,165,250,0.3)"  },
+  receptionist: { bg: "rgba(167,139,250,0.12)", text: "#A78BFA", border: "rgba(167,139,250,0.3)" },
+  admin:        { bg: "rgba(251,191,36,0.12)",  text: "#FBBF24", border: "rgba(251,191,36,0.3)"  },
+  owner:        { bg: "rgba(251,113,133,0.12)", text: "#FB7185", border: "rgba(251,113,133,0.3)" },
+};
+
 // ---------------------------------------------------------------------------
 // Icon components
 // ---------------------------------------------------------------------------
@@ -39,6 +47,14 @@ const Icon = {
   Analytics: () => (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M2 13L5.5 8.5l3 2.5L12 5l2.5 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Staff: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M1 13c0-2.761 2.015-4.5 4.5-4.5S10 10.239 10 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="11.5" cy="5.5" r="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10 13c0-2.21 1.343-3.5 3-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   ),
   Settings: () => (
@@ -94,7 +110,7 @@ export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
   ];
 
   const bottomItems: NavItem[] = [
-    { label: "Settings", href: `${base}/settings`, icon: Icon.Settings, requiredRoles: ["admin", "owner"] },
+    { label: "Admin", href: `${base}/admin`, icon: Icon.Settings, requiredRoles: ["admin", "owner"] },
   ];
 
   const isActive = (href: string) =>
@@ -224,16 +240,27 @@ export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
           justifyContent: isCollapsed ? "center" : undefined,
         }}
       >
-        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)] font-mono">
-          {user?.avatarInitials ?? "?"}
-        </div>
+        {(() => {
+          const roleKey = user?.role ?? "doctor";
+          const colors = ROLE_COLORS[roleKey] ?? ROLE_COLORS.doctor;
+          return (
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold font-mono border"
+              style={{ background: colors.bg, color: colors.text, borderColor: colors.border }}
+            >
+              {user?.avatarInitials ?? "?"}
+            </div>
+          );
+        })()}
         {!isCollapsed && (
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium truncate text-[var(--text-primary)]">
               {user?.fullName ?? "—"}
             </div>
             <div className="text-[11px] truncate capitalize text-[var(--text-secondary)]">
-              {user?.role}
+              {user?.role === "owner" && user.clinicalRole
+                ? `Owner · ${user.clinicalRole}`
+                : user?.role}
             </div>
           </div>
         )}

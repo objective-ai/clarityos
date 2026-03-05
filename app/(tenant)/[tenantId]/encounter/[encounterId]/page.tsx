@@ -1,14 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import type { EntitlementKey } from "@/types/session";
-import { useEncounterStore } from "@/store/encounterStore";
+import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
+import { useVitalsStore } from "@/store/vitalsStore";
+import { useCurrentUser } from "@/store/sessionStore";
+import { getPatientIdForEncounter } from "@/lib/mock-patient-data";
+import { getPatientIdForAppointment } from "@/lib/mock-schedule-data";
+import { PermissionGate } from "@/components/auth/PermissionGate";
+import { VitalsForm } from "@/components/encounter/VitalsForm";
+import { VitalsCard } from "@/components/encounter/VitalsCard";
 import { RefractionGrid } from "@/components/encounter/RefractionGrid";
 import { ExamFindings } from "@/components/encounter/ExamFindings";
+import { ExamFindingsCard } from "@/components/encounter/ExamFindingsCard";
 import { DiagnosisPicker } from "@/components/encounter/DiagnosisPicker";
+import { ContinuitySidebar } from "@/components/encounter/ContinuitySidebar";
 import { DEMO_REFRACTIONS } from "@/lib/mock-refraction-data";
+import { DEMO_VITALS } from "@/lib/mock-vitals-data";
 import {
   Card,
   CardHeader,
@@ -17,115 +28,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-// ---------------------------------------------------------------------------
-// Vitals Card
-// ---------------------------------------------------------------------------
-
-function VitalsCard({ isReadOnly = false }: { isReadOnly?: boolean }) {
-  const vitals = {
-    iop_od: "23",
-    iop_os: "18",
-    ucva_od: "20/200",
-    ucva_os: "20/100",
-    bcva_od: "20/25",
-    bcva_os: "20/20",
-    blood_pressure: "128/82",
-    pulse: "72",
-  };
-
-  const isElevated = (val: string) => parseFloat(val) > 21;
-
-  return (
-    <Card className={isReadOnly ? "opacity-75" : ""}>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Vitals &amp; Pre-Test</CardTitle>
-          <CardDescription>Recorded by technician</CardDescription>
-        </div>
-        {isReadOnly && (
-          <Badge variant="outline" className="gap-1.5 text-[var(--text-muted)]">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <rect x="1.5" y="5.5" width="9" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-              <path d="M3.5 5.5V4a2.5 2.5 0 015 0v1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            </svg>
-            Locked
-          </Badge>
-        )}
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* IOP */}
-          <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="text-overline mb-4">Intraocular Pressure</div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { eye: "OD", val: vitals.iop_od },
-                { eye: "OS", val: vitals.iop_os },
-              ].map(({ eye, val }) => {
-                const elevated = isElevated(val);
-                return (
-                  <div
-                    key={eye}
-                    className={`flex flex-col items-center p-4 rounded-xl border ${
-                      elevated
-                        ? "bg-[rgba(251,191,36,0.06)] border-[rgba(251,191,36,0.20)]"
-                        : "bg-[var(--bg-elevated)] border-[var(--border-subtle)]"
-                    }`}
-                  >
-                    <span className="text-overline">{eye}</span>
-                    <span
-                      className={`text-3xl data-value my-1 ${
-                        elevated ? "text-[var(--state-warning)]" : ""
-                      }`}
-                    >
-                      {val}
-                    </span>
-                    <span className="text-[11px] text-[var(--text-muted)]">
-                      mmHg {elevated && (
-                        <Badge variant="warning" className="ml-1 text-[10px] px-1.5 py-0">elevated</Badge>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Visual Acuity */}
-          <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="text-overline mb-4">Visual Acuity</div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr>
-                  <th className="text-left pb-2 text-overline">Measure</th>
-                  <th className="text-center pb-2 text-overline">OD</th>
-                  <th className="text-center pb-2 text-overline">OS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { label: "UCVA", od: vitals.ucva_od, os: vitals.ucva_os },
-                  { label: "BCVA", od: vitals.bcva_od, os: vitals.bcva_os },
-                ].map((row) => (
-                  <tr key={row.label} className="border-t border-[var(--border-subtle)]">
-                    <td className="py-2.5 text-overline" style={{ textTransform: "none" }}>{row.label}</td>
-                    <td className="py-2.5 text-center text-base data-value">{row.od}</td>
-                    <td className="py-2.5 text-center text-base data-value">{row.os}</td>
-                  </tr>
-                ))}
-                <tr className="border-t border-[var(--border-subtle)]">
-                  <td className="py-2.5 text-overline" style={{ textTransform: "none" }}>BP</td>
-                  <td colSpan={2} className="py-2.5 text-center text-base data-value">{vitals.blood_pressure}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // UpsellModal
@@ -325,6 +227,113 @@ function AiScribeWidget() {
 }
 
 // ---------------------------------------------------------------------------
+// Encounter Workflow Header
+// ---------------------------------------------------------------------------
+
+const STATUS_STEPS: { key: EncounterStatus; label: string }[] = [
+  { key: "pre_test", label: "Pre-Test" },
+  { key: "in_exam", label: "In Exam" },
+  { key: "finalized", label: "Finalized" },
+];
+
+const STATUS_ORDER: Record<EncounterStatus, number> = {
+  pre_test: 0,
+  in_exam: 1,
+  finalized: 2,
+};
+
+interface EncounterWorkflowHeaderProps {
+  encounterId: string;
+  isReadOnly: boolean;
+}
+
+function EncounterWorkflowHeader({ encounterId, isReadOnly }: EncounterWorkflowHeaderProps) {
+  const encounterState = useEncounterStore((s) => s.encounters[encounterId]);
+  const setChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
+  const [draft, setDraft] = useState(encounterState?.chiefComplaint ?? "");
+
+  // Debounced save — 1.5s after last keystroke
+  useEffect(() => {
+    if (isReadOnly) return;
+    const t = setTimeout(() => setChiefComplaint(encounterId, draft), 1500);
+    return () => clearTimeout(t);
+  }, [draft, encounterId, isReadOnly, setChiefComplaint]);
+
+  const currentStep = STATUS_ORDER[encounterState?.status ?? "pre_test"];
+
+  const formattedDate = encounterState?.encounterDate
+    ? new Date(encounterState.encounterDate + "T00:00:00").toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+      })
+    : "—";
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+          {/* Chief Complaint */}
+          <div className="flex-1 flex flex-col gap-1.5">
+            <div className="text-overline">Chief Complaint</div>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => !isReadOnly && setChiefComplaint(encounterId, draft)}
+              readOnly={isReadOnly}
+              rows={2}
+              placeholder="Reason for visit…"
+              className={`w-full px-4 py-2.5 rounded-xl text-sm resize-none transition-colors ${
+                isReadOnly
+                  ? "bg-transparent border-transparent text-[var(--text-secondary)] cursor-default"
+                  : "glass-input"
+              }`}
+            />
+          </div>
+
+          {/* Right: stepper + provider */}
+          <div className="flex flex-col gap-3 sm:items-end">
+            {/* Status stepper */}
+            <div className="flex items-center gap-1">
+              {STATUS_STEPS.map((step, i) => {
+                const stepIndex = STATUS_ORDER[step.key];
+                const isActive = stepIndex === currentStep;
+                const isDone = stepIndex < currentStep;
+                return (
+                  <div key={step.key} className="flex items-center gap-1">
+                    {i > 0 && (
+                      <div
+                        className="w-6 h-px"
+                        style={{ background: isDone ? "var(--state-normal)" : "var(--border-default)" }}
+                      />
+                    )}
+                    <span
+                      className="px-2.5 py-1 rounded-lg text-xs font-medium border transition-all"
+                      style={
+                        isActive
+                          ? { background: "var(--accent-dim)", color: "var(--accent)", borderColor: "var(--accent)" }
+                          : isDone
+                          ? { background: "rgba(34,197,94,0.08)", color: "var(--state-normal)", borderColor: "rgba(34,197,94,0.2)" }
+                          : { background: "transparent", color: "var(--text-muted)", borderColor: "var(--border-subtle)" }
+                      }
+                    >
+                      {isDone ? "✓ " : ""}{step.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Provider + date */}
+            <div className="text-[11px] text-[var(--text-muted)] text-right">
+              {encounterState?.providerName ?? "—"} &middot; {formattedDate}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
@@ -333,23 +342,40 @@ export default function EncounterPage({
 }: {
   params: { tenantId: string; encounterId: string };
 }) {
+  const { requireRole } = useEntitlements();
   const initEncounter = useEncounterStore((s) => s.initEncounter);
+  const initVitals = useVitalsStore((s) => s.init);
   const encounterState = useEncounterStore((s) => s.encounters[params.encounterId]);
   const isFinalized = encounterState?.isFinalized ?? false;
+  const user = useCurrentUser();
+  const patientId =
+    getPatientIdForEncounter(params.encounterId) ??
+    getPatientIdForAppointment(params.encounterId) ??
+    "pat-001";
 
-  // Initialize encounter in store on mount (layout doesn't own this)
+  // Role-based read-only: technicians + doctors + owners can edit clinical data
+  const canEditClinical = requireRole("doctor", "technician", "owner");
+  const clinicalReadOnly = isFinalized || !canEditClinical;
+
+  // Initialize encounter + vitals in store on mount
   useEffect(() => {
     initEncounter(params.encounterId, {
       status: "pre_test",
       encounterDate: new Date().toISOString().slice(0, 10),
-      providerName: "Dr. Sarah Lin, OD",
-      iopOdElevated: true,
-      iopOsElevated: false,
+      providerName: user?.fullName ?? "Dr. Morgan",
+      patientId,
     });
-  }, [params.encounterId, initEncounter]);
+    initVitals(params.encounterId, DEMO_VITALS);
+  }, [params.encounterId, initEncounter, initVitals, user, patientId]);
 
   return (
     <div className="flex flex-col gap-6 stagger">
+      {/* Workflow header — chief complaint + status progress */}
+      <EncounterWorkflowHeader
+        encounterId={params.encounterId}
+        isReadOnly={isFinalized}
+      />
+
       {/* Finalized banner */}
       {isFinalized && (
         <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[rgba(34,197,94,0.08)] border border-[rgba(34,197,94,0.20)] text-sm text-[var(--state-normal)]">
@@ -357,12 +383,44 @@ export default function EncounterPage({
             <rect x="2.5" y="7" width="11" height="7.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
             <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
-          <span className="font-medium">This encounter has been finalized.</span>
-          <span className="text-[var(--text-secondary)]">All fields are locked.</span>
+          <span className="font-medium">Signed and finalized</span>
+          {encounterState?.signedByName && (
+            <span className="text-[var(--text-secondary)]">
+              by {encounterState.signedByName}
+              {encounterState.signedAt &&
+                ` on ${new Date(encounterState.signedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}`}
+            </span>
+          )}
+          {!encounterState?.signedByName && (
+            <span className="text-[var(--text-secondary)]">All fields are locked.</span>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <Link
+              href={`/${params.tenantId}/patients/${encounterState?.patientId ?? ""}`}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium hover-btn text-[var(--text-secondary)] border border-[var(--border-subtle)]"
+            >
+              Back to Patient
+            </Link>
+            <Link
+              href={`/${params.tenantId}/schedule`}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium hover-btn text-[var(--text-secondary)] border border-[var(--border-subtle)]"
+            >
+              Schedule
+            </Link>
+            <Badge variant="secondary">Locked</Badge>
+          </div>
         </div>
       )}
 
-      <VitalsCard isReadOnly={isFinalized} />
+      {encounterState?.status === "pre_test" && canEditClinical ? (
+        <VitalsForm encounterId={params.encounterId} />
+      ) : (
+        <VitalsCard encounterId={params.encounterId} isReadOnly={clinicalReadOnly} />
+      )}
 
       {/* Refraction */}
       <Card>
@@ -370,27 +428,46 @@ export default function EncounterPage({
           <RefractionGrid
             encounterId={params.encounterId}
             initialRefractions={DEMO_REFRACTIONS}
-            isReadOnly={isFinalized}
+            isReadOnly={clinicalReadOnly}
           />
         </CardContent>
       </Card>
+
+      {/* Continuity Sidebar — active master problems */}
+      <ContinuitySidebar
+        patientId={encounterState?.patientId ?? patientId}
+        encounterId={params.encounterId}
+        isReadOnly={clinicalReadOnly}
+      />
 
       {/* Exam Findings + Diagnoses — side by side on desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardContent className="p-6">
-            <ExamFindings encounterId={params.encounterId} isReadOnly={isFinalized} />
+            {isFinalized || !canEditClinical ? (
+              <ExamFindingsCard encounterId={params.encounterId} />
+            ) : (
+              <PermissionGate roles={["doctor", "owner"]} fallback={
+                <ExamFindingsCard encounterId={params.encounterId} />
+              }>
+                <ExamFindings encounterId={params.encounterId} isReadOnly={false} />
+              </PermissionGate>
+            )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} />
-          </CardContent>
-        </Card>
+        <PermissionGate roles={["doctor", "owner"]}>
+          <Card>
+            <CardContent className="p-6">
+              <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} />
+            </CardContent>
+          </Card>
+        </PermissionGate>
       </div>
 
-      <AiScribeWidget />
+      <PermissionGate roles={["doctor", "owner"]}>
+        <AiScribeWidget />
+      </PermissionGate>
     </div>
   );
 }
