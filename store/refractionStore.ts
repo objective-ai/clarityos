@@ -73,7 +73,7 @@ interface RefractionStoreState {
 
 interface RefractionStoreActions {
   /** Load refractions from the real API and initialize all columns */
-  loadRefractions: (encounterId: string, isReadOnly: boolean) => Promise<void>;
+  loadRefractions: (encounterId: string, isReadOnly?: boolean) => Promise<void>;
 
   /** Called once when the component mounts with encounter data from the server */
   init: (encounterId: string, initialRefractions: RefractionDraft[], isReadOnly: boolean) => void;
@@ -249,7 +249,7 @@ export const useRefractionStore = create<RefractionStore>()(
 
       // ── Actions ────────────────────────────────────────────────────────
 
-      async loadRefractions(encounterId, isReadOnly) {
+      async loadRefractions(encounterId, isReadOnly = false) {
         // Set encounterId and all columns to a neutral loading state
         set(
           (state) => ({

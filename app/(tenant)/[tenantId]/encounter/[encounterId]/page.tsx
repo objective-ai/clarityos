@@ -14,9 +14,6 @@ import { useVitalsStore } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
 import { useRefractionStore } from "@/store/refractionStore";
-import { useCurrentUser } from "@/store/sessionStore";
-import { getPatientIdForEncounter } from "@/lib/mock-patient-data";
-import { getPatientIdForAppointment } from "@/lib/mock-schedule-data";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { useSidebarCollapsed } from "@/contexts/SidebarContext";
 import { EncounterBottomTabs } from "@/components/encounter/EncounterBottomTabs";
@@ -29,7 +26,7 @@ import { ExamFindings } from "@/components/encounter/ExamFindings";
 import { ExamFindingsCard } from "@/components/encounter/ExamFindingsCard";
 import { DiagnosisPicker } from "@/components/encounter/DiagnosisPicker";
 import { ContinuitySidebar } from "@/components/encounter/ContinuitySidebar";
-import { getInitialStoreState } from "@/lib/mock/personas";
+import { GlassCardSkeleton } from "@/components/ui/skeleton";
 import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,
@@ -116,7 +113,7 @@ function UpsellModal({ feature, onClose }: UpsellModalProps) {
 // AI Scribe Widget — Ambient Data-Entry Scribe
 // ---------------------------------------------------------------------------
 
-// Refraction field mapping: AI JSON key → RowKey (includes eye prefix)
+// Refraction field mapping: AI JSON key -> RowKey (includes eye prefix)
 const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
   sphere:   { od: "od_sphere",   os: "os_sphere" },
   cylinder: { od: "od_cylinder", os: "os_cylinder" },
@@ -202,10 +199,10 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
       const data = structuredData;
       setAcceptError(null);
 
-      // ── Snapshot before/after diff for audit trail ──────────────
+      // Snapshot before/after diff for audit trail
       const diff: Record<string, { old: unknown; new: unknown }> = {};
 
-      // 1. Chief complaint — safe append with pipe separator
+      // 1. Chief complaint -- safe append with pipe separator
       if (data.chief_complaint) {
         const existing = useEncounterStore.getState().encounters[encounterId]?.chiefComplaint ?? "";
         diff["chief_complaint"] = { old: existing, new: data.chief_complaint };
@@ -213,7 +210,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
         setChiefComplaint(encounterId, updated);
       }
 
-      // 2. Vitals — skip nulls to avoid overwriting existing values
+      // 2. Vitals -- skip nulls to avoid overwriting existing values
       if (data.vitals) {
         const vitalsDraft = useVitalsStore.getState().encounters[encounterId]?.draft;
         for (const [field, value] of Object.entries(data.vitals)) {
@@ -225,7 +222,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
         }
       }
 
-      // 3. Exam findings — dispatch per eye/structure/field
+      // 3. Exam findings -- dispatch per eye/structure/field
       if (data.exam_findings) {
         for (const [section, eyes] of Object.entries(data.exam_findings)) {
           if (!eyes) continue;
@@ -274,7 +271,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
         }
       }
 
-      // 5. Refraction — map to Final Rx column (index 3), with eye-prefixed RowKeys
+      // 5. Refraction -- map to Final Rx column (index 3), with eye-prefixed RowKeys
       if (data.refraction) {
         const rxDraft = useRefractionStore.getState().columns[FINAL_RX_COL]?.draft;
         for (const [eye, rx] of Object.entries(data.refraction)) {
@@ -368,7 +365,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
               </div>
             </div>
           ) : !soapText && !isStreaming ? (
-            /* Initial state — transcript input */
+            /* Initial state -- transcript input */
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="ai-transcript" className="text-overline">
@@ -379,7 +376,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
                   value={transcript}
                   onChange={(e) => setTranscript(e.target.value)}
                   rows={4}
-                  placeholder="Paste or dictate the clinical transcript here…"
+                  placeholder="Paste or dictate the clinical transcript here..."
                   className="w-full px-4 py-3 rounded-xl text-sm resize-y min-h-[6rem] glass-input placeholder:text-[var(--text-muted)]"
                 />
               </div>
@@ -403,7 +400,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
               </button>
             </div>
           ) : (
-            /* Streaming / done state — show SOAP text */
+            /* Streaming / done state -- show SOAP text */
             <div>
               <pre className="text-xs leading-relaxed whitespace-pre-wrap p-5 rounded-xl font-mono bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)] min-h-[120px]">
                 {soapText}
@@ -457,7 +454,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
               {isStreaming && (
                 <div className="flex items-center gap-2 mt-3 text-[11px] text-[var(--text-muted)]">
                   <div className="w-3 h-3 rounded-full border-2 animate-spin border-[var(--accent)] border-t-transparent" />
-                  Generating SOAP note&hellip;
+                  Generating SOAP note...
                 </div>
               )}
             </div>
@@ -489,7 +486,7 @@ function EncounterWorkflowHeader({ encounterId, isReadOnly }: EncounterWorkflowH
   const setChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
   const [draft, setDraft] = useState(encounterState?.chiefComplaint ?? "");
 
-  // Debounced save — 1.5s after last keystroke
+  // Debounced save -- 1.5s after last keystroke
   useEffect(() => {
     if (isReadOnly) return;
     const t = setTimeout(() => setChiefComplaint(encounterId, draft), 1500);
@@ -515,7 +512,7 @@ function EncounterWorkflowHeader({ encounterId, isReadOnly }: EncounterWorkflowH
             onBlur={() => !isReadOnly && setChiefComplaint(encounterId, draft)}
             readOnly={isReadOnly}
             rows={3}
-            placeholder="Reason for visit…"
+            placeholder="Reason for visit..."
             className={`w-full px-4 py-2.5 rounded-xl text-sm resize-none transition-colors ${
               isReadOnly
                 ? "bg-transparent border-transparent text-[var(--text-secondary)] cursor-default"
@@ -539,20 +536,22 @@ export default function EncounterPage({
 }) {
   const { requireRole } = useEntitlements();
   const sidebarCollapsed = useSidebarCollapsed();
-  const initEncounter = useEncounterStore((s) => s.initEncounter);
   const advanceStatus = useEncounterStore((s) => s.advanceStatus);
   const unlockEncounter = useEncounterStore((s) => s.unlockEncounter);
-  const initVitals = useVitalsStore((s) => s.init);
-  const initFindings = useExamFindingsStore((s) => s.init);
-  const initDiagnoses = useDiagnosisStore((s) => s.init);
-  const seedProblems = useProblemListStore((s) => s._seedProblems);
+  const loadEncounter = useEncounterStore((s) => s.loadEncounter);
+  const loadVitals = useVitalsStore((s) => s.loadVitals);
+  const loadFindings = useExamFindingsStore((s) => s.loadFindings);
+  const loadDiagnoses = useDiagnosisStore((s) => s.loadDiagnoses);
+  const loadRefractions = useRefractionStore((s) => s.loadRefractions);
+  const fetchProblems = useProblemListStore((s) => s.fetchProblems);
   const encounterState = useEncounterStore((s) => s.encounters[params.encounterId]);
   const isFinalized = encounterState?.isFinalized ?? false;
-  const user = useCurrentUser();
-  const patientId =
-    getPatientIdForEncounter(params.encounterId) ??
-    getPatientIdForAppointment(params.encounterId) ??
-    "pat-001";
+  const encounterLoadStatus = encounterState?.loadStatus ?? "idle";
+
+  // patientId flows from encounterStore (set by loadEncounter)
+  const patientId = useEncounterStore(
+    (s) => s.encounters[params.encounterId]?.patientId ?? null
+  );
 
   // Role-based read-only: technicians + doctors + owners can edit clinical data
   const canEditClinical = requireRole("doctor", "technician", "owner");
@@ -588,28 +587,58 @@ export default function EncounterPage({
     }
   }, [params.encounterId, revertChiefComplaint, revertVitalsField, revertStructureField, revertCellValue]);
 
-  // Stable persona state — computed once per encounter to avoid re-init on renders
-  const [persona] = useState(() => getInitialStoreState(params.encounterId, patientId));
-
-  // Initialize all encounter stores on mount (all inits are idempotent)
+  // Parallel fetch all encounter sections on mount
   useEffect(() => {
-    initEncounter(params.encounterId, {
-      status: "pre_test",
-      encounterDate: new Date().toISOString().slice(0, 10),
-      providerName: user?.fullName ?? "Dr. Morgan",
-      patientId,
-      chiefComplaint: persona.encounter.chiefComplaint,
-    });
-    initVitals(params.encounterId, persona.vitals);
-    initFindings(params.encounterId, "anterior_segment", persona.anteriorFindings);
-    initFindings(params.encounterId, "posterior_segment", persona.posteriorFindings);
-    initDiagnoses(params.encounterId, persona.diagnoses);
-    seedProblems(patientId, persona.problems);
-  }, [params.encounterId, initEncounter, initVitals, initFindings, initDiagnoses, seedProblems, user, patientId, persona]);
+    const encId = params.encounterId;
+    loadEncounter(encId);
+    loadVitals(encId);
+    loadRefractions(encId);
+    loadFindings(encId, "anterior_segment");
+    loadFindings(encId, "posterior_segment");
+    loadDiagnoses(encId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.encounterId]);
+
+  // Fetch patient problem list once patientId is available from encounterStore
+  useEffect(() => {
+    if (!patientId) return;
+    fetchProblems(patientId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId]);
+
+  // Show full-page skeleton while encounter header is loading
+  if (encounterLoadStatus === "loading" || encounterLoadStatus === "idle") {
+    return (
+      <div className="flex flex-col gap-6">
+        <GlassCardSkeleton rows={2} />
+        <GlassCardSkeleton rows={4} />
+        <GlassCardSkeleton rows={6} />
+      </div>
+    );
+  }
+
+  // If encounter failed to load, show error state with retry
+  if (encounterLoadStatus === "error") {
+    return (
+      <div className="glass-card p-8 text-center flex flex-col items-center gap-4">
+        <p className="text-subhead text-[var(--state-critical)]">Could not load encounter</p>
+        <p className="text-caption text-[var(--text-muted)]">
+          {encounterState?.loadError ?? "Network error"}
+        </p>
+        <button
+          type="button"
+          onClick={() => loadEncounter(params.encounterId)}
+          className="px-4 py-2 rounded-xl text-sm font-medium bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 transition-all"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 stagger">
-      {/* Workflow header — chief complaint + audit trail toggle */}
+      {/* Workflow header -- chief complaint + audit trail toggle */}
       <div id="section-complaint" className="flex flex-col gap-2">
         <EncounterWorkflowHeader
           encounterId={params.encounterId}
@@ -698,21 +727,21 @@ export default function EncounterPage({
           <CardContent className="p-6">
             <RefractionGrid
               encounterId={params.encounterId}
-              initialRefractions={persona.refractions}
+              initialRefractions={[]}
               isReadOnly={clinicalReadOnly}
             />
           </CardContent>
         </Card>
       </div>
 
-      {/* Continuity Sidebar — active master problems */}
+      {/* Continuity Sidebar -- active master problems */}
       <ContinuitySidebar
-        patientId={encounterState?.patientId ?? patientId}
+        patientId={patientId ?? ""}
         encounterId={params.encounterId}
         isReadOnly={clinicalReadOnly}
       />
 
-      {/* Exam Findings — Anterior + Posterior side by side */}
+      {/* Exam Findings -- Anterior + Posterior side by side */}
       <div id="section-exam" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardContent className="p-6">
@@ -743,7 +772,7 @@ export default function EncounterPage({
         </Card>
       </div>
 
-      {/* Diagnoses — full width, 2-column list */}
+      {/* Diagnoses -- full width, 2-column list */}
       <div id="section-dx">
         <PermissionGate roles={["doctor", "owner"]}>
           <Card>
@@ -782,7 +811,7 @@ export default function EncounterPage({
         status={encounterState?.status ?? "pre_test"}
         isFinalized={isFinalized}
         sidebarCollapsed={sidebarCollapsed}
-        patientId={patientId}
+        patientId={patientId ?? ""}
         onAdvanceStatus={() => {
           if (encounterState?.status === "in_exam") {
             setFinalizeModalOpen(true);
