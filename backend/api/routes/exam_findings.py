@@ -138,6 +138,7 @@ async def upsert_exam_findings(
 async def get_exam_findings(
     encounter_id: UUID,
     exam_section: str,
+    request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_EXAM_FINDINGS)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -157,4 +158,13 @@ async def get_exam_findings(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Findings not found"
         )
+
+    # HIPAA-01: Log PHI read access for breach notification queries
+    await log_action(
+        db, ctx, AuditAction.READ, "exam_findings", row.id,
+        encounter_id=encounter_id,
+        patient_id=row.patient_id,
+        detail=f"Viewed {exam_section} findings",
+        ip_address=request.client.host if request.client else None,
+    )
     return row
