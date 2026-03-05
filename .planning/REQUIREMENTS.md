@@ -127,13 +127,63 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (Populated during roadmap creation) | | |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| SEC-05 | Phase 1 | Pending |
+| SEC-06 | Phase 1 | Pending |
+| SEC-07 | Phase 1 | Pending |
+| SEC-08 | Phase 1 | Pending |
+| SEC-09 | Phase 1 | Pending |
+| SEC-10 | Phase 1 | Pending |
+| INF-01 | Phase 1 | Pending |
+| INF-02 | Phase 1 | Pending |
+| INF-03 | Phase 1 | Pending |
+| INF-04 | Phase 1 | Pending |
+| INF-05 | Phase 1 | Pending |
+| INF-06 | Phase 1 | Pending |
+| API-01 | Phase 2 | Pending |
+| API-02 | Phase 2 | Pending |
+| API-03 | Phase 2 | Pending |
+| API-04 | Phase 2 | Pending |
+| API-05 | Phase 2 | Pending |
+| API-06 | Phase 2 | Pending |
+| API-07 | Phase 2 | Pending |
+| API-08 | Phase 2 | Pending |
+| HIPAA-01 | Phase 2 | Pending |
+| HIPAA-02 | Phase 2 | Pending |
+| HIPAA-03 | Phase 2 | Pending |
+| SCHED-01 | Phase 3 | Pending |
+| SCHED-02 | Phase 3 | Pending |
+| SCHED-03 | Phase 3 | Pending |
+| SCHED-04 | Phase 3 | Pending |
+| SCHED-05 | Phase 3 | Pending |
+| BILL-01 | Phase 4 | Pending |
+| BILL-02 | Phase 4 | Pending |
+| BILL-03 | Phase 4 | Pending |
+| BILL-04 | Phase 4 | Pending |
+| BILL-05 | Phase 4 | Pending |
+| BILL-06 | Phase 4 | Pending |
+| PAT-01 | Phase 5 | Pending |
+| PAT-02 | Phase 5 | Pending |
+| PAT-03 | Phase 5 | Pending |
+| PAT-04 | Phase 5 | Pending |
+| PAT-05 | Phase 5 | Pending |
+| OPT-01 | Phase 6 | Pending |
+| OPT-02 | Phase 6 | Pending |
+| OPT-03 | Phase 6 | Pending |
+| OPT-04 | Phase 6 | Pending |
+| INTAKE-01 | Phase 7 | Pending |
+| INTAKE-02 | Phase 7 | Pending |
+| INTAKE-03 | Phase 7 | Pending |
+| INTAKE-04 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 55 total
-- Mapped to phases: 0
-- Unmapped: 55
+- v1 requirements: 51 total
+- Mapped to phases: 51
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after user expanded scope to full MVP (6 phases)*
+*Last updated: 2026-03-05 after roadmap creation (7 phases, 51 requirements mapped)*
