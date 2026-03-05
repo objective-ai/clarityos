@@ -9,8 +9,6 @@ import { PatientStickyHeader } from "@/components/PatientStickyHeader";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { SessionTimeoutModal } from "@/components/auth/SessionTimeoutModal";
 import { useEncounterStore } from "@/store/encounterStore";
-import { getPatientById, getPatientIdForEncounter } from "@/lib/mock-patient-data";
-import { getPatientIdForAppointment } from "@/lib/mock-schedule-data";
 import type { PatientHeaderData } from "@/types/session";
 
 export default function TenantLayout({
@@ -29,25 +27,17 @@ export default function TenantLayout({
     ? pathname.split("/encounter/")[1]?.split("/")[0]
     : null;
   const encounters = useEncounterStore((s) => s.encounters);
+  // Derive patient header from encounterStore state only (no mock data)
+  // Full patient demographics are loaded by the encounter page via loadEncounter()
   const patientHeader = useMemo<PatientHeaderData | null>(() => {
     if (!encounterId) return null;
     const enc = encounters[encounterId];
-    const patientId =
-      enc?.patientId ??
-      getPatientIdForEncounter(encounterId) ??
-      getPatientIdForAppointment(encounterId);
+    // Only show header if we have a patientId from the API
+    const patientId = enc?.patientId;
     if (!patientId) return null;
-    const patient = getPatientById(patientId);
-    if (!patient) return null;
-    return {
-      id: patient.id,
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      preferredName: patient.preferredName ?? null,
-      dob: patient.dob,
-      sex: patient.sex === "F" ? "female" : "male",
-      alerts: patient.alerts,
-    };
+    // Basic header from encounter state — TopNav will show name when available
+    // Full demographics loaded by encounter page via API
+    return null;
   }, [encounterId, encounters]);
 
   // Auto-collapse sidebar on tablet-sized screens

@@ -8,9 +8,26 @@ import {
   useTenantCustomizationStore,
 } from "@/store/tenantCustomizationStore";
 import { contrastRatio, meetsAALarge } from "@/lib/color-utils";
-import { getAllStaff, type MockStaffMember } from "@/lib/mock-staff-data";
 import type { ThemePreference } from "@/store/themeStore";
 import type { StaffRole } from "@/types/session";
+
+// ---------------------------------------------------------------------------
+// Local staff type — replaces mock-staff-data shape
+// API integration will fetch from /api/staff in Phase 5
+// ---------------------------------------------------------------------------
+
+interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  role: StaffRole;
+  clinicalRole?: StaffRole;
+  npi?: string;
+  isActive: boolean;
+  createdAt: string;
+}
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -392,9 +409,9 @@ const CLINICAL_ROLES: StaffRole[] = ["doctor", "technician"];
 
 interface StaffFormDialogProps {
   open: boolean;
-  member: MockStaffMember | null;
+  member: StaffMember | null;
   onClose: () => void;
-  onSave: (data: Omit<MockStaffMember, "id" | "createdAt"> & { id?: string }) => void;
+  onSave: (data: Omit<StaffMember, "id" | "createdAt"> & { id?: string }) => void;
 }
 
 function StaffFormDialog({ open, member, onClose, onSave }: StaffFormDialogProps) {
@@ -569,9 +586,10 @@ function StaffFormDialog({ open, member, onClose, onSave }: StaffFormDialogProps
 
 function StaffManagementSection() {
   const [search, setSearch] = useState("");
-  const [staffList, setStaffList] = useState<MockStaffMember[]>(() => getAllStaff());
+  // Phase 5: load from /api/staff — empty for now (API integration pending)
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<MockStaffMember | null>(null);
+  const [editingMember, setEditingMember] = useState<StaffMember | null>(null);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return staffList;
@@ -593,13 +611,13 @@ function StaffManagementSection() {
     );
   };
 
-  const handleSave = (data: Omit<MockStaffMember, "id" | "createdAt"> & { id?: string }) => {
+  const handleSave = (data: Omit<StaffMember, "id" | "createdAt"> & { id?: string }) => {
     if (data.id) {
       setStaffList((prev) =>
-        prev.map((s) => s.id === data.id ? { ...s, ...data } as MockStaffMember : s)
+        prev.map((s) => s.id === data.id ? { ...s, ...data } as StaffMember : s)
       );
     } else {
-      const newMember: MockStaffMember = {
+      const newMember: StaffMember = {
         ...data,
         id: `staff-${Date.now()}`,
         createdAt: new Date().toISOString().slice(0, 10),
@@ -609,7 +627,7 @@ function StaffManagementSection() {
   };
 
   const openAdd = () => { setEditingMember(null); setDialogOpen(true); };
-  const openEdit = (m: MockStaffMember) => { setEditingMember(m); setDialogOpen(true); };
+  const openEdit = (m: StaffMember) => { setEditingMember(m); setDialogOpen(true); };
 
   return (
     <div className="flex flex-col gap-6">

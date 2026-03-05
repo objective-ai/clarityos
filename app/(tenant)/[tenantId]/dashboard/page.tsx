@@ -6,7 +6,6 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentTenant } from "@/store/sessionStore";
 import { useCurrentUser } from "@/store/sessionStore";
 import { useEncounterStore } from "@/store/encounterStore";
-import { getPatientById } from "@/lib/mock-patient-data";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { PatientChartModal } from "@/components/PatientChartModal";
@@ -104,15 +103,13 @@ export default function DashboardPage({
     const entries = Object.entries(encounters);
     if (entries.length === 0) return null; // use fallback
     return entries
-      .map(([id, enc]) => {
-        const patient = enc.patientId ? getPatientById(enc.patientId) : null;
-        return {
-          id,
-          name: patient ? `${patient.firstName} ${patient.lastName}` : "Unknown Patient",
-          date: formatEncounterDate(enc.encounterDate),
-          status: enc.status,
-        };
-      })
+      .map(([id, enc]) => ({
+        id,
+        // Patient name comes from API when encounter is loaded; fall back to ID
+        name: enc.patientId ? `Patient ${enc.patientId}` : "Unknown Patient",
+        date: formatEncounterDate(enc.encounterDate),
+        status: enc.status,
+      }))
       .sort((a, b) => {
         const encA = encounters[a.id];
         const encB = encounters[b.id];
