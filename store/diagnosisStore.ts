@@ -8,6 +8,8 @@
 
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
+
+const isDev = process.env.NODE_ENV === "development";
 import { apiFetch } from "@/lib/api-client";
 import type {
   Diagnosis,
@@ -69,9 +71,7 @@ function emptySlice(): DiagnosisSlice {
 // Store
 // ---------------------------------------------------------------------------
 
-export const useDiagnosisStore = create<DiagnosisStore>()(
-  devtools(
-    subscribeWithSelector((set, get) => ({
+const diagnosisStoreImpl = subscribeWithSelector(devtools<DiagnosisStore>((set, get) => ({
       encounters: {},
 
       init(encounterId, initial) {
@@ -320,9 +320,10 @@ export const useDiagnosisStore = create<DiagnosisStore>()(
           "_removeLocal",
         );
       },
-    })),
-    { name: "ClarityOS/Diagnoses" },
-  ),
+    }), { name: "ClarityOS/Diagnoses", enabled: isDev }));
+
+export const useDiagnosisStore = create<DiagnosisStore>()(
+  diagnosisStoreImpl
 );
 
 // ---------------------------------------------------------------------------

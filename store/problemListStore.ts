@@ -8,6 +8,8 @@
 
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
+
+const isDev = process.env.NODE_ENV === "development";
 import { apiFetch } from "@/lib/api-client";
 import type {
   PatientProblem,
@@ -81,9 +83,7 @@ function emptySlice(): ProblemSlice {
 // Store
 // ---------------------------------------------------------------------------
 
-export const useProblemListStore = create<ProblemListStore>()(
-  devtools(
-    subscribeWithSelector((set, get) => ({
+const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((set, get) => ({
       patients: {},
 
       async fetchProblems(patientId) {
@@ -362,9 +362,10 @@ export const useProblemListStore = create<ProblemListStore>()(
           "_seedProblems",
         );
       },
-    })),
-    { name: "ClarityOS/ProblemList" },
-  ),
+    }), { name: "ClarityOS/ProblemList", enabled: isDev }));
+
+export const useProblemListStore = create<ProblemListStore>()(
+  problemListStoreImpl
 );
 
 // ---------------------------------------------------------------------------

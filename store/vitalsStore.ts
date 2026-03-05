@@ -22,6 +22,8 @@
 
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
+
+const isDev = process.env.NODE_ENV === "development";
 import {
   blankVitalsDraft,
   type VitalsDraft,
@@ -151,9 +153,7 @@ async function saveVitalsToAPI(
 // Store implementation
 // ---------------------------------------------------------------------------
 
-export const useVitalsStore = create<VitalsStore>()(
-  devtools(
-    subscribeWithSelector((set, get) => ({
+const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) => ({
       encounters: {},
 
       init(encounterId, initialData) {
@@ -310,9 +310,10 @@ export const useVitalsStore = create<VitalsStore>()(
           "_setStatus"
         );
       },
-    })),
-    { name: "ClarityOS/Vitals" }
-  )
+    }), { name: "ClarityOS/Vitals", enabled: isDev }));
+
+export const useVitalsStore = create<VitalsStore>()(
+  vitalsStoreImpl
 );
 
 // ---------------------------------------------------------------------------

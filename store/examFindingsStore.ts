@@ -17,6 +17,8 @@
 
 import { create } from "zustand";
 import { devtools, subscribeWithSelector } from "zustand/middleware";
+
+const isDev = process.env.NODE_ENV === "development";
 import {
   blankDraft,
   blankStructure,
@@ -152,9 +154,7 @@ async function saveFindingsToAPI(
 // Store implementation
 // ---------------------------------------------------------------------------
 
-export const useExamFindingsStore = create<ExamFindingsStore>()(
-  devtools(
-    subscribeWithSelector((set, get) => ({
+const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>((set, get) => ({
       findings: {},
 
       init(encounterId, section, initialData) {
@@ -438,9 +438,10 @@ export const useExamFindingsStore = create<ExamFindingsStore>()(
           "_setStatus",
         );
       },
-    })),
-    { name: "ClarityOS/ExamFindings" },
-  ),
+    }), { name: "ClarityOS/ExamFindings", enabled: isDev }));
+
+export const useExamFindingsStore = create<ExamFindingsStore>()(
+  examFindingsStoreImpl
 );
 
 // ---------------------------------------------------------------------------
