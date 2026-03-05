@@ -49,11 +49,12 @@ Plans:
   3. The audit trail sidebar in the encounter view displays real audit log entries from the API (no 404 errors)
   4. Session automatically times out after 30 minutes of inactivity, clearing ePHI and redirecting to /login
   5. No file in the production bundle imports from any mock data module
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 02-01: Store migration (encounterStore, vitalsStore, refractionStore, examFindingsStore, diagnosisStore, problemListStore)
-- [ ] 02-02: Page migration and HIPAA compliance (mock imports removed from pages, PHI read logging, audit sidebar wired)
+- [ ] 02-01-PLAN.md — API client upgrade, skeleton/status UI, audit-logs BFF route, PHI logging (API-08, HIPAA-01, HIPAA-02)
+- [ ] 02-02-PLAN.md — Store migration: all 6 clinical stores from mock to real API (API-01 through API-06)
+- [ ] 02-03-PLAN.md — Page wiring, mock cleanup, end-to-end verification (API-07, HIPAA-03)
 
 ### Phase 3: Scheduling
 **Goal**: Clinicians can manage their daily schedule with real appointments — booking, check-in, and seamless encounter creation from the schedule
@@ -135,8 +136,8 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Security & Auth Foundation | 2/3 | In Progress|  |
-| 2. API Integration & HIPAA Compliance | 0/2 | Not started | - |
+| 1. Security & Auth Foundation | 3/3 | Complete | 2026-03-05 |
+| 2. API Integration & HIPAA Compliance | 0/3 | Not started | - |
 | 3. Scheduling | 0/2 | Not started | - |
 | 4. Billing & Coding | 0/2 | Not started | - |
 | 5. Patient Profile | 0/2 | Not started | - |
