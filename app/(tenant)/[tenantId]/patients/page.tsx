@@ -5,20 +5,16 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
+import { getAllPatients, getPatientEncounters } from "@/lib/mock-patient-data";
 import { Card, CardContent } from "@/components/ui/card";
 
-const MOCK_PATIENTS = [
-  { id: "pat-001", firstName: "Margaret", lastName: "Chen", dob: "1958-03-12", sex: "F", lastVisit: "2026-03-03", phone: "(555) 234-5678" },
-  { id: "pat-002", firstName: "Robert", lastName: "Kim", dob: "1972-08-25", sex: "M", lastVisit: "2026-03-03", phone: "(555) 345-6789" },
-  { id: "pat-003", firstName: "Sarah", lastName: "Johnson", dob: "1990-11-05", sex: "F", lastVisit: "2026-03-02", phone: "(555) 456-7890" },
-  { id: "pat-004", firstName: "James", lastName: "Wilson", dob: "1965-01-18", sex: "M", lastVisit: "2026-03-03", phone: "(555) 567-8901" },
-  { id: "pat-005", firstName: "Lisa", lastName: "Park", dob: "1988-07-22", sex: "F", lastVisit: "2026-03-03", phone: "(555) 678-9012" },
-  { id: "pat-006", firstName: "David", lastName: "Brown", dob: "1955-04-30", sex: "M", lastVisit: "2026-03-03", phone: "(555) 789-0123" },
-  { id: "pat-007", firstName: "Emily", lastName: "Davis", dob: "1995-09-14", sex: "F", lastVisit: "2026-03-03", phone: "(555) 890-1234" },
-  { id: "pat-008", firstName: "Michael", lastName: "Torres", dob: "1978-12-03", sex: "M", lastVisit: "2026-02-28", phone: "(555) 901-2345" },
-  { id: "pat-009", firstName: "Karen", lastName: "White", dob: "1960-06-17", sex: "F", lastVisit: "2026-02-27", phone: "(555) 012-3456" },
-  { id: "pat-010", firstName: "Anna", lastName: "Lopez", dob: "1983-02-08", sex: "F", lastVisit: "2026-03-03", phone: "(555) 123-4567" },
-];
+const PATIENTS = getAllPatients().map((p) => {
+  const encs = getPatientEncounters(p.id);
+  const lastVisit = encs.length > 0
+    ? encs.sort((a, b) => b.date.localeCompare(a.date))[0].date
+    : undefined;
+  return { ...p, lastVisit };
+});
 
 function calculateAge(dob: string): number {
   const birth = new Date(dob);
@@ -35,9 +31,9 @@ export default function PatientsPage() {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return MOCK_PATIENTS;
+    if (!search.trim()) return PATIENTS;
     const q = search.toLowerCase();
-    return MOCK_PATIENTS.filter(
+    return PATIENTS.filter(
       (p) =>
         p.firstName.toLowerCase().includes(q) ||
         p.lastName.toLowerCase().includes(q) ||
@@ -69,7 +65,7 @@ export default function PatientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-display text-2xl">Patients</h1>
-          <p className="text-body mt-1">{MOCK_PATIENTS.length} patients on file</p>
+          <p className="text-body mt-1">{PATIENTS.length} patients on file</p>
         </div>
       </div>
 

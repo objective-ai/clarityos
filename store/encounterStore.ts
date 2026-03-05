@@ -1,25 +1,30 @@
 import { create } from "zustand";
 import { persist, devtools } from "zustand/middleware";
+import type { EncounterStatus } from "@/types/encounter";
+
+export type { EncounterStatus };
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export type EncounterStatus = "pre_test" | "in_exam" | "finalized";
 
 export interface EncounterState {
   status: EncounterStatus;
   isFinalized: boolean;
   encounterDate: string;
   providerName: string;
-  iopOdElevated?: boolean;
-  iopOsElevated?: boolean;
+  patientId?: string;
+  chiefComplaint?: string;
+  signedByName?: string;
+  signedAt?: string;
 }
 
 interface EncounterStoreState {
   encounters: Record<string, EncounterState>;
   initEncounter: (id: string, data: Omit<EncounterState, "isFinalized">) => void;
   advanceStatus: (id: string) => void;
+  setChiefComplaint: (id: string, text: string) => void;
+  finalizeEncounter: (id: string, signedByName: string, signedAt: string) => void;
   getEncounter: (id: string) => EncounterState | undefined;
 }
 
@@ -65,7 +70,7 @@ export const useEncounterStore = create<EncounterStoreState>()(
           const enc = get().encounters[id];
           if (!enc) return;
           const next = NEXT_STATUS[enc.status];
-          if (!next) return; // already finalized
+          if (!next || next === "finalized") return; // use finalizeEncounter for finalization
           set(
             (state) => ({
               encounters: {
@@ -73,12 +78,45 @@ export const useEncounterStore = create<EncounterStoreState>()(
                 [id]: {
                   ...state.encounters[id],
                   status: next,
-                  isFinalized: next === "finalized",
                 },
               },
             }),
             false,
             "advanceStatus"
+          );
+        },
+
+        setChiefComplaint: (id, text) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], chiefComplaint: text },
+              },
+            }),
+            false,
+            "setChiefComplaint"
+          );
+        },
+
+        finalizeEncounter: (id, signedByName, signedAt) => {
+          const enc = get().encounters[id];
+          if (!enc || enc.isFinalized) return;
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: {
+                  ...state.encounters[id],
+                  status: "finalized" as EncounterStatus,
+                  isFinalized: true,
+                  signedByName,
+                  signedAt,
+                },
+              },
+            }),
+            false,
+            "finalizeEncounter"
           );
         },
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentTenant } from "@/store/sessionStore";
 import { useCurrentUser } from "@/store/sessionStore";
+import { useEncounterStore } from "@/store/encounterStore";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { PatientChartModal } from "@/components/PatientChartModal";
@@ -14,14 +15,6 @@ import {
   CardTitle,
   CardContent,
 } from "@/components/ui/card";
-
-const MOCK_STATS = {
-  appointmentsToday: 24,
-  patientsSeen: 18,
-  pendingEncounters: 3,
-  nextPatient: "Chen, M",
-  nextTime: "2:30 PM",
-};
 
 const QUICK_ACTIONS = [
   {
@@ -60,12 +53,26 @@ const QUICK_ACTIONS = [
   },
 ];
 
-const RECENT_ENCOUNTERS = [
+const FALLBACK_ENCOUNTERS = [
   { name: "Margaret Chen", date: "Today, 1:15 PM", status: "in_exam", id: "enc-001" },
   { name: "Robert Kim", date: "Today, 11:30 AM", status: "finalized", id: "enc-002" },
   { name: "Sarah Johnson", date: "Yesterday, 3:45 PM", status: "finalized", id: "enc-003" },
   { name: "Emily Davis", date: "Yesterday, 2:00 PM", status: "finalized", id: "enc-004" },
 ];
+
+function formatEncounterDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  if (isToday) return `Today, ${time}`;
+  if (isYesterday) return `Yesterday, ${time}`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + `, ${time}`;
+}
 
 export default function DashboardPage({
   params,
@@ -77,6 +84,36 @@ export default function DashboardPage({
   const user = useCurrentUser();
   const base = `/${params.tenantId}`;
   const [chartOpen, setChartOpen] = useState(false);
+
+  const encounters = useEncounterStore((s) => s.encounters);
+
+  const stats = useMemo(() => {
+    const all = Object.values(encounters);
+    const total = all.length;
+    const finalized = all.filter((e) => e.isFinalized).length;
+    const pending = total - finalized;
+    return { total, finalized, pending };
+  }, [encounters]);
+
+  const recentEncounters = useMemo(() => {
+    const entries = Object.entries(encounters);
+    if (entries.length === 0) return null; // use fallback
+    return entries
+      .map(([id, enc]) => ({
+        id,
+        name: enc.providerName,
+        date: formatEncounterDate(enc.encounterDate),
+        status: enc.status,
+      }))
+      .sort((a, b) => {
+        const encA = encounters[a.id];
+        const encB = encounters[b.id];
+        return new Date(encB.encounterDate).getTime() - new Date(encA.encounterDate).getTime();
+      })
+      .slice(0, 4);
+  }, [encounters]);
+
+  const displayEncounters = recentEncounters ?? FALLBACK_ENCOUNTERS;
 
   return (
     <div className="flex flex-col gap-6 stagger">
@@ -103,8 +140,8 @@ export default function DashboardPage({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Link href={`${base}/schedule`} className="no-underline h-full">
           <StatCard
-            label="Appointments Today"
-            value={MOCK_STATS.appointmentsToday}
+            label="Total Encounters"
+            value={stats.total}
             className="h-full"
             icon={
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -115,9 +152,8 @@ export default function DashboardPage({
           />
         </Link>
         <StatCard
-          label="Patients Seen"
-          value={MOCK_STATS.patientsSeen}
-          trend="+3 from yesterday"
+          label="Finalized"
+          value={stats.finalized}
           accent
           icon={
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -128,12 +164,12 @@ export default function DashboardPage({
         />
         <StatCard
           label="Pending"
-          value={MOCK_STATS.pendingEncounters}
+          value={stats.pending}
         />
         <StatCard
           label="Next Patient"
-          value={MOCK_STATS.nextPatient}
-          trend={MOCK_STATS.nextTime}
+          value="—"
+          trend="No schedule yet"
           onClick={() => setChartOpen(true)}
         />
       </div>
@@ -171,7 +207,7 @@ export default function DashboardPage({
           </CardHeader>
           <CardContent>
             <div className="flex flex-col">
-              {RECENT_ENCOUNTERS.map((enc, i) => (
+              {displayEncounters.map((enc, i) => (
                 <Link
                   key={enc.id}
                   href={`${base}/encounter/${enc.id}`}
@@ -193,8 +229,8 @@ export default function DashboardPage({
                       </span>
                     </div>
                   </div>
-                  <Badge variant={enc.status === "in_exam" ? "warning" : "success"}>
-                    {enc.status === "in_exam" ? "In Exam" : "Finalized"}
+                  <Badge variant={enc.status === "finalized" ? "success" : enc.status === "in_exam" ? "warning" : "secondary"}>
+                    {enc.status === "finalized" ? "Finalized" : enc.status === "in_exam" ? "In Exam" : "Pre-Test"}
                   </Badge>
                 </Link>
               ))}

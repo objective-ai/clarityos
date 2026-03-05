@@ -1,30 +1,24 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  useDiagnosisStore,
+  useDiagnoses,
+  useDiagnosisSaveStatus,
+} from "@/store/diagnosisStore";
+import type { EyeLaterality, Diagnosis } from "@/types/diagnosis";
 
 // ---------------------------------------------------------------------------
-// Types
+// Common optometry ICD-10 codes
 // ---------------------------------------------------------------------------
-
-type EyeLaterality = "OD" | "OS" | "OU";
 
 interface ICD10Code {
   code: string;
   description: string;
   category: string;
 }
-
-interface Diagnosis {
-  id: string;
-  icd10Code: string;
-  description: string;
-  eyeAffected: EyeLaterality;
-}
-
-// ---------------------------------------------------------------------------
-// Common optometry ICD-10 codes
-// ---------------------------------------------------------------------------
 
 const COMMON_CODES: ICD10Code[] = [
   { code: "H52.13", description: "Myopia, bilateral", category: "Refractive" },
@@ -51,18 +45,35 @@ const COMMON_CODES: ICD10Code[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Component
+// Props
 // ---------------------------------------------------------------------------
 
 interface DiagnosisPickerProps {
   encounterId: string;
   isReadOnly?: boolean;
+  initialDiagnoses?: Diagnosis[];
 }
 
-export function DiagnosisPicker({ encounterId, isReadOnly = false }: DiagnosisPickerProps) {
-  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function DiagnosisPicker({
+  encounterId,
+  isReadOnly = false,
+  initialDiagnoses,
+}: DiagnosisPickerProps) {
+  const store = useDiagnosisStore();
+  const diagnoses = useDiagnoses(encounterId);
+  const saveStatus = useDiagnosisSaveStatus(encounterId);
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+
+  // Initialize on mount
+  useEffect(() => {
+    store.init(encounterId, initialDiagnoses);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encounterId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return COMMON_CODES;
@@ -71,40 +82,45 @@ export function DiagnosisPicker({ encounterId, isReadOnly = false }: DiagnosisPi
       (c) =>
         c.code.toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q) ||
-        c.category.toLowerCase().includes(q)
+        c.category.toLowerCase().includes(q),
     );
   }, [search]);
 
   const addDiagnosis = useCallback(
-    (code: ICD10Code, eye: EyeLaterality) => {
+    async (code: ICD10Code, eye: EyeLaterality) => {
       if (isReadOnly) return;
-      const id = `dx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      setDiagnoses((prev) => [
-        ...prev,
-        { id, icd10Code: code.code, description: code.description, eyeAffected: eye },
-      ]);
+      await store.addDiagnosis(encounterId, {
+        icd10_code: code.code,
+        description: code.description,
+        eye_affected: eye,
+      });
       setShowPicker(false);
       setSearch("");
     },
-    [isReadOnly]
+    [encounterId, isReadOnly, store],
   );
 
   const removeDiagnosis = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (isReadOnly) return;
-      setDiagnoses((prev) => prev.filter((d) => d.id !== id));
+      await store.removeDiagnosis(encounterId, id);
     },
-    [isReadOnly]
+    [encounterId, isReadOnly, store],
   );
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="section-title">Diagnoses</h2>
-          <p className="text-caption mt-0.5 text-[var(--text-muted)]">
-            ICD-10 codes for this encounter
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="section-title">Diagnoses</h2>
+            <p className="text-caption mt-0.5 text-[var(--text-muted)]">
+              ICD-10 codes for this encounter
+            </p>
+          </div>
+          {saveStatus === "saving" && (
+            <Badge variant="info">Saving…</Badge>
+          )}
         </div>
         {!isReadOnly && (
           <Button
@@ -128,14 +144,16 @@ export function DiagnosisPicker({ encounterId, isReadOnly = false }: DiagnosisPi
               }`}
             >
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)]">
-                {dx.icd10Code}
+                {dx.icd10_code}
               </span>
               <span className="flex-1 text-xs text-[var(--text-primary)]">
                 {dx.description}
               </span>
-              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
-                {dx.eyeAffected}
-              </span>
+              {dx.eye_affected && (
+                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
+                  {dx.eye_affected}
+                </span>
+              )}
               {!isReadOnly && (
                 <button
                   type="button"

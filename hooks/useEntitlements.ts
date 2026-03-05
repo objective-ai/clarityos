@@ -94,6 +94,9 @@ export interface UseEntitlementsReturn {
   /** The current user's staff role */
   role: StaffRole | null;
 
+  /** Clinical role if this user is an owner who also practices clinically */
+  clinicalRole: StaffRole | null;
+
   /** Whether the current user has superuser access */
   isSuperuser: boolean;
 
@@ -126,6 +129,7 @@ export function useEntitlements(): UseEntitlementsReturn {
         requireRole: () => false,
         planName: "",
         role: null,
+        clinicalRole: null,
         isSuperuser: false,
         isAuthenticated: false,
         entitlements: emptySet,
@@ -157,11 +161,13 @@ export function useEntitlements(): UseEntitlementsReturn {
 
       requireRole: (...allowedRoles: StaffRole[]): boolean => {
         if (user.isSuperuser) return true;
-        return (allowedRoles as string[]).includes(user.role);
+        const roles = allowedRoles as string[];
+        return roles.includes(user.role) || (!!user.clinicalRole && roles.includes(user.clinicalRole));
       },
 
       planName: tenant.planName,
       role: user.role,
+      clinicalRole: user.clinicalRole ?? null,
       isSuperuser: user.isSuperuser,
       isAuthenticated: true,
       entitlements: entitlementSet,

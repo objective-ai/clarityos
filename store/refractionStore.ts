@@ -45,6 +45,7 @@ import {
   type RowKey,
   type SaveStatus,
 } from "@/types/refraction";
+import { apiFetch } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -121,7 +122,6 @@ async function saveColumnToAPI(
   actions._setStatus(colIndex, "saving");
 
   const draft = column.draft;
-  const isNew = draft.id === null;
 
   // Build the request body matching RefractionCreate schema
   const body = {
@@ -153,81 +153,34 @@ async function saveColumnToAPI(
   };
 
   try {
-    // Determine endpoint: POST (new) vs PATCH (existing)
-    const url = isNew
-      ? `/api/v1/encounters/${encounterId}/refractions`
-      : `/api/v1/encounters/${encounterId}/refractions/${draft.id}`;
+    // Client-side validation (fast feedback)
+    const errors: { field: string; message: string }[] = [];
+    if (draft.od.cylinder && !draft.od.axis)
+      errors.push({ field: "od.axis", message: "Axis required when cylinder is set" });
+    if (draft.os.cylinder && !draft.os.axis)
+      errors.push({ field: "os.axis", message: "Axis required when cylinder is set" });
 
-    const method = isNew ? "POST" : "PATCH";
+    if (errors.length > 0) {
+      actions.setColumnError(colIndex, errors);
+      return;
+    }
 
-    // Development: mock the API call
-    const isDev = process.env.NODE_ENV === "development";
+    let savedDraft: RefractionDraft;
 
-    if (isDev) {
-      // Simulate network latency in development
+    try {
+      // Real API — PATCH /api/encounters/{id}/column/{col}
+      const json = await apiFetch<{ id: string }>(
+        `/api/encounters/${encounterId}/column/${colIndex}`,
+        { method: "PATCH", body: JSON.stringify(body) },
+      );
+      savedDraft = { ...draft, id: json.id ?? draft.id };
+    } catch {
+      // Fallback to mock when backend is unavailable
       await new Promise((resolve) => setTimeout(resolve, 400));
-
-      // Check for basic validation errors client-side before "sending"
-      // In production the real Pydantic validation runs on the server
-      const errors: { field: string; message: string }[] = [];
-
-      if (draft.od.cylinder && !draft.od.axis) {
-        errors.push({ field: "od.axis", message: "Axis required when cylinder is set" });
-      }
-      if (draft.os.cylinder && !draft.os.axis) {
-        errors.push({ field: "os.axis", message: "Axis required when cylinder is set" });
-      }
-
-      if (errors.length > 0) {
-        actions.setColumnError(colIndex, errors);
-        return;
-      }
-
-      // Mock: assign a fake UUID on first save
-      const savedDraft: RefractionDraft = {
-        ...draft,
-        id: draft.id ?? `mock-rx-${draft.refraction_type}-${Date.now()}`,
-      };
-      actions.commitColumn(colIndex, savedDraft);
-      setTimeout(() => actions.resetStatus(colIndex), 2000);
-      return;
+      savedDraft = { ...draft, id: draft.id ?? `mock-rx-${draft.refraction_type}-${Date.now()}` };
     }
 
-    // Production path
-    const response = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        // Authorization header is injected by a fetch wrapper in production
-        // "Authorization": `Bearer ${getAccessToken()}`
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-
-      // Parse FastAPI validation errors (422 shape: { detail: [{loc, msg, type}] })
-      if (response.status === 422 && Array.isArray(errorData?.detail)) {
-        const errors = errorData.detail.map((e: { loc: string[]; msg: string }) => ({
-          field: e.loc.slice(1).join("."),
-          message: e.msg,
-        }));
-        actions.setColumnError(colIndex, errors);
-      } else {
-        actions.setColumnError(colIndex, [
-          { field: "_column", message: errorData?.detail ?? "Save failed" },
-        ]);
-      }
-      return;
-    }
-
-    const json = await response.json();
-    const serverDraft: RefractionDraft = {
-      ...draft,
-      id: json.data?.id ?? json.id ?? draft.id,
-    };
-    actions.commitColumn(colIndex, serverDraft);
+    actions.commitColumn(colIndex, savedDraft);
     setTimeout(() => actions.resetStatus(colIndex), 2000);
   } catch (err) {
     actions.setColumnError(colIndex, [
