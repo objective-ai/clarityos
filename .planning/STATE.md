@@ -3,30 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-05T22:32:20.844Z"
-last_activity: 2026-03-05 — Plan 01-03 complete (Supabase Auth integration)
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-05T22:42:17Z"
+last_activity: 2026-03-05 — Plan 02-02 complete (Store migrations to real API)
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Plan 01-03 complete (Phase 1 done)
-last_updated: "2026-03-05T21:32:00Z"
-last_activity: 2026-03-05 — Plan 01-03 complete (Supabase Auth integration)
-progress:
-  total_phases: 7
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 14
+  completed_plans: 5
+  percent: 24
 ---
 
 # Project State
@@ -36,36 +21,38 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** Phase 1 - Security & Auth Foundation
+**Current focus:** Phase 2 - API Integration & HIPAA Compliance
 
 ## Current Position
 
-Phase: 1 of 7 (Security & Auth Foundation) -- COMPLETE
-Plan: 3 of 3 in current phase (all done)
-Status: Phase 1 complete, ready for Phase 2
-Last activity: 2026-03-05 — Plan 01-03 complete (Supabase Auth integration)
+Phase: 2 of 7 (API Integration & HIPAA Compliance)
+Plan: 2 of N in current phase (done)
+Status: Plan 02-02 complete, continuing Phase 2
+Last activity: 2026-03-05 — Plan 02-02 complete (Store migrations to real API)
 
-Progress: [=.........] 14%
+Progress: [==........] 24%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: ~14min
-- Total execution time: ~0.7 hours
+- Total plans completed: 5
+- Average duration: ~11min
+- Total execution time: ~1.0 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 3/3 | ~41min | ~14min |
+| 02 | 2/? | ~20min | ~10min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min)
+- Last 5 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min), 02-01 (~12min), 02-02 (~8min)
 - Trend: Accelerating
 
 *Updated after each plan completion*
 | Phase 02 P01 | 12 | 3 tasks | 6 files |
+| Phase 02 P02 | 8 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -88,10 +75,14 @@ Recent decisions affecting current work:
 - [Phase 02-01]: withRetry exponential backoff: 500ms base, retries at 500ms, 1000ms, 2000ms
 - [Phase 02-01]: Encounter-level GET logging sufficient for vitals PHI (vitals loaded inline from encounter response, no standalone GET)
 - [Phase 02-01]: exam_findings GET required standalone log_action(READ) — separate PHI endpoint, fixed as Rule 2 auto-fix
+- [Phase 02-02]: loadRefractions isReadOnly parameter made optional (default false) — encounter page calls with 1 arg on mount
+- [Phase 02-02]: diagnosisStore.removeDiagnosis surfaces errors (no silent local removal)
+- [Phase 02-02]: refractionSummaryToDraft converter maps camelCase API → snake_case RefractionDraft
+- [Phase 02-02]: problemListStore._seedProblems removed — no mock path, real fetchProblems only
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
@@ -100,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05T22:32:20.840Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-05T22:42:17Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

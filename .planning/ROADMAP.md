@@ -49,7 +49,7 @@ Plans:
   3. The audit trail sidebar in the encounter view displays real audit log entries from the API (no 404 errors)
   4. Session automatically times out after 30 minutes of inactivity, clearing ePHI and redirecting to /login
   5. No file in the production bundle imports from any mock data module
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 02-01-PLAN.md — API client upgrade, skeleton/status UI, audit-logs BFF route, PHI logging (API-08, HIPAA-01, HIPAA-02)
@@ -137,7 +137,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Security & Auth Foundation | 3/3 | Complete | 2026-03-05 |
-| 2. API Integration & HIPAA Compliance | 1/3 | In Progress|  |
+| 2. API Integration & HIPAA Compliance | 2/3 | In Progress|  |
 | 3. Scheduling | 0/2 | Not started | - |
 | 4. Billing & Coding | 0/2 | Not started | - |
 | 5. Patient Profile | 0/2 | Not started | - |

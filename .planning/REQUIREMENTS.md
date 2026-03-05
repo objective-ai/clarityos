@@ -31,12 +31,12 @@ Requirements for the full MVP. Each maps to roadmap phases.
 
 ### API Integration
 
-- [ ] **API-01**: encounterStore migrated from mock data to real apiFetch() calls
-- [ ] **API-02**: vitalsStore migrated from mock data to real apiFetch() calls
-- [ ] **API-03**: refractionStore migrated from mock data to real apiFetch() calls
-- [ ] **API-04**: examFindingsStore migrated from mock data to real apiFetch() calls
-- [ ] **API-05**: diagnosisStore migrated from mock data to real apiFetch() calls
-- [ ] **API-06**: problemListStore migrated from mock data to real apiFetch() calls
+- [x] **API-01**: encounterStore migrated from mock data to real apiFetch() calls
+- [x] **API-02**: vitalsStore migrated from mock data to real apiFetch() calls
+- [x] **API-03**: refractionStore migrated from mock data to real apiFetch() calls
+- [x] **API-04**: examFindingsStore migrated from mock data to real apiFetch() calls
+- [x] **API-05**: diagnosisStore migrated from mock data to real apiFetch() calls
+- [x] **API-06**: problemListStore migrated from mock data to real apiFetch() calls
 - [ ] **API-07**: Mock persona seed imports removed from all 9 production pages
 - [x] **API-08**: apiFetch() updated to use Supabase session token for Authorization header
 
@@ -143,12 +143,12 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INF-04 | Phase 1 | Complete |
 | INF-05 | Phase 1 | Complete |
 | INF-06 | Phase 1 | Complete |
-| API-01 | Phase 2 | Pending |
-| API-02 | Phase 2 | Pending |
-| API-03 | Phase 2 | Pending |
-| API-04 | Phase 2 | Pending |
-| API-05 | Phase 2 | Pending |
-| API-06 | Phase 2 | Pending |
+| API-01 | Phase 2 | Complete |
+| API-02 | Phase 2 | Complete |
+| API-03 | Phase 2 | Complete |
+| API-04 | Phase 2 | Complete |
+| API-05 | Phase 2 | Complete |
+| API-06 | Phase 2 | Complete |
 | API-07 | Phase 2 | Pending |
 | API-08 | Phase 2 | Complete |
 | HIPAA-01 | Phase 2 | Complete |
