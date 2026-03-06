@@ -16,7 +16,6 @@ import { useThemeStore, nextTheme } from "@/store/themeStore";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { useCurrentUser, useSessionStore } from "@/store/sessionStore";
-import { getMockSession, type MockScenario } from "@/lib/auth/mock-session";
 import type { PatientHeaderData, StaffRole } from "@/types/session";
 
 const ROLE_COLORS: Record<StaffRole, { bg: string; text: string; border: string }> = {
@@ -54,7 +53,9 @@ function getPageTitle(pathname: string): string {
   return "Dashboard";
 }
 
-const SCENARIO_LABELS: [MockScenario, string][] = [
+type DevScenario = "premium_doctor" | "core_plan" | "technician" | "receptionist" | "owner";
+
+const SCENARIO_LABELS: [DevScenario, string][] = [
   ["premium_doctor", "Doctor (Premium)"],
   ["core_plan", "Doctor (Core Plan)"],
   ["technician", "Technician"],
@@ -70,12 +71,13 @@ export function TopNav({ tenantId, patient }: TopNavProps) {
   const isDev = process.env.NODE_ENV === "development";
   const canAccessSettings = requireRole("admin", "owner");
   const setSession = useSessionStore((s) => s.setSession);
-  const [activeScenario, setActiveScenario] = useState<MockScenario>("premium_doctor");
+  const [activeScenario, setActiveScenario] = useState<DevScenario>("premium_doctor");
   const user = useCurrentUser();
   const pageTitle = getPageTitle(pathname);
 
-  const switchRole = (scenario: MockScenario) => {
+  const switchRole = async (scenario: DevScenario) => {
     setActiveScenario(scenario);
+    const { getMockSession } = await import("@/lib/auth/mock-session");
     setSession(getMockSession(scenario));
   };
 
