@@ -264,23 +264,27 @@ export function RxPrintView() {
       </div>
 
       {/* Print styles */}
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #rx-print-area,
-          #rx-print-area * {
-            visibility: visible;
-          }
-          #rx-print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-        }
-      `}</style>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media print {
+              body * {
+                visibility: hidden;
+              }
+              #rx-print-area,
+              #rx-print-area * {
+                visibility: visible;
+              }
+              #rx-print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+              }
+            }
+          `,
+        }}
+      />
     </>
   );
 }
