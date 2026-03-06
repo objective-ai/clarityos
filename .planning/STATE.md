@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: "Phase 3 complete — ready for Phase 4+"
-last_updated: "2026-03-06T05:15:00Z"
-last_activity: 2026-03-06 — Phase 3 complete (Scheduling)
+status: executing
+stopped_at: "Phase 5 complete — Patient Profile"
+last_updated: "2026-03-06T05:42:00Z"
+last_activity: 2026-03-06 — Phase 5 complete (Patient Profile)
 progress:
   total_phases: 7
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 43
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 9
+  percent: 57
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 3 of 7 COMPLETE
-Next: Phases 4, 5, 6 (can run in parallel)
-Last activity: 2026-03-06 — Phase 3 verified and closed
+Phase: 5 of 7 COMPLETE (Phases 3, 5 done; 4, 6 available)
+Next: Phases 4, 6 (can run in parallel)
+Last activity: 2026-03-06 — Phase 5 Patient Profile complete
 
-Progress: [======....] 43%
+Progress: [======....] 57%
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Progress: [======....] 43%
 | 01 | 3/3 | ~41min | ~14min |
 | 02 | 3/3 | ~65min | ~22min |
 | 03 | 2/2 | ~25min | ~13min |
+| 05 | 1/1 | ~11min | ~11min |
 
 **Recent Trend:**
 - Last 8 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min), 02-01 (~12min), 02-02 (~8min), 02-03 (~45min), 03-01 (~12min), 03-02 (~13min)
@@ -78,6 +79,10 @@ Recent decisions affecting current work:
 - [Phase 03-02]: Start Exam creates linked Encounter and navigates to encounter view
 - [Phase 03-02]: Booking modal accepts patient/provider UUID, type, date/time, duration, chief complaint
 - [Phase 03-02]: Cancel requires reason (min 3 chars) matching backend validation
+- [Phase 05-01]: Contact/insurance/emergency stored in JSONB (contact_info_jsonb, medical_history_jsonb)
+- [Phase 05-01]: Flowsheet prefers FINAL refraction, falls back to MANIFEST
+- [Phase 05-01]: Prep Me uses Claude claude-sonnet-4-6-20250514 with 300 max_tokens for 2-sentence summary
+- [Phase 05-01]: PHI_VIEWED audit action logged on patient detail access
 
 ### Pending Todos
 
@@ -91,6 +96,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-06T05:15:00Z
-Stopped at: Phase 3 complete
+Last session: 2026-03-06T05:42:00Z
+Stopped at: Phase 5 complete — Patient Profile
 Resume file: None
