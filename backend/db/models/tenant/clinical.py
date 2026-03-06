@@ -129,6 +129,10 @@ class AuditAction(str, enum.Enum):
     CHECK_IN = "check_in"
     START_EXAM = "start_exam"
     CANCEL_APPOINTMENT = "cancel_appointment"
+    # Billing actions (added in Phase 4 — migration 0003_billing)
+    CREATE_SUPERBILL = "create_superbill"
+    UPDATE_SUPERBILL = "update_superbill"
+    SUBMIT_SUPERBILL = "submit_superbill"
 
 
 # ---------------------------------------------------------------------------
@@ -834,4 +838,165 @@ class AuditLog(TenantBase):
         return (
             f"<AuditLog {self.action.value} {self.resource_type} "
             f"{self.resource_id} by user={self.user_id}>"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Billing Enums
+# ---------------------------------------------------------------------------
+
+
+class ClaimStatus(str, enum.Enum):
+    """Status of a superbill/claim."""
+
+    DRAFT = "draft"
+    READY_TO_BILL = "ready_to_bill"
+    SUBMITTED = "submitted"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class MdmLevel(str, enum.Enum):
+    """Medical Decision Making complexity levels for E&M coding."""
+
+    STRAIGHTFORWARD = "straightforward"
+    LOW = "low"
+    MODERATE = "moderate"
+    HIGH = "high"
+
+
+# ---------------------------------------------------------------------------
+# Superbill  (billing record for an encounter)
+# ---------------------------------------------------------------------------
+
+
+class Superbill(TimestampMixin, TenantBase):
+    """Billing superbill linked to a finalized encounter."""
+
+    __tablename__ = "superbills"
+    __table_args__ = (
+        Index("ix_superbills_encounter", "encounter_id"),
+        Index("ix_superbills_status", "tenant_id", "claim_status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    encounter_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("encounters.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,  # One superbill per encounter
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("patients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    claim_status: Mapped[ClaimStatus] = mapped_column(
+        Enum(ClaimStatus, name="claim_status_enum"),
+        nullable=False,
+        default=ClaimStatus.DRAFT,
+    )
+
+    # AI-calculated MDM complexity
+    mdm_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    mdm_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suggested_em_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # Total fee for the superbill
+    total_fee: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Who created / last modified the superbill
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # --- Relationships ---
+    encounter: Mapped["Encounter"] = relationship("Encounter")
+    patient: Mapped["Patient"] = relationship("Patient")
+    provider: Mapped["Staff"] = relationship("Staff", foreign_keys=[provider_id])
+    created_by: Mapped["Staff | None"] = relationship(
+        "Staff", foreign_keys=[created_by_id]
+    )
+    line_items: Mapped[list["SuperbillLineItem"]] = relationship(
+        "SuperbillLineItem", back_populates="superbill",
+        cascade="all, delete-orphan", order_by="SuperbillLineItem.created_at"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Superbill encounter_id={self.encounter_id} "
+            f"status={self.claim_status}>"
+        )
+
+
+# ---------------------------------------------------------------------------
+# SuperbillLineItem  (individual CPT code on a superbill)
+# ---------------------------------------------------------------------------
+
+
+class SuperbillLineItem(TimestampMixin, TenantBase):
+    """A single CPT line item on a superbill with diagnosis pointers."""
+
+    __tablename__ = "superbill_line_items"
+    __table_args__ = (
+        Index("ix_superbill_line_items_superbill", "superbill_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    superbill_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("superbills.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    cpt_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    fee: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    units: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    # Diagnosis pointers — array of ICD-10 codes that justify this CPT
+    # Stored as JSONB array of strings, e.g. ["H52.13", "H40.1130"]
+    diagnosis_pointers: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+
+    # Modifier codes (e.g., "-25" for significant, separately identifiable E/M)
+    modifiers: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+
+    # --- Relationships ---
+    superbill: Mapped["Superbill"] = relationship(
+        "Superbill", back_populates="line_items"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<SuperbillLineItem cpt={self.cpt_code} "
+            f"fee={self.fee} dx={self.diagnosis_pointers}>"
         )
