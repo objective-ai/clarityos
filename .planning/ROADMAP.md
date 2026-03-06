@@ -15,9 +15,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Security & Auth Foundation** - Close security gaps, wire Supabase Auth, relocate backend, set up Alembic
 - [x] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging (completed 2026-03-05)
 - [x] **Phase 3: Scheduling** - Real appointment system with check-in workflow and encounter creation (completed 2026-03-05)
-- [ ] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator
-- [ ] **Phase 5: Patient Profile** - Patient CRUD, detail page, encounter timeline, clinical flowsheets, AI Prep Me
-- [ ] **Phase 6: Optical Handoff** - Optical dashboard, Rx PDF generator, optical queue, Rx change alerts
+- [x] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator (completed 2026-03-06)
+- [x] **Phase 5: Patient Profile** - Patient CRUD, detail page, encounter timeline, clinical flowsheets, AI Prep Me (completed 2026-03-06)
+- [x] **Phase 6: Optical Handoff** - Optical dashboard, Rx PDF generator, optical queue, Rx change alerts (completed 2026-03-06)
 - [ ] **Phase 7: Patient Intake** - Public intake forms, AI triage, intake webhook
 
 ## Phase Details
@@ -80,11 +80,10 @@ Plans:
   2. AI evaluates MDM complexity from exam findings and suggests the correct E&M level (99213/99214/99215)
   3. System warns when a CPT code lacks a supporting diagnosis pointer
   4. Billing data can be exported in CMS-1500 standard JSON format for clearinghouse submission
-**Plans**: TBD
+**Plans:** 1/1 plan complete
 
 Plans:
-- [ ] 04-01: Billing backend and store (billingStore, CPT-ICD mapping, superbill data model)
-- [ ] 04-02: Billing UI and AI coding (superbill modal, AI MDM calculator, E&M suggestion, CMS-1500 export)
+- [x] 04-01-SUMMARY.md — Billing backend, store, SuperbillModal, CMS-1500 export, MDM calculator (BILL-01 through BILL-06)
 
 ### Phase 5: Patient Profile
 **Goal**: Clinicians can view a complete longitudinal patient record — demographics, encounter history, clinical trends, and AI-generated visit prep
@@ -95,11 +94,10 @@ Plans:
   2. Patient detail page shows a chronological encounter timeline with date, provider, chief complaint, and AI-generated visit summary
   3. Clinical flowsheets display IOP and refractive data tracked across visits in a data table
   4. Pressing "Prep Me" generates a 2-sentence AI clinical summary from the patient's last 3 finalized SOAP notes
-**Plans**: TBD
+**Plans:** 1/1 plan complete
 
 Plans:
-- [ ] 05-01: Patient backend (CRUD API, search, detail page data)
-- [ ] 05-02: Patient frontend (detail page, encounter timeline, flowsheets, AI Prep Me)
+- [x] 05-01-SUMMARY.md — Patient CRUD API, detail page, encounter timeline, flowsheets, AI Prep Me (PAT-01 through PAT-05)
 
 ### Phase 6: Optical Handoff
 **Goal**: After an exam is finalized, the optical team sees the patient in their queue with a printable prescription and change alerts
@@ -109,10 +107,10 @@ Plans:
   1. When an encounter is finalized, the patient automatically appears in the optical dashboard queue
   2. Optical staff can generate a printable Rx PDF with doctor signature, license number, and expiration date
   3. If today's refraction changed more than 0.50D spherical equivalent from last year, a bright badge alerts optical staff
-**Plans**: TBD
+**Plans:** 1/1 plan complete
 
 Plans:
-- [ ] 06-01: Optical system (opticalStore, optical dashboard, Rx PDF generator, Rx change alerts)
+- [x] 06-01-SUMMARY.md — Optical queue, Rx print view, SE change alerts, sidebar nav (OPT-01 through OPT-04)
 
 ### Phase 7: Patient Intake
 **Goal**: Patients can complete intake forms on their phone before arriving, with AI flagging urgent conditions for the clinical team
@@ -139,7 +137,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 | 1. Security & Auth Foundation | 3/3 | Complete | 2026-03-05 |
 | 2. API Integration & HIPAA Compliance | 3/3 | Complete   | 2026-03-05 |
 | 3. Scheduling | 2/2 | Complete | 2026-03-05 |
-| 4. Billing & Coding | 0/2 | Not started | - |
-| 5. Patient Profile | 0/2 | Not started | - |
-| 6. Optical Handoff | 0/1 | Not started | - |
+| 4. Billing & Coding | 1/1 | Complete | 2026-03-06 |
+| 5. Patient Profile | 1/1 | Complete | 2026-03-06 |
+| 6. Optical Handoff | 1/1 | Complete | 2026-03-06 |
 | 7. Patient Intake | 0/2 | Not started | - |
