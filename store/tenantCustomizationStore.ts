@@ -12,6 +12,8 @@
 import { create } from "zustand";
 import { persist, devtools } from "zustand/middleware";
 
+const isDev = process.env.NODE_ENV === "development";
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -55,6 +57,6 @@ export const useTenantCustomizationStore = create<TenantCustomizationState>()(
       }),
       { name: "clarity-tenant-customization" }
     ),
-    { name: "ClarityOS/TenantCustomization" }
+    { name: "ClarityOS/TenantCustomization", enabled: isDev }
   )
 );

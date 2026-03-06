@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import ai_scribe, audit, diagnosis, encounter, exam_findings, patient_problem, promotion, refraction, staff, vitals
+from backend.api.routes import ai_scribe, appointment, audit, diagnosis, encounter, exam_findings, patient_problem, promotion, refraction, staff, vitals
 from backend.core.config import settings
 
 app = FastAPI(
@@ -69,6 +69,11 @@ app.include_router(
     audit.router,
     prefix="/api",
     tags=["Audit Logs"],
+)
+app.include_router(
+    appointment.router,
+    prefix="/api/appointments",
+    tags=["Appointments"],
 )
 
 

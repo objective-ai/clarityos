@@ -51,6 +51,12 @@ class ClinicalAction(StrEnum):
     # AI Scribe
     GENERATE_AI_SCRIBE = "generate_ai_scribe"
 
+    # Scheduling
+    VIEW_SCHEDULE = "view_schedule"
+    MANAGE_APPOINTMENT = "manage_appointment"
+    CHECK_IN_PATIENT = "check_in_patient"
+    START_EXAM = "start_exam"
+
     # Admin
     VIEW_AUDIT_LOG = "view_audit_log"
     MANAGE_STAFF = "manage_staff"
@@ -93,6 +99,13 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
 
     # AI Scribe
     ClinicalAction.GENERATE_AI_SCRIBE: {_D, _O},
+
+    # Scheduling — all staff can view and manage appointments; only doctors/owners
+    # can transition into the exam room.
+    ClinicalAction.VIEW_SCHEDULE:       {_D, _T, _R, _A, _O},
+    ClinicalAction.MANAGE_APPOINTMENT:  {_D, _T, _R, _A, _O},
+    ClinicalAction.CHECK_IN_PATIENT:    {_T, _R, _A, _O},
+    ClinicalAction.START_EXAM:          {_D, _O},
 
     # Admin
     ClinicalAction.VIEW_AUDIT_LOG:      {_A, _O},

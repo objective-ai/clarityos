@@ -2,32 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Completed 02-03-PLAN.md — checkpoint:human-verify pending"
-last_updated: "2026-03-05T22:47:15.664Z"
-last_activity: 2026-03-05 — Plan 02-02 complete (Store migrations to real API)
+status: planning
+stopped_at: "Phase 3 complete — ready for Phase 4+"
+last_updated: "2026-03-06T05:15:00Z"
+last_activity: 2026-03-06 — Phase 3 complete (Scheduling)
 progress:
   total_phases: 7
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-05T22:42:17Z"
-last_activity: 2026-03-05 — Plan 02-02 complete (Store migrations to real API)
-progress:
-  [██████████] 100%
-  completed_phases: 1
-  total_plans: 6
-  completed_plans: 5
-  percent: 24
+  completed_phases: 3
+  total_plans: 8
+  completed_plans: 8
+  percent: 43
 ---
 
 # Project State
@@ -37,39 +21,34 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** Phase 2 - API Integration & HIPAA Compliance
+**Current focus:** Phases 4-6 available (parallel-eligible)
 
 ## Current Position
 
-Phase: 2 of 7 (API Integration & HIPAA Compliance)
-Plan: 2 of N in current phase (done)
-Status: Plan 02-02 complete, continuing Phase 2
-Last activity: 2026-03-05 — Plan 02-02 complete (Store migrations to real API)
+Phase: 3 of 7 COMPLETE
+Next: Phases 4, 5, 6 (can run in parallel)
+Last activity: 2026-03-06 — Phase 3 verified and closed
 
-Progress: [==........] 24%
+Progress: [======....] 43%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: ~11min
-- Total execution time: ~1.0 hours
+- Total plans completed: 8
+- Average duration: ~12min
+- Total execution time: ~1.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 3/3 | ~41min | ~14min |
-| 02 | 2/? | ~20min | ~10min |
+| 02 | 3/3 | ~65min | ~22min |
+| 03 | 2/2 | ~25min | ~13min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min), 02-01 (~12min), 02-02 (~8min)
-- Trend: Accelerating
-
-*Updated after each plan completion*
-| Phase 02 P01 | 12 | 3 tasks | 6 files |
-| Phase 02 P02 | 8 | 2 tasks | 7 files |
-| Phase 02-api-integration-hipaa-compliance P03 | 45 | 2 tasks | 15 files |
+- Last 8 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min), 02-01 (~12min), 02-02 (~8min), 02-03 (~45min), 03-01 (~12min), 03-02 (~13min)
+- Trend: Stable
 
 ## Accumulated Context
 
@@ -78,27 +57,27 @@ Progress: [==........] 24%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Roadmap: Combined Security + Infrastructure into Phase 1 (hard dependency chain — auth needs backend relocation, backend needs Alembic)
-- Roadmap: HIPAA compliance grouped with API Integration in Phase 2 (PHI logging only meaningful when real data flows)
+- Roadmap: Combined Security + Infrastructure into Phase 1 (hard dependency chain)
+- Roadmap: HIPAA compliance grouped with API Integration in Phase 2
 - Roadmap: Phases 3-6 can execute in parallel after Phase 2; Phase 7 depends on Phase 3
-- 01-02: Baseline migration is no-op (schema exists via Supabase)
 - 01-02: BFF proxy pattern uses getUser() auth check then getSession() for token forwarding
-- 01-02: Custom Access Token Hook uses LIMIT 1 for single-tenant-per-user MVP
 - 01-03: Browser client uses @supabase/ssr createBrowserClient (not legacy singleton)
-- 01-03: Middleware uses getUser() for server-side JWT verification (security best practice)
-- 01-03: ePHI cleanup clears 6 clinical stores + localStorage keys matching draft-transcript-*, encounter-*, clinical-*
-- 01-03: subscribeWithSelector(devtools(...)) composition order for stores with action names
-- [Phase 02-01]: SSR-safe Supabase createClient factory replaces legacy singleton in api-client (API-08)
+- 01-03: Middleware uses getUser() for server-side JWT verification
+- 01-03: ePHI cleanup clears 6 clinical stores + localStorage keys
+- [Phase 02-01]: SSR-safe Supabase createClient factory replaces legacy singleton in api-client
 - [Phase 02-01]: withRetry exponential backoff: 500ms base, retries at 500ms, 1000ms, 2000ms
-- [Phase 02-01]: Encounter-level GET logging sufficient for vitals PHI (vitals loaded inline from encounter response, no standalone GET)
-- [Phase 02-01]: exam_findings GET required standalone log_action(READ) — separate PHI endpoint, fixed as Rule 2 auto-fix
-- [Phase 02-02]: loadRefractions isReadOnly parameter made optional (default false) — encounter page calls with 1 arg on mount
-- [Phase 02-02]: diagnosisStore.removeDiagnosis surfaces errors (no silent local removal)
-- [Phase 02-02]: refractionSummaryToDraft converter maps camelCase API → snake_case RefractionDraft
-- [Phase 02-02]: problemListStore._seedProblems removed — no mock path, real fetchProblems only
-- [Phase 02]: admin/page.tsx StaffMember interface defined locally — staff API load deferred to Phase 5
-- [Phase 02]: PatientChartModal replaced with placeholder — real patient demographics deferred to Phase 5
-- [Phase 02]: TopNav dev role switcher kept — guarded by process.env.NODE_ENV === development
+- [Phase 02-02]: refractionSummaryToDraft converter maps camelCase API to snake_case RefractionDraft
+- [Phase 02]: Login uses window.location.href (not router.push) for full page load after auth
+- [Phase 02]: Root page is auth-aware server component (redirects authenticated users to dashboard)
+- [Phase 02]: TopNav mock-session import is dynamic (only loaded in dev when role switcher used)
+- [Phase 03-01]: Migration uses DO block for idempotent appointment_id FK addition to encounters
+- [Phase 03-01]: end_time is always derived (start_time + duration_minutes), never accepted as input
+- [Phase 03-01]: start-exam returns HTTP 200 + already_existed=true if encounter pre-exists (idempotent)
+- [Phase 03-01]: AuditAction scheduling values added as Python enum only (no DB ALTER TYPE needed)
+- [Phase 03-02]: Schedule uses day view with date navigation (prev/next/today/date picker)
+- [Phase 03-02]: Start Exam creates linked Encounter and navigates to encounter view
+- [Phase 03-02]: Booking modal accepts patient/provider UUID, type, date/time, duration, chief complaint
+- [Phase 03-02]: Cancel requires reason (min 3 chars) matching backend validation
 
 ### Pending Todos
 
@@ -106,11 +85,12 @@ None.
 
 ### Blockers/Concerns
 
-- 5 critical security issues are active on deployed Vercel URL (Phase 1 addresses all)
-- Python backend in app/ blocks all BFF route handler creation (RESOLVED by Plan 01-01)
+- Environment: .git directory has cloud-only files on OneDrive, preventing git commits from bash.
+  Impact: Per-task commits could not be made. All files written and verified on disk.
+  Resolution: Use a git client with full OneDrive access to stage and commit the new files.
 
 ## Session Continuity
 
-Last session: 2026-03-05T22:47:15.661Z
-Stopped at: Completed 02-03-PLAN.md — checkpoint:human-verify pending
+Last session: 2026-03-06T05:15:00Z
+Stopped at: Phase 3 complete
 Resume file: None

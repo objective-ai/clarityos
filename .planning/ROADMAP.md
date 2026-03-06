@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Security & Auth Foundation** - Close security gaps, wire Supabase Auth, relocate backend, set up Alembic
 - [x] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging (completed 2026-03-05)
-- [ ] **Phase 3: Scheduling** - Real appointment system with check-in workflow and encounter creation
+- [x] **Phase 3: Scheduling** - Real appointment system with check-in workflow and encounter creation (completed 2026-03-05)
 - [ ] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator
 - [ ] **Phase 5: Patient Profile** - Patient CRUD, detail page, encounter timeline, clinical flowsheets, AI Prep Me
 - [ ] **Phase 6: Optical Handoff** - Optical dashboard, Rx PDF generator, optical queue, Rx change alerts
@@ -65,11 +65,11 @@ Plans:
   2. Front desk can check in a patient, changing appointment status from scheduled to checked_in, visible to the provider
   3. Provider can start an exam from a checked-in appointment, which creates a linked encounter and transitions status to in_exam
   4. Schedule page displays real appointment data grouped by date, replacing the previous mock timeline cards
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 03-01-PLAN.md — Appointment backend: Alembic migration, Pydantic schemas, CRUD API, status transitions, encounter creation (SCHED-01, SCHED-02, SCHED-04, SCHED-05)
-- [ ] 03-02-PLAN.md — Schedule frontend: appointmentStore, schedule page UI, booking modal, check-in/start-exam workflow (SCHED-03, SCHED-04, SCHED-05)
+- [x] 03-01-PLAN.md — Appointment backend: Alembic migration, Pydantic schemas, CRUD API, status transitions, encounter creation (SCHED-01, SCHED-02, SCHED-04, SCHED-05)
+- [x] 03-02-PLAN.md — Schedule frontend: appointmentStore, schedule page UI, booking modal, check-in/start-exam workflow (SCHED-03, SCHED-04, SCHED-05)
 
 ### Phase 4: Billing & Coding
 **Goal**: After finalizing an encounter, the provider can review and approve a superbill with AI-suggested coding, ready for clearinghouse export
@@ -138,7 +138,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 |-------|----------------|--------|-----------|
 | 1. Security & Auth Foundation | 3/3 | Complete | 2026-03-05 |
 | 2. API Integration & HIPAA Compliance | 3/3 | Complete   | 2026-03-05 |
-| 3. Scheduling | 0/2 | Not started | - |
+| 3. Scheduling | 2/2 | Complete | 2026-03-05 |
 | 4. Billing & Coding | 0/2 | Not started | - |
 | 5. Patient Profile | 0/2 | Not started | - |
 | 6. Optical Handoff | 0/1 | Not started | - |

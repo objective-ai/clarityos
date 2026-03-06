@@ -9,6 +9,8 @@
 import { create } from "zustand";
 import { persist, devtools } from "zustand/middleware";
 
+const isDev = process.env.NODE_ENV === "development";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ export const useThemeStore = create<ThemeState>()(
       }),
       { name: "clarity-theme" }
     ),
-    { name: "ClarityOS/Theme" }
+    { name: "ClarityOS/Theme", enabled: isDev }
   )
 );
 

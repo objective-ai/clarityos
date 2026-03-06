@@ -105,7 +105,15 @@ class ExamSection(str, enum.Enum):
 
 
 class AuditAction(str, enum.Enum):
-    """Actions tracked in the HIPAA audit log."""
+    """Actions tracked in the HIPAA audit log.
+
+    NOTE: AuditAction values are stored as strings in the ``action`` JSONB
+    column of audit_log (via a PostgreSQL enum named ``audit_action_enum``).
+    Adding new values here does NOT automatically update the DB enum type —
+    a migration is required to ALTER TYPE ... ADD VALUE for each new member
+    before deploying.  The scheduling values below were added in migration
+    0002_appointments (the enum is created fresh there and includes them).
+    """
 
     CREATE = "create"
     READ = "read"
@@ -117,6 +125,10 @@ class AuditAction(str, enum.Enum):
     AI_SCRIBE_AUTOFILL = "ai_scribe_autofill"
     MANUAL_EDIT = "manual_edit"
     PHI_VIEWED = "phi_viewed"
+    # Scheduling actions (added in Phase 3 — migration 0002_appointments)
+    CHECK_IN = "check_in"
+    START_EXAM = "start_exam"
+    CANCEL_APPOINTMENT = "cancel_appointment"
 
 
 # ---------------------------------------------------------------------------
