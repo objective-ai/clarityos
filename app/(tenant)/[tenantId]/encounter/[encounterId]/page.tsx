@@ -19,6 +19,7 @@ import { useSidebarCollapsed } from "@/contexts/SidebarContext";
 import { EncounterBottomTabs } from "@/components/encounter/EncounterBottomTabs";
 import { AuditTrailSidebar } from "@/components/encounter/AuditTrailSidebar";
 import { FinalizeModal } from "@/components/encounter/FinalizeModal";
+import { SuperbillModal } from "@/components/encounter/SuperbillModal";
 import { VitalsForm } from "@/components/encounter/VitalsForm";
 import { VitalsCard } from "@/components/encounter/VitalsCard";
 import { RefractionGrid } from "@/components/encounter/RefractionGrid";
@@ -560,6 +561,7 @@ export default function EncounterPage({
   const [auditOpen, setAuditOpen] = useState(false);
   const finalizeModalOpen = useEncounterStore((s) => s.finalizeModalOpen);
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
+  const [superbillOpen, setSuperbillOpen] = useState(false);
 
   // Store setters for revert functionality
   const revertChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
@@ -683,6 +685,17 @@ export default function EncounterPage({
             <span className="text-[var(--text-secondary)]">All fields are locked.</span>
           )}
           <div className="flex items-center gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => setSuperbillOpen(true)}
+              className="text-xs px-3 py-1.5 rounded-lg font-semibold hover-btn transition-all"
+              style={{
+                background: "var(--accent)",
+                color: "var(--text-inverse)",
+              }}
+            >
+              Superbill
+            </button>
             <Link
               href={`/${params.tenantId}/patients/${encounterState?.patientId ?? ""}`}
               className="text-xs px-3 py-1.5 rounded-lg font-medium hover-btn text-[var(--text-secondary)] border border-[var(--border-subtle)]"
@@ -838,6 +851,16 @@ export default function EncounterPage({
         onOpenChange={setFinalizeModalOpen}
         encounterId={params.encounterId}
         providerName={encounterState?.providerName ?? "Unknown Provider"}
+      />
+
+      {/* Superbill modal (shown after finalization) */}
+      <SuperbillModal
+        open={superbillOpen}
+        onOpenChange={setSuperbillOpen}
+        encounterId={params.encounterId}
+        patientName="Patient"
+        providerName={encounterState?.providerName ?? "Unknown Provider"}
+        encounterDate={encounterState?.encounterDate ?? new Date().toISOString().split("T")[0]}
       />
     </div>
   );
