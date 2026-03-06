@@ -1,7 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git -C \"c:/Users/duytr/OneDrive/Desktop/clarityos-erp\" status .claude/agents/)"
+      "Bash(git -C \"c:/Users/duytr/OneDrive/Desktop/clarityos-erp\" status .claude/agents/)",
+      "Bash(ls \"c:/Users/duytr/OneDrive/Desktop/clarityos-erp/.claude/worktrees/agent-a48c4803/app/\\(tenant\\)/[tenantId]/\")",
+      "Bash(for f in \"backend/alembic/versions/0003_billing.py\" \"backend/schemas/billing.py\" \"backend/api/routes/billing.py\" \"types/billing.ts\" \"store/billingStore.ts\" \"lib/utils/cms1500.ts\" \"components/encounter/SuperbillModal.tsx\" \".planning/phases/04-billing-coding/04-01-SUMMARY.md\")",
+      "Bash(do)",
+      "Bash([ -f \"$f\" ])",
+      "Bash(echo \"FOUND: $f\")",
+      "Bash(echo \"MISSING: $f\")",
+      "Bash(npx tsc --noEmit --skipLibCheck)",
+      "Bash(npx tsc --noEmit)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\duytr\\OneDrive\\Desktop\\clarityos-erp\\.claude\\agents",
+      "c:\\Users\\duytr\\OneDrive\\Desktop\\clarityos-erp\\.claude\\worktrees\\agent-ae53e662\\app\\api\\patients\\[patientId]",
+      "c:\\Users\\duytr\\OneDrive\\Desktop\\clarityos-erp\\.claude\\worktrees\\agent-a48c4803\\app\\(tenant)\\[tenantId]"
     ]
   }
 }
