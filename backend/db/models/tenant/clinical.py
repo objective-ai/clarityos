@@ -133,6 +133,10 @@ class AuditAction(str, enum.Enum):
     CREATE_SUPERBILL = "create_superbill"
     UPDATE_SUPERBILL = "update_superbill"
     SUBMIT_SUPERBILL = "submit_superbill"
+    # Optical actions (added in Phase 6 — optical handoff)
+    VIEW_OPTICAL_QUEUE = "view_optical_queue"
+    UPDATE_OPTICAL_STATUS = "update_optical_status"
+    GENERATE_RX_PDF = "generate_rx_pdf"
 
 
 # ---------------------------------------------------------------------------

@@ -93,7 +93,8 @@ Recent decisions affecting current work:
 - [Phase 06-01]: Optical queue queries finalized encounters with is_final_rx refractions
 - [Phase 06-01]: Rx Change Alert uses SE formula: sphere + (cylinder/2), threshold 0.50D
 - [Phase 06-01]: Rx PDF uses window.print() with print-optimized div (no external lib)
-- [Phase 06-01]: Optical status: waiting → in_progress → dispensed
+- [Phase 06-01]: Optical status: waiting -> in_progress -> dispensed
+- [Phase 06-01]: Print styles use dangerouslySetInnerHTML (not styled-jsx)
 
 ### Pending Todos
 
@@ -101,12 +102,10 @@ None.
 
 ### Blockers/Concerns
 
-- Environment: .git directory has cloud-only files on OneDrive, preventing git commits from bash.
-  Impact: Per-task commits could not be made. All files written and verified on disk.
-  Resolution: Use a git client with full OneDrive access to stage and commit the new files.
+None active.
 
 ## Session Continuity
 
 Last session: 2026-03-06T06:00:00Z
-Stopped at: Phases 4, 5, 6 complete — merging branches
+Stopped at: Phases 4, 5, 6 merged to master
 Resume file: None

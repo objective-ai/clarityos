@@ -65,6 +65,10 @@ class ClinicalAction(StrEnum):
     VIEW_BILLING = "view_billing"
     MANAGE_BILLING = "manage_billing"
 
+    # Optical
+    VIEW_OPTICAL = "view_optical"
+    UPDATE_OPTICAL_STATUS = "update_optical_status"
+
     # Admin
     VIEW_AUDIT_LOG = "view_audit_log"
     MANAGE_STAFF = "manage_staff"
@@ -122,6 +126,10 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     # Billing
     ClinicalAction.VIEW_BILLING:        {_D, _A, _O},
     ClinicalAction.MANAGE_BILLING:      {_D, _A, _O},
+
+    # Optical — technicians and receptionists handle optical handoff
+    ClinicalAction.VIEW_OPTICAL:        {_D, _T, _R, _A, _O},
+    ClinicalAction.UPDATE_OPTICAL_STATUS: {_D, _T, _A, _O},
 
     # Admin
     ClinicalAction.VIEW_AUDIT_LOG:      {_A, _O},

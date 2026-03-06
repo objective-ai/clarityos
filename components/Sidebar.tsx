@@ -50,6 +50,13 @@ const Icon = {
       <path d="M2 13L5.5 8.5l3 2.5L12 5l2.5 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  Optical: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="5" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="11" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M8.5 8h-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  ),
   Staff: () => (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <circle cx="5.5" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
@@ -108,6 +115,7 @@ export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
     { label: "Schedule", href: `${base}/schedule`, icon: Icon.Calendar, requiredEntitlement: Entitlement.SCHEDULING },
     { label: "Patients", href: `${base}/patients`, icon: Icon.Patients, requiredEntitlement: Entitlement.PATIENT_DEMOGRAPHICS },
     { label: "Analytics", href: `${base}/analytics`, icon: Icon.Analytics, requiredEntitlement: Entitlement.ADVANCED_ANALYTICS },
+    { label: "Optical", href: `${base}/optical`, icon: Icon.Optical },
   ];
 
   const bottomItems: NavItem[] = [
