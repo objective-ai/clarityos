@@ -13,7 +13,7 @@ ClarityOS has a fully built frontend running on mock data and a FastAPI backend 
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Security & Auth Foundation** - Close security gaps, wire Supabase Auth, relocate backend, set up Alembic
-- [x] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging (completed 2026-03-05)
+- [x] **Phase 2: API Integration & HIPAA Compliance** - Replace all mock data with real API calls, add PHI access logging (completed 2026-03-05)
 - [ ] **Phase 3: Scheduling** - Real appointment system with check-in workflow and encounter creation
 - [ ] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator
 - [ ] **Phase 5: Patient Profile** - Patient CRUD, detail page, encounter timeline, clinical flowsheets, AI Prep Me
@@ -52,9 +52,9 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — API client upgrade, skeleton/status UI, audit-logs BFF route, PHI logging (API-08, HIPAA-01, HIPAA-02)
-- [ ] 02-02-PLAN.md — Store migration: all 6 clinical stores from mock to real API (API-01 through API-06)
-- [ ] 02-03-PLAN.md — Page wiring, mock cleanup, end-to-end verification (API-07, HIPAA-03)
+- [x] 02-01-PLAN.md — API client upgrade, skeleton/status UI, audit-logs BFF route, PHI logging (API-08, HIPAA-01, HIPAA-02)
+- [x] 02-02-PLAN.md — Store migration: all 6 clinical stores from mock to real API (API-01 through API-06)
+- [x] 02-03-PLAN.md — Page wiring, mock cleanup, end-to-end verification (API-07, HIPAA-03)
 
 ### Phase 3: Scheduling
 **Goal**: Clinicians can manage their daily schedule with real appointments — booking, check-in, and seamless encounter creation from the schedule
@@ -65,11 +65,11 @@ Plans:
   2. Front desk can check in a patient, changing appointment status from scheduled to checked_in, visible to the provider
   3. Provider can start an exam from a checked-in appointment, which creates a linked encounter and transitions status to in_exam
   4. Schedule page displays real appointment data grouped by date, replacing the previous mock timeline cards
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: Appointment backend (model, migration, CRUD API, status transitions)
-- [ ] 03-02: Schedule frontend (wire schedule page to real data, check-in workflow, encounter creation)
+- [ ] 03-01-PLAN.md — Appointment backend: Alembic migration, Pydantic schemas, CRUD API, status transitions, encounter creation (SCHED-01, SCHED-02, SCHED-04, SCHED-05)
+- [ ] 03-02-PLAN.md — Schedule frontend: appointmentStore, schedule page UI, booking modal, check-in/start-exam workflow (SCHED-03, SCHED-04, SCHED-05)
 
 ### Phase 4: Billing & Coding
 **Goal**: After finalizing an encounter, the provider can review and approve a superbill with AI-suggested coding, ready for clearinghouse export
