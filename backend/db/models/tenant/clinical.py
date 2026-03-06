@@ -129,6 +129,10 @@ class AuditAction(str, enum.Enum):
     CHECK_IN = "check_in"
     START_EXAM = "start_exam"
     CANCEL_APPOINTMENT = "cancel_appointment"
+    # Optical actions (added in Phase 6 — optical handoff)
+    VIEW_OPTICAL_QUEUE = "view_optical_queue"
+    UPDATE_OPTICAL_STATUS = "update_optical_status"
+    GENERATE_RX_PDF = "generate_rx_pdf"
 
 
 # ---------------------------------------------------------------------------
