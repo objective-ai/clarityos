@@ -1,11 +1,21 @@
 import { redirect } from "next/navigation";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
  * app/page.tsx
  *
- * Root landing page — redirects to /login.
- * Authenticated users will be redirected to their tenant dashboard by middleware.
+ * Root landing page — auth-aware redirect.
+ * Authenticated users go to their tenant dashboard.
+ * Unauthenticated users go to /login.
  */
-export default function Home() {
+export default async function Home() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (user) {
+    const tenantId = user.app_metadata?.tenant_id ?? "demo-clinic";
+    redirect(`/${tenantId}/dashboard`);
+  }
+
   redirect("/login");
 }

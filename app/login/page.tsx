@@ -9,12 +9,11 @@
  */
 
 import { Suspense, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
 
@@ -41,10 +40,15 @@ function LoginForm() {
         return;
       }
 
-      // Redirect to returnTo URL or root (middleware will resolve tenant dashboard)
-      router.push(returnTo ?? "/");
-      router.refresh();
-    } catch {
+      // Get tenant from session for direct dashboard redirect
+      const { data: { session: newSession } } = await supabase.auth.getSession();
+      const tenantId = newSession?.user?.app_metadata?.tenant_id ?? "demo-clinic";
+      const destination = returnTo ?? `/${tenantId}/dashboard`;
+
+      // Full page load ensures middleware sees the new auth cookie
+      window.location.href = destination;
+    } catch (err) {
+      console.error("[login]", err);
       setError("An unexpected error occurred. Please try again.");
       setIsLoading(false);
     }
