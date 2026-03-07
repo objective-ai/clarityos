@@ -12,7 +12,9 @@ Endpoints:
   PATCH  /{appointment_id}           -- Update (SCHEDULED / CONFIRMED only)
   POST   /{appointment_id}/cancel    -- Cancel with required reason
   POST   /{appointment_id}/check-in  -- Transition SCHEDULED/CONFIRMED -> ARRIVED
+  POST   /{appointment_id}/revert-check-in -- Revert ARRIVED -> CONFIRMED
   POST   /{appointment_id}/start-exam -- Transition ARRIVED -> IN_EXAM + create Encounter
+  POST   /{appointment_id}/reschedule -- Move to a new time slot
 """
 
 from datetime import date as _date
@@ -38,6 +40,7 @@ from backend.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentCreateRequest,
     AppointmentListResponse,
+    AppointmentRescheduleRequest,
     AppointmentResponse,
     AppointmentUpdateRequest,
 )
@@ -78,6 +81,9 @@ def _build_appointment_response(
         reminder_sent_at=appt.reminder_sent_at,
         patient_name=patient_name,
         provider_name=provider_name,
+        encounter_id=appt.encounter.id if appt.encounter else None,
+        intake_status=appt.intake_status,
+        triage_flags_jsonb=appt.triage_flags_jsonb,
         created_at=appt.created_at,
         updated_at=appt.updated_at,
     )
@@ -98,6 +104,7 @@ async def _get_appointment_or_404(
         .options(
             selectinload(Appointment.patient),
             selectinload(Appointment.provider),
+            selectinload(Appointment.encounter),
         )
     )
     appt = (await db.execute(stmt)).scalar_one_or_none()
@@ -152,7 +159,7 @@ async def create_appointment(
         ip_address=request.client.host if request.client else None,
     )
 
-    await db.refresh(appt, attribute_names=["patient", "provider"])
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
     return _build_appointment_response(appt)
 
 
@@ -200,6 +207,7 @@ async def list_appointments(
         .options(
             selectinload(Appointment.patient),
             selectinload(Appointment.provider),
+            selectinload(Appointment.encounter),
         )
         .order_by(Appointment.start_time)
     )
@@ -295,7 +303,7 @@ async def update_appointment(
     )
 
     await db.flush()
-    await db.refresh(appt, attribute_names=["patient", "provider"])
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
     return _build_appointment_response(appt)
 
 
@@ -337,7 +345,7 @@ async def cancel_appointment(
     )
 
     await db.flush()
-    await db.refresh(appt, attribute_names=["patient", "provider"])
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
     return _build_appointment_response(appt)
 
 
@@ -385,7 +393,7 @@ async def check_in_patient(
     )
 
     await db.flush()
-    await db.refresh(appt, attribute_names=["patient", "provider"])
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
     return _build_appointment_response(appt)
 
 
@@ -476,3 +484,116 @@ async def start_exam(
     )
 
     return {"encounter_id": str(enc.id), "already_existed": False}
+
+
+# ---------------------------------------------------------------------------
+# POST /{appointment_id}/revert-check-in -- ARRIVED -> CONFIRMED
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{appointment_id}/revert-check-in", response_model=AppointmentResponse)
+async def revert_check_in(
+    appointment_id: UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CHECK_IN_PATIENT)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Undo an accidental check-in.
+
+    Transitions status: ARRIVED -> CONFIRMED.
+    Returns 409 if the appointment is not in ARRIVED status.
+    """
+    appt = await _get_appointment_or_404(appointment_id, ctx, db)
+
+    if appt.status != AppointmentStatus.ARRIVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot revert check-in for appointment with status '{appt.status.value}'. "
+                "Only ARRIVED appointments can be reverted."
+            ),
+        )
+
+    appt.status = AppointmentStatus.CONFIRMED
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.REVERT_CHECK_IN,
+        "appointment",
+        appt.id,
+        patient_id=appt.patient_id,
+        detail="Reverted check-in — patient returned to confirmed",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    await db.flush()
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
+    return _build_appointment_response(appt)
+
+
+# ---------------------------------------------------------------------------
+# POST /{appointment_id}/reschedule -- Move to a new time slot
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{appointment_id}/reschedule", response_model=AppointmentResponse)
+async def reschedule_appointment(
+    appointment_id: UUID,
+    payload: AppointmentRescheduleRequest,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_APPOINTMENT)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reschedule an appointment to a new time slot.
+
+    Allowed from: SCHEDULED, CONFIRMED, ARRIVED.
+    If the patient was already checked in (ARRIVED), status reverts to CONFIRMED.
+    """
+    appt = await _get_appointment_or_404(appointment_id, ctx, db)
+
+    reschedulable = {
+        AppointmentStatus.SCHEDULED,
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.ARRIVED,
+    }
+    if appt.status not in reschedulable:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot reschedule appointment with status '{appt.status.value}'. "
+                "Only scheduled, confirmed, or arrived appointments can be rescheduled."
+            ),
+        )
+
+    old_start = appt.start_time
+    new_start = payload.new_start_time
+    if new_start.tzinfo is None:
+        new_start = new_start.replace(tzinfo=timezone.utc)
+
+    new_duration = payload.new_duration_minutes or appt.duration_minutes
+
+    appt.start_time = new_start
+    appt.end_time = new_start + timedelta(minutes=new_duration)
+    appt.duration_minutes = new_duration
+
+    # If patient was checked in, revert to confirmed
+    if appt.status == AppointmentStatus.ARRIVED:
+        appt.status = AppointmentStatus.CONFIRMED
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.RESCHEDULE,
+        "appointment",
+        appt.id,
+        patient_id=appt.patient_id,
+        detail=f"Rescheduled from {old_start.isoformat()} to {new_start.isoformat()}",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    await db.flush()
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
+    return _build_appointment_response(appt)

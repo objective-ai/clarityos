@@ -43,6 +43,13 @@ export interface Appointment {
   reminderSentAt: string | null;
   patientName: string | null;
   providerName: string | null;
+  encounterId: string | null;
+  intakeStatus: "pending" | "submitted" | null;
+  triageFlags: {
+    urgency: string;
+    flags: string[];
+    reasoning: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +81,11 @@ export interface AppointmentUpdatePayload {
 
 export interface AppointmentCancelPayload {
   cancellationReason: string;
+}
+
+export interface AppointmentReschedulePayload {
+  newStartTime: string; // ISO 8601
+  newDurationMinutes?: number;
 }
 
 export interface StartExamResponse {
@@ -111,8 +123,8 @@ export const STATUS_LABELS: Record<AppointmentStatus, string> = {
 };
 
 export const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  scheduled: "var(--text-muted)",
-  confirmed: "var(--accent)",
+  scheduled: "#64748b",
+  confirmed: "#2DD4BF",
   arrived: "#f59e0b",
   in_pretest: "#8b5cf6",
   in_exam: "#3b82f6",

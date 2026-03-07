@@ -188,6 +188,31 @@ class AppointmentCancelRequest(AppBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Reschedule Request
+# ---------------------------------------------------------------------------
+
+
+class AppointmentRescheduleRequest(AppBaseModel):
+    """
+    Request body for POST /appointments/{id}/reschedule
+
+    Moves an appointment to a new time slot. Duration defaults to the
+    existing value if not provided.
+    """
+
+    new_start_time: datetime = Field(
+        ...,
+        description="New appointment start time (timezone-aware ISO 8601).",
+    )
+    new_duration_minutes: int | None = Field(
+        default=None,
+        ge=5,
+        le=240,
+        description="New duration in minutes (5–240). If omitted, keeps current duration.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Response
 # ---------------------------------------------------------------------------
 
@@ -223,6 +248,11 @@ class AppointmentResponse(AppBaseModel):
     # Joined display fields
     patient_name: str | None = None
     provider_name: str | None = None
+    encounter_id: uuid.UUID | None = None
+
+    # Intake (Phase 7)
+    intake_status: str | None = None
+    triage_flags_jsonb: dict | None = None
 
     created_at: datetime
     updated_at: datetime

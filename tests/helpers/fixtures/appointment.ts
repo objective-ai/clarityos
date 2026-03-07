@@ -9,7 +9,7 @@ export function makeAppointment(
 ): Appointment {
   return {
     id: "appt-1",
-    tenantId: "demo-clinic",
+    tenantId: "b0000000-0000-0000-0000-000000000001",
     patientId: "pat-1",
     providerId: "prov-1",
     bookedById: null,
@@ -22,6 +22,9 @@ export function makeAppointment(
     internalNotes: null,
     cancellationReason: null,
     reminderSentAt: null,
+    encounterId: null,
+    intakeStatus: null,
+    triageFlags: null,
     patientName: "Jane Doe",
     providerName: "Dr. Smith",
     createdAt: "2026-03-05T10:00:00Z",

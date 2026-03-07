@@ -36,12 +36,15 @@ interface AppointmentState {
   updateAppointment: (id: string, payload: AppointmentUpdatePayload) => Promise<Appointment>;
   cancelAppointment: (id: string, reason: string) => Promise<void>;
   checkInPatient: (id: string) => Promise<Appointment>;
+  revertCheckIn: (id: string) => Promise<Appointment>;
   startExam: (id: string) => Promise<StartExamResponse>;
+  rescheduleAppointment: (id: string, newStartTime: string, newDurationMinutes?: number) => Promise<Appointment>;
+  generateIntakeToken: (id: string) => Promise<{ token: string; url: string; expiresAt: string }>;
 }
 
-/** Get today's date as ISO string (YYYY-MM-DD) */
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Get a local date as ISO string (YYYY-MM-DD). Avoids UTC offset bugs. */
+export function localDateISO(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export const useAppointmentStore = create<AppointmentState>()(
@@ -49,7 +52,7 @@ export const useAppointmentStore = create<AppointmentState>()(
     (set, get) => ({
       appointments: [],
       total: 0,
-      selectedDate: todayISO(),
+      selectedDate: localDateISO(),
       loading: false,
       error: null,
 
@@ -118,6 +121,16 @@ export const useAppointmentStore = create<AppointmentState>()(
         return appt;
       },
 
+      revertCheckIn: async (id) => {
+        const appt = await apiFetch<Appointment>(`/api/appointments/${id}/revert-check-in`, {
+          method: "POST",
+        });
+        set((state) => ({
+          appointments: state.appointments.map((a) => (a.id === id ? appt : a)),
+        }));
+        return appt;
+      },
+
       startExam: async (id) => {
         const result = await apiFetch<StartExamResponse>(
           `/api/appointments/${id}/start-exam`,
@@ -126,6 +139,31 @@ export const useAppointmentStore = create<AppointmentState>()(
         // Refresh to get updated status
         const { selectedDate } = get();
         await get().fetchAppointments(selectedDate);
+        return result;
+      },
+      rescheduleAppointment: async (id, newStartTime, newDurationMinutes) => {
+        const payload: Record<string, unknown> = { newStartTime };
+        if (newDurationMinutes != null) payload.newDurationMinutes = newDurationMinutes;
+        const appt = await apiFetch<Appointment>(`/api/appointments/${id}/reschedule`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const { selectedDate } = get();
+        await get().fetchAppointments(selectedDate);
+        return appt;
+      },
+
+      generateIntakeToken: async (id) => {
+        const result = await apiFetch<{ token: string; url: string; expiresAt: string }>(
+          `/api/appointments/${id}/intake-token`,
+          { method: "POST" }
+        );
+        // Update local appointment with pending intake status
+        set((state) => ({
+          appointments: state.appointments.map((a) =>
+            a.id === id ? { ...a, intakeStatus: "pending" as const } : a
+          ),
+        }));
         return result;
       },
     }),
