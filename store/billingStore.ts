@@ -127,6 +127,12 @@ export const useBillingStore = create<BillingStore>()(
             `/api/encounters/${encounterId}/superbill`,
           );
 
+          // Backend returns Decimal as string — coerce to number
+          superbill.totalFee = Number(superbill.totalFee) || 0;
+          for (const li of superbill.lineItems ?? []) {
+            li.fee = Number(li.fee) || 0;
+          }
+
           set(
             {
               encounters: {
@@ -198,6 +204,12 @@ export const useBillingStore = create<BillingStore>()(
               body: JSON.stringify(payload),
             },
           );
+
+          // Backend returns Decimal as string — coerce to number
+          superbill.totalFee = Number(superbill.totalFee) || 0;
+          for (const li of superbill.lineItems ?? []) {
+            li.fee = Number(li.fee) || 0;
+          }
 
           set(
             {

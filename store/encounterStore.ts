@@ -14,11 +14,18 @@ export type { EncounterStatus };
 export type EncounterLoadStatus = "idle" | "loading" | "loaded" | "error";
 
 export interface EncounterState {
+  shortId?: string;
   status: EncounterStatus;
   isFinalized: boolean;
   encounterDate: string;
-  providerName: string;
   patientId?: string;
+  patientChartNumber?: number;
+  providerId?: string;
+  patientName?: string;
+  patientPreferredName?: string;
+  patientDob?: string;
+  patientSex?: string;
+  providerName: string;
   chiefComplaint?: string;
   signedByName?: string;
   signedAt?: string;
@@ -32,8 +39,14 @@ export interface EncounterState {
 // Shape of the API response from GET /api/encounters/:id
 interface EncounterApiResponse {
   id: string;
+  shortId: string;
   patientId: string;
+  patientChartNumber?: number;
   providerId: string;
+  patientName?: string;
+  patientPreferredName?: string;
+  patientDob?: string;
+  patientSex?: string;
   providerName?: string;
   status: EncounterStatus;
   chiefComplaint?: string;
@@ -115,11 +128,18 @@ export const useEncounterStore = create<EncounterStoreState>()(
                 encounters: {
                   ...state.encounters,
                   [id]: {
+                    shortId: data.shortId,
                     status: data.status,
                     isFinalized: data.status === "finalized",
                     encounterDate: data.encounterDate,
-                    providerName: data.providerName ?? "",
                     patientId: data.patientId,
+                    patientChartNumber: data.patientChartNumber,
+                    providerId: data.providerId,
+                    patientName: data.patientName,
+                    patientPreferredName: data.patientPreferredName,
+                    patientDob: data.patientDob,
+                    patientSex: data.patientSex,
+                    providerName: data.providerName ?? "",
                     chiefComplaint: data.chiefComplaint,
                     signedByName: data.signedByName,
                     signedAt: data.signedAt,

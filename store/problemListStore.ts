@@ -258,7 +258,7 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
       async resolveProblem(patientId, problemId) {
         await get().updateProblem(patientId, problemId, {
           status: "resolved",
-          resolved_date: new Date().toISOString().split("T")[0],
+          resolvedDate: new Date().toISOString().split("T")[0],
         });
       },
 

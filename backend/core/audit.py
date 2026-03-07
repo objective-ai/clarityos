@@ -65,7 +65,7 @@ async def log_action(
         tenant_id=ctx.tenant_id,
         user_id=ctx.user_id,
         staff_id=staff_id,
-        action=action,
+        action=action.value if hasattr(action, "value") else action,
         resource_type=resource_type,
         resource_id=resource_id,
         encounter_id=encounter_id,

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from decimal import Decimal
+
 from enum import StrEnum
 
 from pydantic import Field
@@ -42,11 +42,11 @@ class OpticalStatus(StrEnum):
 class EyeRxSummary(AppBaseModel):
     """Abbreviated Rx values for a single eye, used in queue cards."""
 
-    sphere: Decimal | None = None
-    cylinder: Decimal | None = None
+    sphere: float | None = None
+    cylinder: float | None = None
     axis: int | None = None
-    add: Decimal | None = None
-    prism: Decimal | None = None
+    add: float | None = None
+    prism: float | None = None
     prism_base: str | None = None
     visual_acuity: str | None = None
 
@@ -60,12 +60,12 @@ class RxChangeAlert(AppBaseModel):
     """Spherical equivalent change alert for one or both eyes."""
 
     has_change: bool = False
-    od_previous_se: Decimal | None = None
-    od_current_se: Decimal | None = None
-    od_delta: Decimal | None = None
-    os_previous_se: Decimal | None = None
-    os_current_se: Decimal | None = None
-    os_delta: Decimal | None = None
+    od_previous_se: float | None = None
+    od_current_se: float | None = None
+    od_delta: float | None = None
+    os_previous_se: float | None = None
+    os_current_se: float | None = None
+    os_delta: float | None = None
     message: str | None = None
 
 
@@ -93,10 +93,10 @@ class OpticalQueueItem(AppBaseModel):
     # Final Rx
     od: EyeRxSummary
     os: EyeRxSummary
-    pd_distance: Decimal | None = None
-    pd_near: Decimal | None = None
-    pd_od: Decimal | None = None
-    pd_os: Decimal | None = None
+    pd_distance: float | None = None
+    pd_near: float | None = None
+    pd_od: float | None = None
+    pd_os: float | None = None
 
     # Rx change detection
     rx_change_alert: RxChangeAlert = Field(default_factory=RxChangeAlert)
@@ -162,10 +162,10 @@ class RxPdfData(AppBaseModel):
     # Prescription
     od: EyeRxSummary
     os: EyeRxSummary
-    pd_distance: Decimal | None = None
-    pd_near: Decimal | None = None
-    pd_od: Decimal | None = None
-    pd_os: Decimal | None = None
+    pd_distance: float | None = None
+    pd_near: float | None = None
+    pd_od: float | None = None
+    pd_os: float | None = None
 
     # Provider info
     provider_name: str

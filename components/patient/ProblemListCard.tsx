@@ -70,9 +70,9 @@ export function ProblemListCard({ patientId }: ProblemListCardProps) {
   const handleAdd = useCallback(
     async (code: QuickCode, eye: EyeLaterality | null) => {
       await store.addProblem(patientId, {
-        icd10_code: code.code,
+        icd10Code: code.code,
         description: code.description,
-        eye_affected: eye,
+        eyeAffected: eye,
       });
       setShowAdd(false);
       setSearch("");
@@ -196,14 +196,14 @@ export function ProblemListCard({ patientId }: ProblemListCardProps) {
                 className="flex items-center gap-3 px-5 py-3 border-t border-[var(--border-subtle)]"
               >
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)] flex-shrink-0">
-                  {problem.icd10_code}
+                  {problem.icd10Code}
                 </span>
                 <span className="flex-1 text-xs text-[var(--text-primary)]">
                   {problem.description}
                 </span>
-                {problem.eye_affected && (
+                {problem.eyeAffected && (
                   <span className="text-[10px] font-mono font-semibold text-[var(--text-muted)]">
-                    {problem.eye_affected}
+                    {problem.eyeAffected}
                   </span>
                 )}
                 <Badge variant={STATUS_VARIANT[problem.status as ProblemStatus] ?? "secondary"}>
@@ -244,15 +244,15 @@ export function ProblemListCard({ patientId }: ProblemListCardProps) {
                 className="flex items-center gap-3 px-5 py-3 border-t border-[var(--border-subtle)] opacity-60"
               >
                 <span className="text-xs font-mono px-2 py-0.5 rounded-lg bg-[var(--bg-glass)] text-[var(--text-muted)] border border-[var(--glass-border)] flex-shrink-0">
-                  {problem.icd10_code}
+                  {problem.icd10Code}
                 </span>
                 <span className="flex-1 text-xs text-[var(--text-secondary)] line-through">
                   {problem.description}
                 </span>
                 <Badge variant="success">resolved</Badge>
-                {problem.resolved_date && (
+                {problem.resolvedDate && (
                   <span className="text-[10px] text-[var(--text-muted)]">
-                    {problem.resolved_date}
+                    {problem.resolvedDate}
                   </span>
                 )}
               </div>

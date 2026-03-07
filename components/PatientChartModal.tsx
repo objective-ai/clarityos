@@ -30,7 +30,7 @@ export function PatientChartModal({
   open,
   onOpenChange,
 }: PatientChartModalProps) {
-  const { tenantId } = useParams<{ tenantId: string }>();
+  const { tenant } = useParams<{ tenant: string }>();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -55,9 +55,9 @@ export function PatientChartModal({
               Real patient demographics will be loaded from the API.
             </p>
           </div>
-          {patientId && tenantId && (
+          {patientId && tenant && (
             <Link
-              href={`/${tenantId}/patients/${patientId}`}
+              href={`/${tenant}/patients/${patientId}`}
               onClick={() => onOpenChange(false)}
               className="text-sm text-[var(--accent)] hover:underline"
             >

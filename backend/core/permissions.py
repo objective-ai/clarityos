@@ -120,7 +120,7 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     # can transition into the exam room.
     ClinicalAction.VIEW_SCHEDULE:       {_D, _T, _R, _A, _O},
     ClinicalAction.MANAGE_APPOINTMENT:  {_D, _T, _R, _A, _O},
-    ClinicalAction.CHECK_IN_PATIENT:    {_T, _R, _A, _O},
+    ClinicalAction.CHECK_IN_PATIENT:    {_D, _T, _R, _A, _O},
     ClinicalAction.START_EXAM:          {_D, _O},
 
     # Billing

@@ -21,15 +21,21 @@ function formatRx(
   axis: number | null
 ): string {
   if (sphere == null) return "--";
-  const sph = sphere >= 0 ? `+${sphere.toFixed(2)}` : sphere.toFixed(2);
-  if (cylinder == null || cylinder === 0) return sph;
-  const cyl = cylinder >= 0 ? `+${cylinder.toFixed(2)}` : cylinder.toFixed(2);
+  const s = Number(sphere);
+  if (isNaN(s)) return "--";
+  const sph = s >= 0 ? `+${s.toFixed(2)}` : s.toFixed(2);
+  if (cylinder == null || Number(cylinder) === 0) return sph;
+  const c = Number(cylinder);
+  if (isNaN(c)) return sph;
+  const cyl = c >= 0 ? `+${c.toFixed(2)}` : c.toFixed(2);
   return `${sph} / ${cyl} x ${axis ?? "--"}`;
 }
 
 function formatAdd(add: number | null): string {
   if (add == null) return "--";
-  return `+${add.toFixed(2)}`;
+  const a = Number(add);
+  if (isNaN(a)) return "--";
+  return `+${a.toFixed(2)}`;
 }
 
 function formatPd(
@@ -39,11 +45,11 @@ function formatPd(
   pdOs: number | null
 ): string {
   if (pdOd != null && pdOs != null) {
-    return `${pdOd.toFixed(1)} / ${pdOs.toFixed(1)} mm (mono)`;
+    return `${Number(pdOd).toFixed(1)} / ${Number(pdOs).toFixed(1)} mm (mono)`;
   }
   if (pdDistance != null) {
-    const near = pdNear != null ? ` / ${pdNear.toFixed(1)} near` : "";
-    return `${pdDistance.toFixed(1)}${near} mm`;
+    const near = pdNear != null ? ` / ${Number(pdNear).toFixed(1)} near` : "";
+    return `${Number(pdDistance).toFixed(1)}${near} mm`;
   }
   return "--";
 }

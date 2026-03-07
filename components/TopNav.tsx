@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, Sun, Moon, Check } from "lucide-react";
+import { Sun, Moon, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,19 +10,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useThemeStore, nextTheme } from "@/store/themeStore";
+import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
-import { useCurrentUser, useSessionStore } from "@/store/sessionStore";
+import { useSessionStore } from "@/store/sessionStore";
+import { useDiagnosisStore } from "@/store/diagnosisStore";
+import { useEncounterStore } from "@/store/encounterStore";
 import type { PatientHeaderData, StaffRole } from "@/types/session";
-
-const ROLE_COLORS: Record<StaffRole, { bg: string; text: string; border: string }> = {
-  doctor:       { bg: "rgba(45,212,191,0.12)",  text: "#2DD4BF", border: "rgba(45,212,191,0.3)"  },
-  technician:   { bg: "rgba(96,165,250,0.12)",  text: "#60A5FA", border: "rgba(96,165,250,0.3)"  },
-  receptionist: { bg: "rgba(167,139,250,0.12)", text: "#A78BFA", border: "rgba(167,139,250,0.3)" },
-  admin:        { bg: "rgba(251,191,36,0.12)",  text: "#FBBF24", border: "rgba(251,191,36,0.3)"  },
-  owner:        { bg: "rgba(251,113,133,0.12)", text: "#FB7185", border: "rgba(251,113,133,0.3)" },
-};
 
 function calculateAge(dob: string): number {
   const birth = new Date(dob);
@@ -40,7 +34,7 @@ function formatSex(sex: PatientHeaderData["sex"]): string {
 }
 
 interface TopNavProps {
-  tenantId: string;
+  tenant: string;
   patient?: PatientHeaderData | null;
 }
 
@@ -50,6 +44,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/patients")) return "Patients";
   if (pathname.includes("/analytics")) return "Analytics";
   if (pathname.includes("/admin")) return "Admin";
+  if (pathname.includes("/optical")) return "Optical";
   return "Dashboard";
 }
 
@@ -63,29 +58,53 @@ const SCENARIO_LABELS: [DevScenario, string][] = [
   ["owner", "Owner"],
 ];
 
-export function TopNav({ tenantId, patient }: TopNavProps) {
+export function TopNav({ tenant, patient }: TopNavProps) {
   const pathname = usePathname();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
-  const { requireRole, has, planName, role } = useEntitlements();
+  const subtitle = usePageHeaderStore((s) => s.subtitle);
+  const { has, planName, role } = useEntitlements();
   const isDev = process.env.NODE_ENV === "development";
-  const canAccessSettings = requireRole("admin", "owner");
+  const session = useSessionStore((s) => s.session);
   const setSession = useSessionStore((s) => s.setSession);
-  const [activeScenario, setActiveScenario] = useState<DevScenario>("premium_doctor");
-  const user = useCurrentUser();
   const pageTitle = getPageTitle(pathname);
 
+  // Extract encounterId from pathname for diagnosis tags + provider info
+  const encounterId = pathname.includes("/encounter/")
+    ? pathname.split("/encounter/")[1]?.split("/")[0] ?? null
+    : null;
+  const diagnoses = useDiagnosisStore(
+    (s) => (encounterId ? s.encounters[encounterId]?.diagnoses : null) ?? []
+  );
+  const encounter = useEncounterStore(
+    (s) => (encounterId ? s.encounters[encounterId] : null) ?? null
+  );
+
+  // Derive active scenario from actual session state so badge and checkmark stay in sync
+  const activeScenario: DevScenario = (() => {
+    if (role === "receptionist") return "receptionist";
+    if (role === "technician") return "technician";
+    if (role === "owner") return "owner";
+    if (planName === "Core") return "core_plan";
+    return "premium_doctor";
+  })();
+
   const switchRole = async (scenario: DevScenario) => {
-    setActiveScenario(scenario);
-    const { getMockSession } = await import("@/lib/auth/mock-session");
-    setSession(getMockSession(scenario));
+    const { switchDevRole, getMockSession } = await import(
+      "@/lib/auth/mock-session"
+    );
+    if (session) {
+      setSession(switchDevRole(session, scenario));
+    } else {
+      setSession(getMockSession(scenario));
+    }
   };
 
   return (
     <header
       className="sticky top-0 z-30 flex items-center justify-between px-6"
       style={{
-        height: "var(--header-height)",
+        minHeight: "var(--header-height)",
         background: "var(--bg-sticky-header)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
@@ -94,30 +113,99 @@ export function TopNav({ tenantId, patient }: TopNavProps) {
     >
       <div className="flex items-center gap-3 min-w-0">
         {patient ? (
-          <>
-            <h1 className="text-sm font-semibold truncate text-[var(--text-primary)]">
-              {patient.lastName}, {patient.firstName}
-            </h1>
-            <span className="text-[11px] text-[var(--text-secondary)] flex-shrink-0">
-              {formatSex(patient.sex)} &middot; {calculateAge(patient.dob)}y &middot;{" "}
-              {new Date(patient.dob + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </span>
-            {patient.alerts.filter((a) => a.severity === "critical").map((a) => (
-              <Badge key={a.id} variant="destructive" className="gap-1 flex-shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse-dot bg-current" />
-                {a.label}
-              </Badge>
-            ))}
-            {patient.alerts.filter((a) => a.severity === "warning").map((a) => (
-              <Badge key={a.id} variant="warning" className="flex-shrink-0">{a.label}</Badge>
-            ))}
-          </>
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Name + Demographics block */}
+            <div className="flex flex-col justify-center min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-[15px] font-semibold truncate text-[var(--text-primary)]">
+                  {patient.lastName}, {patient.firstName}
+                </h1>
+                {patient.alerts.filter((a) => a.severity === "critical").map((a) => (
+                  <Badge key={a.id} variant="destructive" className="gap-1 flex-shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full animate-pulse-dot bg-current" />
+                    {a.label}
+                  </Badge>
+                ))}
+                {patient.alerts.filter((a) => a.severity === "warning").map((a) => (
+                  <Badge key={a.id} variant="warning" className="flex-shrink-0">{a.label}</Badge>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)] mt-0.5">
+                {patient.dob && (
+                  <>
+                    <span>{formatSex(patient.sex)}</span>
+                    <span className="text-[var(--border-strong)]">&middot;</span>
+                    <span>{calculateAge(patient.dob)}y</span>
+                    <span className="text-[var(--border-strong)]">&middot;</span>
+                    <span>{new Date(patient.dob + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    <span className="text-[var(--border-strong)]">&middot;</span>
+                  </>
+                )}
+                <span className="font-mono text-[var(--text-muted)]">#{patient.chartNumber ?? patient.id.slice(0, 8)}</span>
+              </div>
+            </div>
+
+            {/* Diagnosis pills — vertically centered, spanning both rows */}
+            {diagnoses.length > 0 && (
+              <>
+                <div className="w-px self-stretch bg-[var(--border-default)] flex-shrink-0" />
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {diagnoses.slice(0, 4).map((dx) => {
+                    const isOD = dx.eyeAffected === "OD";
+                    const isOS = dx.eyeAffected === "OS";
+                    return (
+                      <span
+                        key={dx.id}
+                        className="inline-flex items-center gap-1.5 flex-shrink-0 rounded-xl text-base px-4 py-2.5 font-semibold max-w-[200px]"
+                        title={dx.icd10Code}
+                        style={{
+                          background: isOD
+                            ? "#DBEAFE"
+                            : isOS
+                            ? "#EDE9FE"
+                            : "#CCFBF1",
+                          color: isOD
+                            ? "#1E40AF"
+                            : isOS
+                            ? "#5B21B6"
+                            : "#115E59",
+                          border: isOD
+                            ? "1px solid #93C5FD"
+                            : isOS
+                            ? "1px solid #C4B5FD"
+                            : "1px solid #5EEAD4",
+                        }}
+                      >
+                        <span className="truncate">{dx.description || dx.icd10Code}</span>
+                        {dx.eyeAffected && (
+                          <span className="font-bold flex-shrink-0">{dx.eyeAffected}</span>
+                        )}
+                      </span>
+                    );
+                  })}
+                  {diagnoses.length > 4 && (
+                    <span className="text-xs text-[var(--text-muted)] flex-shrink-0">
+                      +{diagnoses.length - 4}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         ) : (
-          <h1 className="text-heading">{pageTitle}</h1>
+          <div className="flex items-baseline gap-3 min-w-0">
+            <h1 className="text-heading whitespace-nowrap">{pageTitle}</h1>
+            {subtitle && (
+              <>
+                <span className="text-[var(--text-muted)]">&middot;</span>
+                <span className="text-body text-sm truncate">{subtitle}</span>
+              </>
+            )}
+          </div>
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {isDev && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -159,24 +247,10 @@ export function TopNav({ tenantId, patient }: TopNavProps) {
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        <Link href={`/${tenantId}/admin`}>
-          <Button variant="ghost" size="icon" aria-label="Admin">
-            <Settings className="h-4 w-4" />
-          </Button>
-        </Link>
-
-        {!patient && (() => {
-          const roleKey = user?.role ?? "doctor";
-          const colors = ROLE_COLORS[roleKey] ?? ROLE_COLORS.doctor;
-          return (
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold font-mono border ml-1"
-              style={{ background: colors.bg, color: colors.text, borderColor: colors.border }}
-            >
-              {user?.avatarInitials ?? "?"}
-            </div>
-          );
-        })()}
+        <LogoutButton
+          collapsed
+          className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        />
       </div>
     </header>
   );

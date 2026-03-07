@@ -6,28 +6,28 @@ export type EyeLaterality = "OD" | "OS" | "OU";
 
 export interface Diagnosis {
   id: string;
-  encounter_id: string;
-  icd10_code: string;
+  encounterId: string;
+  icd10Code: string;
   description: string;
-  eye_affected: EyeLaterality | null;
+  eyeAffected: EyeLaterality | null;
   severity: string | null;
   status: string;
   notes: string | null;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DiagnosisCreateRequest {
-  icd10_code: string;
+  icd10Code: string;
   description: string;
-  eye_affected?: EyeLaterality | null;
+  eyeAffected?: EyeLaterality | null;
   severity?: string | null;
   status?: string;
   notes?: string | null;
 }
 
 export interface DiagnosisUpdateRequest {
-  eye_affected?: EyeLaterality | null;
+  eyeAffected?: EyeLaterality | null;
   severity?: string | null;
   status?: string | null;
   notes?: string | null;

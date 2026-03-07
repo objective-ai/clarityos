@@ -10,7 +10,9 @@
 import { createClient } from "@/lib/supabase/client";
 import { camelizeKeys, snakifyKeys } from "@/lib/case-convert";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Route API calls through Next.js BFF proxy (same-origin) to avoid CORS/CSP issues.
+// The BFF routes in app/api/ forward requests to FastAPI with the auth token.
+const API_URL = "";
 
 /**
  * Retries an async function with exponential backoff.

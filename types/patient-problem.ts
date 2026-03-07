@@ -8,37 +8,37 @@ export type ProblemStatus = "active" | "inactive" | "resolved";
 
 export interface PatientProblem {
   id: string;
-  patient_id: string;
-  icd10_code: string;
+  patientId: string;
+  icd10Code: string;
   description: string;
-  eye_affected: EyeLaterality | null;
+  eyeAffected: EyeLaterality | null;
   severity: string | null;
   status: ProblemStatus;
-  onset_date: string | null;
-  resolved_date: string | null;
-  source_encounter_id: string | null;
+  onsetDate: string | null;
+  resolvedDate: string | null;
+  sourceEncounterId: string | null;
   notes: string | null;
-  is_deleted: boolean;
-  created_at: string;
-  updated_at: string;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProblemCreateRequest {
-  icd10_code: string;
+  icd10Code: string;
   description: string;
-  eye_affected?: EyeLaterality | null;
+  eyeAffected?: EyeLaterality | null;
   severity?: string | null;
   status?: ProblemStatus;
-  onset_date?: string | null;
-  source_encounter_id?: string | null;
+  onsetDate?: string | null;
+  sourceEncounterId?: string | null;
   notes?: string | null;
 }
 
 export interface ProblemUpdateRequest {
-  eye_affected?: EyeLaterality | null;
+  eyeAffected?: EyeLaterality | null;
   severity?: string | null;
   status?: ProblemStatus | null;
-  onset_date?: string | null;
-  resolved_date?: string | null;
+  onsetDate?: string | null;
+  resolvedDate?: string | null;
   notes?: string | null;
 }

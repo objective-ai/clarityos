@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Clarity Optometry EHR"
 
     # ── Database (Supabase Postgres via asyncpg) ──────────────────────────
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/clarity_db"
+    DATABASE_URL: str = Field(..., description="Database connection URL - required")
     DB_ECHO_SQL: bool = False
 
     # ── Supabase ──────────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ── Security ──────────────────────────────────────────────────────────
     SECRET_KEY: str = Field(..., description="App secret key - required")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (HIPAA best practice)
 
     # ── CORS ──────────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]

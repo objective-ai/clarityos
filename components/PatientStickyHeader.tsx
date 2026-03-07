@@ -92,8 +92,8 @@ function IopAlertChip({ eye }: { eye: "OD" | "OS" }) {
 export function PatientStickyHeader({
   patient,
 }: PatientStickyHeaderProps) {
-  const params = useParams<{ tenantId: string; encounterId?: string }>();
-  const tenantId = params.tenantId;
+  const params = useParams<{ tenant: string; encounterId?: string }>();
+  const tenant = params.tenant;
   const encounterId = params.encounterId ?? null;
 
   const [chartOpen, setChartOpen] = useState(false);
@@ -108,9 +108,10 @@ export function PatientStickyHeader({
   const iopOdElevated = isIopElevated(vitalsDraft?.iop_od ?? null);
   const iopOsElevated = isIopElevated(vitalsDraft?.iop_os ?? null);
 
-  const age = useMemo(() => calculateAge(patient.dob), [patient.dob]);
+  const hasDob = !!patient.dob;
+  const age = useMemo(() => (hasDob ? calculateAge(patient.dob) : null), [patient.dob, hasDob]);
   const statusConfig = encounter ? STATUS_CONFIG[encounter.status] : null;
-  const patientDetailHref = `/${tenantId}/patients/${patient.id}`;
+  const patientDetailHref = `/${tenant}/patients/${patient.chartNumber ?? patient.id}`;
 
   const handleAdvance = () => {
     if (!encounterId || !encounter) return;
@@ -158,10 +159,14 @@ export function PatientStickyHeader({
               </h1>
 
               <div className="flex items-center gap-2 mt-1 text-[11px] text-[var(--text-secondary)]">
-                <span>{formatDob(patient.dob)}</span>
-                <span className="text-[var(--border-strong)]">&middot;</span>
-                <span>{age}y</span>
-                <span className="text-[var(--border-strong)]">&middot;</span>
+                {hasDob && (
+                  <>
+                    <span>{formatDob(patient.dob)}</span>
+                    <span className="text-[var(--border-strong)]">&middot;</span>
+                    <span>{age}y</span>
+                    <span className="text-[var(--border-strong)]">&middot;</span>
+                  </>
+                )}
                 <span>{formatSex(patient.sex)}</span>
                 <span className="text-[var(--border-strong)]">&middot;</span>
                 <span className="font-mono text-[var(--text-muted)]">

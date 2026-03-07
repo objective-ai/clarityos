@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
@@ -23,7 +24,7 @@ COLUMN_MAP = {
 
 @router.patch("/{encounter_id}/column/{col_index}", response_model=RefractionResponse)
 async def sync_refraction(
-    encounter_id: UUID,
+    encounter_id: str,
     col_index: int,
     payload: RefractionUpdateRequest,
     request: Request,
@@ -31,6 +32,7 @@ async def sync_refraction(
     db: AsyncSession = Depends(get_db),
 ):
     """Upsert a refraction column for a given encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     rx_type = COLUMN_MAP.get(col_index)
     if rx_type is None:
         raise HTTPException(status_code=400, detail=f"Invalid column index: {col_index}")

@@ -129,6 +129,7 @@ class PatientEncounterSummary(AppBaseModel):
     """Abbreviated encounter for the patient timeline."""
 
     id: uuid.UUID
+    short_id: str
     encounter_date: date
     provider_id: uuid.UUID
     provider_name: str | None = None
@@ -169,6 +170,7 @@ class PatientSummary(AppBaseModel):
     """Abbreviated patient for list views."""
 
     id: uuid.UUID
+    chart_number: int
     first_name: str
     last_name: str
     preferred_name: str | None = None
@@ -193,6 +195,7 @@ class PatientResponse(AppBaseModel):
     """Full patient detail response (for the patient detail page)."""
 
     id: uuid.UUID
+    chart_number: int
     first_name: str
     last_name: str
     preferred_name: str | None = None

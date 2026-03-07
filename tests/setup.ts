@@ -15,8 +15,8 @@ vi.mock("next/navigation", () => ({
     back: vi.fn(),
     prefetch: vi.fn(),
   }),
-  useParams: () => ({ tenantId: "demo-clinic" }),
-  usePathname: () => "/demo-clinic/dashboard",
+  useParams: () => ({ tenant: "sunview" }),
+  usePathname: () => "/sunview/dashboard",
   useSearchParams: () => new URLSearchParams(),
 }));
 

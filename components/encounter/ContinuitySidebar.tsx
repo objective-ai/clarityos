@@ -51,7 +51,7 @@ export function ContinuitySidebar({
 
       // Deduplication: check if ICD-10 code already exists in encounter diagnoses
       const alreadyExists = existingDiagnoses.some(
-        (dx) => dx.icd10_code === problem.icd10_code,
+        (dx) => dx.icd10Code === problem.icd10Code,
       );
       if (alreadyExists) return; // silently skip duplicate
 
@@ -119,19 +119,19 @@ export function ContinuitySidebar({
                 }`}
               >
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)] flex-shrink-0">
-                  {problem.icd10_code}
+                  {problem.icd10Code}
                 </span>
                 <span className="flex-1 text-xs text-[var(--text-primary)] truncate">
                   {problem.description}
                 </span>
-                {problem.eye_affected && (
+                {problem.eyeAffected && (
                   <span className="text-[10px] font-mono font-semibold text-[var(--text-muted)]">
-                    {problem.eye_affected}
+                    {problem.eyeAffected}
                   </span>
                 )}
                 {!isReadOnly && (() => {
                   const isDuplicate = existingDiagnoses.some(
-                    (dx) => dx.icd10_code === problem.icd10_code,
+                    (dx) => dx.icd10Code === problem.icd10Code,
                   );
                   return isDuplicate ? (
                     <span className="text-[10px] text-[var(--text-muted)] px-2">Added</span>

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
@@ -30,7 +31,7 @@ router = APIRouter()
     response_model=ExamFindingsDetailResponse,
 )
 async def upsert_exam_findings(
-    encounter_id: UUID,
+    encounter_id: str,
     exam_section: str,
     payload: ExamFindingsUpdateRequest,
     request: Request,
@@ -38,6 +39,7 @@ async def upsert_exam_findings(
     db: AsyncSession = Depends(get_db),
 ):
     """Upsert structured exam findings for a given encounter + section."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
 
     # 1. Validate section name
     schema_cls = SECTION_SCHEMA_MAP.get(exam_section)
@@ -136,13 +138,14 @@ async def upsert_exam_findings(
     response_model=ExamFindingsDetailResponse,
 )
 async def get_exam_findings(
-    encounter_id: UUID,
+    encounter_id: str,
     exam_section: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_EXAM_FINDINGS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Get exam findings for a specific encounter + section."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
 
     row = (
         await db.execute(

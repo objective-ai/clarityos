@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from backend.api.resolvers import resolve_encounter_id
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,6 +18,7 @@ from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import (
+    AppointmentStatus,
     AuditAction,
     Diagnosis,
     Encounter,
@@ -72,12 +75,28 @@ def _build_encounter_response(enc: Encounter) -> EncounterResponse:
             updated_at=v.updated_at,
         )
 
+    # Derive status from finalization state + linked appointment
+    if enc.is_finalized:
+        derived_status = "finalized"
+    elif enc.appointment and enc.appointment.status == AppointmentStatus.IN_EXAM:
+        derived_status = "in_exam"
+    else:
+        derived_status = "pre_test"
+
     return EncounterResponse(
         id=enc.id,
+        short_id=enc.short_id,
         patient_id=enc.patient_id,
         provider_id=enc.provider_id,
+        patient_name=enc.patient.full_name if enc.patient else None,
+        patient_chart_number=enc.patient.chart_number if enc.patient else None,
+        patient_preferred_name=enc.patient.preferred_name if enc.patient else None,
+        patient_dob=enc.patient.dob if enc.patient else None,
+        patient_sex=enc.patient.sex.value if enc.patient and enc.patient.sex else None,
+        provider_name=enc.provider.full_name if enc.provider else None,
         appointment_id=enc.appointment_id,
         encounter_date=enc.encounter_date,
+        status=derived_status,
         chief_complaint=enc.chief_complaint,
         assessment_and_plan=enc.assessment_and_plan,
         ai_summary_text=enc.ai_summary_text,
@@ -170,7 +189,7 @@ async def create_encounter(
         detail="Created encounter",
         ip_address=request.client.host if request.client else None,
     )
-    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings"])
+    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings", "signed_by", "patient", "provider", "appointment"])
     return _build_encounter_response(enc)
 
 
@@ -181,11 +200,12 @@ async def create_encounter(
 
 @router.get("/{encounter_id}", response_model=EncounterResponse)
 async def get_encounter(
-    encounter_id: UUID,
+    encounter_id: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_ENCOUNTER)),
     db: AsyncSession = Depends(get_db),
 ):
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     stmt = (
         select(Encounter)
         .where(
@@ -199,6 +219,9 @@ async def get_encounter(
             selectinload(Encounter.diagnoses),
             selectinload(Encounter.exam_findings),
             selectinload(Encounter.signed_by),
+            selectinload(Encounter.patient),
+            selectinload(Encounter.provider),
+            selectinload(Encounter.appointment),
         )
     )
     enc = (await db.execute(stmt)).scalar_one_or_none()
@@ -220,12 +243,13 @@ async def get_encounter(
 
 @router.patch("/{encounter_id}", response_model=EncounterResponse)
 async def update_encounter(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: EncounterUpdateRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.UPDATE_ENCOUNTER)),
     db: AsyncSession = Depends(get_db),
 ):
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     enc = (
         await db.execute(
             select(Encounter)
@@ -240,6 +264,9 @@ async def update_encounter(
                 selectinload(Encounter.diagnoses),
                 selectinload(Encounter.exam_findings),
                 selectinload(Encounter.signed_by),
+                selectinload(Encounter.patient),
+                selectinload(Encounter.provider),
+                selectinload(Encounter.appointment),
             )
         )
     ).scalar_one_or_none()
@@ -261,7 +288,7 @@ async def update_encounter(
         ip_address=request.client.host if request.client else None,
     )
     await db.flush()
-    await db.refresh(enc)
+    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings", "signed_by", "patient", "provider", "appointment"])
     return _build_encounter_response(enc)
 
 
@@ -272,12 +299,13 @@ async def update_encounter(
 
 @router.post("/{encounter_id}/finalize", response_model=EncounterResponse)
 async def finalize_encounter(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: EncounterFinalizeRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.FINALIZE_ENCOUNTER)),
     db: AsyncSession = Depends(get_db),
 ):
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     # ── Resolve staff record for the signing provider ──
     staff = await resolve_staff(ctx, db)
     if not staff:
@@ -296,6 +324,9 @@ async def finalize_encounter(
                 selectinload(Encounter.diagnoses),
                 selectinload(Encounter.exam_findings),
                 selectinload(Encounter.signed_by),
+                selectinload(Encounter.patient),
+                selectinload(Encounter.provider),
+                selectinload(Encounter.appointment),
             )
         )
     ).scalar_one_or_none()
@@ -356,5 +387,5 @@ async def finalize_encounter(
             problem.resolved_date = enc.encounter_date
 
     await db.flush()
-    await db.refresh(enc)
+    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings", "signed_by", "patient", "provider", "appointment"])
     return _build_encounter_response(enc)

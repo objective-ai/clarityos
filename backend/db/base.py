@@ -30,17 +30,6 @@ class PublicBase(DeclarativeBase):
     @declared_attr.directive
     def __table_args__(cls):  # noqa: N805
         # Force every public model into the 'public' schema explicitly.
-        existing = getattr(cls, "__table_args__", {})
-        if isinstance(existing, dict):
-            return {**existing, "schema": "public"}
-        if isinstance(existing, tuple):
-            # Tuple form: (*constraints, dict_of_kwargs)
-            args = list(existing)
-            if args and isinstance(args[-1], dict):
-                args[-1] = {**args[-1], "schema": "public"}
-            else:
-                args.append({"schema": "public"})
-            return tuple(args)
         return {"schema": "public"}
 
 

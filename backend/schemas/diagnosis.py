@@ -62,5 +62,6 @@ class DiagnosisResponse(AppBaseModel):
     severity: str | None = None
     status: str
     notes: str | None = None
+    recorded_by_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime

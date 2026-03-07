@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
@@ -14,15 +15,57 @@ from backend.schemas.vitals import VitalsCreate, VitalsResponse
 router = APIRouter()
 
 
+@router.get("/{encounter_id}/vitals", response_model=VitalsResponse)
+async def get_vitals(
+    encounter_id: str,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_VITALS)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get vitals for a given encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
+    enc = (
+        await db.execute(
+            select(Encounter).where(
+                Encounter.id == encounter_id,
+                Encounter.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not enc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+
+    vitals = (
+        await db.execute(
+            select(VitalsAndPretest).where(
+                VitalsAndPretest.encounter_id == encounter_id,
+                VitalsAndPretest.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not vitals:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No vitals recorded yet")
+
+    await log_action(
+        db, ctx, AuditAction.READ, "vitals", vitals.id,
+        encounter_id=encounter_id,
+        patient_id=enc.patient_id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return vitals
+
+
 @router.put("/{encounter_id}/vitals", response_model=VitalsResponse)
 async def update_vitals(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: VitalsCreate,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.EDIT_VITALS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Upsert vitals for a given encounter (idempotent PUT)."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     # Verify encounter belongs to tenant
     enc = (
         await db.execute(

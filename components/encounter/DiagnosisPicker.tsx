@@ -93,9 +93,9 @@ export function DiagnosisPicker({
     async (code: ICD10Code, eye: EyeLaterality) => {
       if (isReadOnly) return;
       await store.addDiagnosis(encounterId, {
-        icd10_code: code.code,
+        icd10Code: code.code,
         description: code.description,
-        eye_affected: eye,
+        eyeAffected: eye,
       });
       setShowPicker(false);
       setSearch("");
@@ -152,14 +152,14 @@ export function DiagnosisPicker({
               }`}
             >
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)]">
-                {dx.icd10_code}
+                {dx.icd10Code}
               </span>
               <span className="flex-1 text-xs text-[var(--text-primary)]">
                 {dx.description}
               </span>
-              {dx.eye_affected && (
+              {dx.eyeAffected && (
                 <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
-                  {dx.eye_affected}
+                  {dx.eyeAffected}
                 </span>
               )}
               {!isReadOnly && (

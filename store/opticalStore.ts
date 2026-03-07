@@ -158,7 +158,10 @@ export const useOpticalStore = create<OpticalState>()(
 
       openPrintPreview: async (encounterId: string) => {
         await get().fetchRxPdfData(encounterId);
-        set({ isPrintPreviewOpen: true }, false, "openPrintPreview");
+        // Only open if data was fetched successfully
+        if (get().rxPdfData) {
+          set({ isPrintPreviewOpen: true }, false, "openPrintPreview");
+        }
       },
 
       closePrintPreview: () => {

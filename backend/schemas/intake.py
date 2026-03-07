@@ -150,6 +150,11 @@ class IntakeFormSubmission(AppBaseModel):
     review_of_systems: ReviewOfSystemsData | None = None
     chief_complaint: str = Field(..., min_length=1, max_length=2000)
 
+    # Consent
+    consent_treat_bill: bool = Field(..., description="Required: consent to treatment and billing")
+    consent_privacy_notice: bool = Field(..., description="Required: HIPAA/CMIA privacy notice acknowledgment")
+    consent_digital_comm: bool = Field(default=False, description="Optional: digital communication consent")
+
 
 class IntakeSubmissionResponse(AppBaseModel):
     """Returned after successful intake form submission."""

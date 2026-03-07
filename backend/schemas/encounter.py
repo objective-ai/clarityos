@@ -454,10 +454,20 @@ class EncounterResponse(AppBaseModel):
     """
 
     id: uuid.UUID
+    short_id: str
     patient_id: uuid.UUID
     provider_id: uuid.UUID
+    patient_name: str | None = None
+    patient_chart_number: int | None = None
+    patient_preferred_name: str | None = None
+    patient_dob: date | None = None
+    patient_sex: str | None = None
+    provider_name: str | None = None
     appointment_id: uuid.UUID | None = None
     encounter_date: date
+    status: str = Field(
+        description="Derived encounter status: pre_test, in_exam, or finalized.",
+    )
     chief_complaint: str | None = None
     assessment_and_plan: str | None = None
 
@@ -491,6 +501,7 @@ class EncounterSummary(AppBaseModel):
     """
 
     id: uuid.UUID
+    short_id: str
     encounter_date: date
     provider_id: uuid.UUID
     chief_complaint: str | None = None

@@ -80,8 +80,10 @@ def _build_appointment_response(
         cancellation_reason=appt.cancellation_reason,
         reminder_sent_at=appt.reminder_sent_at,
         patient_name=patient_name,
+        patient_chart_number=appt.patient.chart_number if appt.patient else None,
         provider_name=provider_name,
         encounter_id=appt.encounter.id if appt.encounter else None,
+        encounter_short_id=appt.encounter.short_id if appt.encounter else None,
         intake_status=appt.intake_status,
         triage_flags_jsonb=appt.triage_flags_jsonb,
         created_at=appt.created_at,
@@ -449,6 +451,7 @@ async def start_exam(
             status_code=status.HTTP_200_OK,
             content={
                 "encounter_id": str(existing_enc.id),
+                "encounter_short_id": existing_enc.short_id,
                 "already_existed": True,
             },
         )
@@ -483,7 +486,7 @@ async def start_exam(
         ip_address=request.client.host if request.client else None,
     )
 
-    return {"encounter_id": str(enc.id), "already_existed": False}
+    return {"encounter_id": str(enc.id), "encounter_short_id": enc.short_id, "already_existed": False}
 
 
 # ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.api.resolvers import resolve_patient_id
 from backend.core.audit import log_action
 from backend.core.config import settings
 from backend.core.permissions import ClinicalAction, require_permission
@@ -92,6 +93,7 @@ def _build_patient_response(patient: Patient) -> PatientResponse:
 
     return PatientResponse(
         id=patient.id,
+        chart_number=patient.chart_number,
         first_name=patient.first_name,
         last_name=patient.last_name,
         preferred_name=patient.preferred_name,
@@ -112,6 +114,7 @@ def _build_patient_summary(patient: Patient, last_visit: date | None = None) -> 
     contact = patient.contact_info_jsonb or {}
     return PatientSummary(
         id=patient.id,
+        chart_number=patient.chart_number,
         first_name=patient.first_name,
         last_name=patient.last_name,
         preferred_name=patient.preferred_name,
@@ -132,13 +135,13 @@ def _build_patient_summary(patient: Patient, last_visit: date | None = None) -> 
 @router.get("/", response_model=PatientListResponse)
 async def list_patients(
     request: Request,
-    search: str | None = Query(None, max_length=200, description="Search first/last name"),
+    search: str | None = Query(None, max_length=200, description="Search name, phone, or email"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
-    """List patients with optional name search."""
+    """List patients with optional search (name, phone, email)."""
 
     base = select(Patient).where(
         Patient.tenant_id == ctx.tenant_id,
@@ -151,6 +154,9 @@ async def list_patients(
             or_(
                 Patient.first_name.ilike(search_term),
                 Patient.last_name.ilike(search_term),
+                Patient.preferred_name.ilike(search_term),
+                Patient.contact_info_jsonb["phone"].astext.ilike(search_term),
+                Patient.contact_info_jsonb["email"].astext.ilike(search_term),
             )
         )
 
@@ -246,12 +252,13 @@ async def create_patient(
 
 @router.get("/{patient_id}", response_model=PatientResponse)
 async def get_patient(
-    patient_id: UUID,
+    patient_id: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
     """Get full patient detail (demographics, contact, insurance, alerts)."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     patient = (
         await db.execute(
             select(Patient).where(
@@ -282,13 +289,14 @@ async def get_patient(
 
 @router.patch("/{patient_id}", response_model=PatientResponse)
 async def update_patient(
-    patient_id: UUID,
+    patient_id: str,
     payload: PatientUpdateRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
     """Update patient demographics, contact, or insurance info."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     staff = await resolve_staff(ctx, db)
 
     patient = (
@@ -355,12 +363,13 @@ async def update_patient(
 
 @router.delete("/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_patient(
-    patient_id: UUID,
+    patient_id: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-delete a patient record."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     staff = await resolve_staff(ctx, db)
 
     patient = (
@@ -396,7 +405,7 @@ async def delete_patient(
 
 @router.get("/{patient_id}/encounters", response_model=list[PatientEncounterSummary])
 async def list_patient_encounters(
-    patient_id: UUID,
+    patient_id: str,
     request: Request,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -404,6 +413,7 @@ async def list_patient_encounters(
     db: AsyncSession = Depends(get_db),
 ):
     """List encounters for a patient in reverse chronological order."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     # Verify patient exists and belongs to tenant
     patient = (
         await db.execute(
@@ -440,6 +450,7 @@ async def list_patient_encounters(
     return [
         PatientEncounterSummary(
             id=enc.id,
+            short_id=enc.short_id,
             encounter_date=enc.encounter_date,
             provider_id=enc.provider_id,
             provider_name=enc.provider.full_name if enc.provider else None,
@@ -461,13 +472,14 @@ async def list_patient_encounters(
 
 @router.get("/{patient_id}/flowsheet", response_model=list[FlowsheetRow])
 async def get_patient_flowsheet(
-    patient_id: UUID,
+    patient_id: str,
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
     """Get IOP and refraction data across visits for clinical flowsheets."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     # Verify patient
     patient = (
         await db.execute(
@@ -539,12 +551,13 @@ async def get_patient_flowsheet(
 
 @router.post("/{patient_id}/prep-me", response_model=PrepMeResponse)
 async def prep_me(
-    patient_id: UUID,
+    patient_id: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a 2-sentence AI clinical summary from the last 3 finalized SOAP notes."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
 
     if not settings.ANTHROPIC_API_KEY:
         raise HTTPException(
@@ -604,24 +617,29 @@ async def prep_me(
 
     client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-    message = client.messages.create(
-        model="claude-sonnet-4-6-20250514",
-        max_tokens=300,
-        system=(
-            "You are a clinical decision support assistant for optometry. "
-            "Given the patient's recent SOAP notes, produce EXACTLY 2 sentences "
-            "summarizing the key clinical context a doctor needs before seeing "
-            "this patient. Focus on: active conditions, trending measurements "
-            "(IOP, Rx changes), and any pending follow-ups. "
-            "Be concise and clinically precise. No headers or formatting."
-        ),
-        messages=[{
-            "role": "user",
-            "content": f"Patient: {patient.full_name}, DOB: {patient.dob}\n\n{combined_notes}",
-        }],
-    )
-
-    summary_text = message.content[0].text.strip()
+    try:
+        message = client.messages.create(
+            model="claude-sonnet-4-6-20250514",
+            max_tokens=300,
+            system=(
+                "You are a clinical decision support assistant for optometry. "
+                "Given the patient's recent SOAP notes, produce EXACTLY 2 sentences "
+                "summarizing the key clinical context a doctor needs before seeing "
+                "this patient. Focus on: active conditions, trending measurements "
+                "(IOP, Rx changes), and any pending follow-ups. "
+                "Be concise and clinically precise. No headers or formatting."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"Patient chart notes:\n\n{combined_notes}",
+            }],
+        )
+        summary_text = message.content[0].text.strip()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI service error: {e}",
+        )
 
     # Audit log
     staff = await resolve_staff(ctx, db)

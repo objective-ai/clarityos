@@ -6,6 +6,7 @@ import type { PatientAlert } from "@/types/session";
 
 export interface PatientDetail {
   id: string;
+  chartNumber: number;
   firstName: string;
   lastName: string;
   preferredName?: string | null;
@@ -38,6 +39,7 @@ export interface PatientDetail {
 
 export interface PatientSummary {
   id: string;
+  chartNumber: number;
   firstName: string;
   lastName: string;
   preferredName?: string | null;
@@ -91,6 +93,7 @@ export type PatientUpdatePayload = Partial<PatientCreatePayload>;
 
 export interface PatientEncounterSummary {
   id: string;
+  shortId: string;
   encounterDate: string;
   providerId: string;
   providerName?: string | null;

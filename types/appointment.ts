@@ -42,8 +42,10 @@ export interface Appointment {
   cancellationReason: string | null;
   reminderSentAt: string | null;
   patientName: string | null;
+  patientChartNumber: number | null;
   providerName: string | null;
   encounterId: string | null;
+  encounterShortId: string | null;
   intakeStatus: "pending" | "submitted" | null;
   triageFlags: {
     urgency: string;
@@ -90,6 +92,7 @@ export interface AppointmentReschedulePayload {
 
 export interface StartExamResponse {
   encounterId: string;
+  encounterShortId: string;
   alreadyExisted: boolean;
 }
 

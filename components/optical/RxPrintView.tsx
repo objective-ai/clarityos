@@ -10,7 +10,9 @@ import type { RxPdfData } from "@/types/optical";
 
 function formatRxValue(val: number | null): string {
   if (val == null) return "--";
-  return val >= 0 ? `+${val.toFixed(2)}` : val.toFixed(2);
+  const v = Number(val);
+  if (isNaN(v)) return "--";
+  return v >= 0 ? `+${v.toFixed(2)}` : v.toFixed(2);
 }
 
 function formatAxis(axis: number | null): string {
@@ -20,11 +22,11 @@ function formatAxis(axis: number | null): string {
 
 function formatPd(data: RxPdfData): string {
   if (data.pdOd != null && data.pdOs != null) {
-    return `OD: ${data.pdOd.toFixed(1)} mm / OS: ${data.pdOs.toFixed(1)} mm`;
+    return `OD: ${Number(data.pdOd).toFixed(1)} mm / OS: ${Number(data.pdOs).toFixed(1)} mm`;
   }
   if (data.pdDistance != null) {
-    const near = data.pdNear != null ? ` / Near: ${data.pdNear.toFixed(1)} mm` : "";
-    return `Distance: ${data.pdDistance.toFixed(1)} mm${near}`;
+    const near = data.pdNear != null ? ` / Near: ${Number(data.pdNear).toFixed(1)} mm` : "";
+    return `Distance: ${Number(data.pdDistance).toFixed(1)} mm${near}`;
   }
   return "Not recorded";
 }
@@ -54,7 +56,27 @@ export function RxPrintView() {
   const isPrintPreviewOpen = useOpticalStore((s) => s.isPrintPreviewOpen);
   const closePrintPreview = useOpticalStore((s) => s.closePrintPreview);
 
-  if (!isPrintPreviewOpen || !rxPdfData) return null;
+  if (!isPrintPreviewOpen) return null;
+
+  if (!rxPdfData) {
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-50 print:hidden"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={closePrintPreview}
+        />
+        <div className="fixed inset-4 z-50 flex items-center justify-center">
+          <div className="glass-card p-8 text-center">
+            <p className="text-[var(--text-secondary)] mb-4">No prescription data available for this encounter.</p>
+            <Button variant="outline" size="sm" onClick={closePrintPreview}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   const data = rxPdfData;
 

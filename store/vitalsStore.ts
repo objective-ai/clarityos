@@ -214,7 +214,10 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
             false,
             "loadVitals/loaded"
           );
-        } catch {
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          // 404 means no vitals recorded yet — use blank draft (not an error)
+          const isNotFound = msg.includes("not found") || msg.includes("404");
           set(
             (state) => {
               const enc = state.encounters[encounterId];
@@ -224,14 +227,14 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
                   ...state.encounters,
                   [encounterId]: {
                     ...enc,
-                    saveStatus: "error" as VitalsSaveStatus,
-                    errors: [{ field: "_load", message: "Could not load vitals" }],
+                    saveStatus: isNotFound ? ("idle" as VitalsSaveStatus) : ("error" as VitalsSaveStatus),
+                    errors: isNotFound ? [] : [{ field: "_load", message: "Could not load vitals" }],
                   },
                 },
               };
             },
             false,
-            "loadVitals/error"
+            isNotFound ? "loadVitals/not-found" : "loadVitals/error"
           );
         }
       },

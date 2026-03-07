@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext
@@ -26,13 +27,14 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
 )
 async def promote_problem_to_diagnosis(
-    encounter_id: UUID,
+    encounter_id: str,
     problem_id: UUID,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.PROMOTE_PROBLEM)),
     db: AsyncSession = Depends(get_db),
 ):
     """Copy a master problem into an encounter as a diagnosis (copy-on-promotion)."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     # Verify encounter
     enc = (
         await db.execute(

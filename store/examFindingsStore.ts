@@ -209,22 +209,43 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
             "loadFindings/loaded"
           );
         } catch (err) {
-          set(
-            (state) => ({
-              findings: {
-                ...state.findings,
-                [key]: {
-                  draft: state.findings[key]?.draft ?? blankDraft(section),
-                  committed: state.findings[key]?.committed ?? null,
-                  saveStatus: "error" as FindingsSaveStatus,
-                  errors: [{ field: "_load", message: err instanceof Error ? err.message : "Could not load exam findings" }],
-                  lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
+          const msg = err instanceof Error ? err.message : "";
+          // 404 means no findings saved yet — initialize with blank draft (not an error)
+          if (msg.includes("not found") || msg.includes("404")) {
+            set(
+              (state) => ({
+                findings: {
+                  ...state.findings,
+                  [key]: {
+                    draft: state.findings[key]?.draft ?? blankDraft(section),
+                    committed: null,
+                    saveStatus: "idle" as FindingsSaveStatus,
+                    errors: [],
+                    lastSavedAt: null,
+                  },
                 },
-              },
-            }),
-            false,
-            "loadFindings/error"
-          );
+              }),
+              false,
+              "loadFindings/not-found"
+            );
+          } else {
+            set(
+              (state) => ({
+                findings: {
+                  ...state.findings,
+                  [key]: {
+                    draft: state.findings[key]?.draft ?? blankDraft(section),
+                    committed: state.findings[key]?.committed ?? null,
+                    saveStatus: "error" as FindingsSaveStatus,
+                    errors: [{ field: "_load", message: msg || "Could not load exam findings" }],
+                    lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
+                  },
+                },
+              }),
+              false,
+              "loadFindings/error"
+            );
+          }
         }
       },
 

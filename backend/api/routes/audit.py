@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext
 from backend.db.models.tenant.clinical import AuditLog, Encounter, Staff
@@ -57,11 +58,12 @@ def _row_to_response(row: AuditLog, staff_name: str | None = None) -> AuditLogRe
     response_model=list[AuditLogResponse],
 )
 async def get_encounter_audit_logs(
-    encounter_id: UUID,
+    encounter_id: str,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_AUDIT_LOG)),
     db: AsyncSession = Depends(get_db),
 ):
     """Return all audit log entries for a specific encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
 
     # Verify encounter belongs to tenant
     enc = (

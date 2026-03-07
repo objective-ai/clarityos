@@ -25,6 +25,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
@@ -251,13 +252,14 @@ async def get_optical_queue(
 
 @router.get("/{encounter_id}/rx", response_model=RxPdfData)
 async def get_rx_pdf_data(
-    encounter_id: UUID,
+    encounter_id: str,
     request: Request,
     expiration_months: int = Query(12, ge=6, le=24, description="Rx validity in months"),
     db: AsyncSession = Depends(get_db),
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_OPTICAL)),
 ):
     """Return all data needed to render a printable Rx prescription."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     stmt = (
         select(Encounter)
         .where(
@@ -344,13 +346,14 @@ async def get_rx_pdf_data(
 
 @router.patch("/{encounter_id}/status", response_model=OpticalStatusUpdateResponse)
 async def update_optical_status(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: OpticalStatusUpdateRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantContext = Depends(require_permission(ClinicalAction.UPDATE_OPTICAL_STATUS)),
 ):
     """Update the optical workflow status for an encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     # Verify encounter exists and is finalized
     enc = (
         await db.execute(

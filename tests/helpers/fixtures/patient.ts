@@ -12,6 +12,7 @@ export function makePatientSummary(
 ): PatientSummary {
   return {
     id: "pat-1",
+    chartNumber: 10001,
     firstName: "Jane",
     lastName: "Doe",
     dob: "1990-05-15",
@@ -28,6 +29,7 @@ export function makePatientDetail(
 ): PatientDetail {
   return {
     id: "pat-1",
+    chartNumber: 10001,
     firstName: "Jane",
     lastName: "Doe",
     dob: "1990-05-15",
@@ -54,6 +56,7 @@ export function makeEncounterSummary(
 ): PatientEncounterSummary {
   return {
     id: "enc-1",
+    shortId: "abc12345",
     encounterDate: "2026-03-01",
     providerId: "prov-1",
     providerName: "Dr. Smith",

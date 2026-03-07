@@ -104,7 +104,7 @@ class LineItemResponse(AppBaseModel):
     superbill_id: uuid.UUID
     cpt_code: str
     description: str
-    fee: Decimal
+    fee: float
     units: int
     diagnosis_pointers: list[str]
     modifiers: list[str]
@@ -178,7 +178,7 @@ class SuperbillResponse(AppBaseModel):
     mdm_level: str | None = None
     mdm_reasoning: str | None = None
     suggested_em_code: str | None = None
-    total_fee: Decimal
+    total_fee: float
     notes: str | None = None
     created_by_id: uuid.UUID | None = None
     line_items: list[LineItemResponse] = Field(default_factory=list)

@@ -23,9 +23,11 @@ export function makeAppointment(
     cancellationReason: null,
     reminderSentAt: null,
     encounterId: null,
+    encounterShortId: null,
     intakeStatus: null,
     triageFlags: null,
     patientName: "Jane Doe",
+    patientChartNumber: 10001,
     providerName: "Dr. Smith",
     createdAt: "2026-03-05T10:00:00Z",
     updatedAt: "2026-03-05T10:00:00Z",
@@ -45,6 +47,7 @@ export function makeStartExamResponse(
 ): StartExamResponse {
   return {
     encounterId: "enc-1",
+    encounterShortId: "abc12345",
     alreadyExisted: false,
     ...overrides,
   };

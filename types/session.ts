@@ -82,6 +82,7 @@ export interface JwtPayload {
 
 export interface TenantSession {
   tenantId: string;
+  tenantSlug: string;
   schemaName: string;
   clinicName: string;
   planName: PlanName;
@@ -128,6 +129,7 @@ export interface PatientAlert {
 
 export interface PatientHeaderData {
   id: string;
+  chartNumber?: number;
   firstName: string;
   lastName: string;
   preferredName?: string | null;

@@ -276,14 +276,14 @@ export function FinalizeModal({
                     className="flex items-center gap-2 text-sm"
                   >
                     <Badge variant="secondary" className="text-[10px] font-mono flex-shrink-0">
-                      {dx.icd10_code}
+                      {dx.icd10Code}
                     </Badge>
                     <span style={{ color: "var(--text-primary)" }}>
                       {dx.description}
                     </span>
-                    {dx.eye_affected && (
+                    {dx.eyeAffected && (
                       <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                        {dx.eye_affected}
+                        {dx.eyeAffected}
                       </Badge>
                     )}
                   </div>

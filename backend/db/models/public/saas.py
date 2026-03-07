@@ -12,13 +12,20 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum,
+    Enum as _Enum,
     ForeignKey,
     Integer,
     String,
     Text,
     func,
 )
+
+
+def Enum(enum_class, **kw):
+    """Wrapper that forces SQLAlchemy to use enum .value (lowercase) instead of .name (uppercase).
+    Uses native_enum=False to store as VARCHAR, avoiding missing PostgreSQL enum type errors."""
+    kw.setdefault("native_enum", False)
+    return _Enum(enum_class, values_callable=lambda e: [x.value for x in e], **kw)
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,6 +73,7 @@ class Tenant(TimestampMixin, PublicBase):
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     schema_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     status: Mapped[TenantStatus] = mapped_column(
         Enum(TenantStatus, name="tenant_status", create_type=False),

@@ -247,8 +247,10 @@ class AppointmentResponse(AppBaseModel):
 
     # Joined display fields
     patient_name: str | None = None
+    patient_chart_number: int | None = None
     provider_name: str | None = None
     encounter_id: uuid.UUID | None = None
+    encounter_short_id: str | None = None
 
     # Intake (Phase 7)
     intake_status: str | None = None

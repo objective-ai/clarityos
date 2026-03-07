@@ -8,12 +8,16 @@ Promotion endpoint copies a problem into an encounter's diagnoses.
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.security import TenantContext, get_current_tenant
+from backend.api.resolvers import resolve_patient_id
+from backend.core.audit import log_action
+from backend.core.permissions import ClinicalAction, require_permission
+from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import (
+    AuditAction,
     Diagnosis,
     Encounter,
     Patient,
@@ -39,11 +43,12 @@ router = APIRouter()
     response_model=list[PatientProblemResponse],
 )
 async def list_problems(
-    patient_id: UUID,
-    ctx: TenantContext = Depends(get_current_tenant),
+    patient_id: str,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_DIAGNOSIS)),
     db: AsyncSession = Depends(get_db),
 ):
     """List active (non-deleted) problems for a patient."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     stmt = (
         select(PatientProblem)
         .where(
@@ -68,12 +73,14 @@ async def list_problems(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_problem(
-    patient_id: UUID,
+    patient_id: str,
     payload: PatientProblemCreate,
-    ctx: TenantContext = Depends(get_current_tenant),
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_DIAGNOSIS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Add a problem to the master problem list."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     # Verify patient belongs to tenant
     patient = (
         await db.execute(
@@ -101,6 +108,14 @@ async def create_problem(
     )
     db.add(problem)
     await db.flush()
+    staff = await resolve_staff(ctx, db)
+    await log_action(
+        db, ctx, AuditAction.CREATE, "problem", problem.id,
+        staff_id=staff.id if staff else None,
+        patient_id=patient_id,
+        detail=f"Added problem {payload.icd10_code}",
+        ip_address=request.client.host if request.client else None,
+    )
     await db.refresh(problem)
     return problem
 
@@ -115,13 +130,15 @@ async def create_problem(
     response_model=PatientProblemResponse,
 )
 async def update_problem(
-    patient_id: UUID,
+    patient_id: str,
     problem_id: UUID,
     payload: PatientProblemUpdate,
-    ctx: TenantContext = Depends(get_current_tenant),
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_DIAGNOSIS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a problem (status, severity, notes, resolved_date, etc.)."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     problem = (
         await db.execute(
             select(PatientProblem).where(
@@ -140,6 +157,14 @@ async def update_problem(
         setattr(problem, field, value)
 
     await db.flush()
+    staff = await resolve_staff(ctx, db)
+    await log_action(
+        db, ctx, AuditAction.UPDATE, "problem", problem.id,
+        staff_id=staff.id if staff else None,
+        patient_id=patient_id,
+        detail=f"Updated problem {problem.icd10_code}",
+        ip_address=request.client.host if request.client else None,
+    )
     await db.refresh(problem)
     return problem
 
@@ -154,12 +179,14 @@ async def update_problem(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_problem(
-    patient_id: UUID,
+    patient_id: str,
     problem_id: UUID,
-    ctx: TenantContext = Depends(get_current_tenant),
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.DELETE_DIAGNOSIS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-delete a problem from the master list."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     problem = (
         await db.execute(
             select(PatientProblem).where(
@@ -176,4 +203,12 @@ async def delete_problem(
 
     problem.is_deleted = True
     problem.deleted_at = datetime.now(timezone.utc)
+    staff = await resolve_staff(ctx, db)
+    await log_action(
+        db, ctx, AuditAction.DELETE, "problem", problem.id,
+        staff_id=staff.id if staff else None,
+        patient_id=patient_id,
+        detail=f"Soft-deleted problem {problem.icd10_code}",
+        ip_address=request.client.host if request.client else None,
+    )
     await db.flush()

@@ -11,9 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
-from backend.core.security import TenantContext
+from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import AuditAction, Diagnosis, Encounter
 from backend.db.session import get_db
 from backend.schemas.diagnosis import (
@@ -25,19 +26,63 @@ from backend.schemas.diagnosis import (
 router = APIRouter()
 
 
+@router.get(
+    "/{encounter_id}/diagnoses",
+    response_model=list[DiagnosisResponse],
+)
+async def list_diagnoses(
+    encounter_id: str,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_ENCOUNTER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all active diagnoses for an encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
+    enc = (
+        await db.execute(
+            select(Encounter).where(
+                Encounter.id == encounter_id,
+                Encounter.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not enc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+
+    rows = (
+        await db.execute(
+            select(Diagnosis).where(
+                Diagnosis.encounter_id == encounter_id,
+                Diagnosis.tenant_id == ctx.tenant_id,
+                Diagnosis.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalars().all()
+
+    await log_action(
+        db, ctx, AuditAction.READ, "diagnosis", enc.id,
+        encounter_id=encounter_id,
+        patient_id=enc.patient_id,
+        detail=f"Listed {len(rows)} diagnoses",
+        ip_address=request.client.host if request.client else None,
+    )
+    return rows
+
+
 @router.post(
     "/{encounter_id}/diagnoses",
     response_model=DiagnosisResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_diagnosis(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: DiagnosisCreateRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_DIAGNOSIS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Add a diagnosis to an encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     enc = (
         await db.execute(
             select(Encounter).where(
@@ -52,6 +97,7 @@ async def create_diagnosis(
     if enc.is_finalized:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Encounter is finalized")
 
+    staff = await resolve_staff(ctx, db)
     dx = Diagnosis(
         tenant_id=ctx.tenant_id,
         encounter_id=encounter_id,
@@ -61,6 +107,7 @@ async def create_diagnosis(
         severity=payload.severity,
         status=payload.status,
         notes=payload.notes,
+        recorded_by_id=staff.id if staff else None,
     )
     db.add(dx)
     await db.flush()
@@ -80,7 +127,7 @@ async def create_diagnosis(
     response_model=DiagnosisResponse,
 )
 async def update_diagnosis(
-    encounter_id: UUID,
+    encounter_id: str,
     diagnosis_id: UUID,
     payload: DiagnosisUpdateRequest,
     request: Request,
@@ -88,6 +135,7 @@ async def update_diagnosis(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a diagnosis on an encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     enc = (
         await db.execute(
             select(Encounter).where(
@@ -116,8 +164,10 @@ async def update_diagnosis(
     if not dx:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Diagnosis not found")
 
+    staff = await resolve_staff(ctx, db)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(dx, field, value)
+    dx.recorded_by_id = staff.id if staff else None
 
     await db.flush()
     await log_action(
@@ -136,13 +186,14 @@ async def update_diagnosis(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_diagnosis(
-    encounter_id: UUID,
+    encounter_id: str,
     diagnosis_id: UUID,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.DELETE_DIAGNOSIS)),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a diagnosis from an encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     enc = (
         await db.execute(
             select(Encounter).where(

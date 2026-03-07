@@ -357,16 +357,12 @@ const RxCell = memo(function RxCell({
             ? "rgba(248, 113, 113, 0.5)"
             : isFocused
             ? COL_ACCENT_FOCUS[colIndex]
-            : hasValue
-            ? COL_ACCENT_BORDER[colIndex]
-            : "var(--border-subtle)",
+            : COL_ACCENT_BORDER[colIndex],
           background: hasError
             ? "rgba(248, 113, 113, 0.06)"
             : isFocused
             ? `rgba(255, 255, 255, 0.04)`
-            : hasValue
-            ? COL_ACCENT[colIndex]
-            : "transparent",
+            : COL_ACCENT[colIndex],
           color: hasError
             ? "var(--state-critical)"
             : hasValue
@@ -649,11 +645,6 @@ export function RefractionGrid({
                           className="align-middle"
                           style={{
                             padding: "4px 6px",
-                            background: focused
-                              ? `${COL_ACCENT[colIndex]}`
-                              : "transparent",
-                            borderRadius: "4px",
-                            transition: "background 120ms ease",
                           }}
                           role="gridcell"
                         >

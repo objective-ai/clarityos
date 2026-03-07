@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
@@ -291,6 +292,7 @@ def _build_superbill_response(
                 updated_at=li.updated_at,
             )
             for li in (sb.line_items or [])
+            if not li.is_deleted
         ],
         warnings=warnings or [],
         created_at=sb.created_at,
@@ -358,7 +360,7 @@ def _suggest_line_items(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_superbill(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: SuperbillCreateRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_BILLING)),
@@ -369,6 +371,7 @@ async def create_superbill(
     Auto-populates with suggested CPT codes if no line items provided.
     Calculates MDM complexity and suggests E&M code.
     """
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     # Verify encounter exists and is finalized
     enc = (
         await db.execute(
@@ -484,13 +487,17 @@ async def create_superbill(
         ip_address=request.client.host if request.client else None,
     )
 
+    # Capture diagnoses before commit expires relationships
+    diagnoses_snapshot = list(enc.diagnoses)
+
     await db.commit()
 
     # Reload with line items
     await db.refresh(sb, attribute_names=["line_items"])
 
     # Validate pointers
-    warnings = validate_cpt_icd_pointers(list(sb.line_items), list(enc.diagnoses))
+    active_items = [li for li in sb.line_items if not li.is_deleted]
+    warnings = validate_cpt_icd_pointers(active_items, diagnoses_snapshot)
 
     return _build_superbill_response(sb, warnings)
 
@@ -502,12 +509,13 @@ async def create_superbill(
 
 @router.get("/{encounter_id}/superbill", response_model=SuperbillResponse)
 async def get_superbill(
-    encounter_id: UUID,
+    encounter_id: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_BILLING)),
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve the superbill for an encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     stmt = (
         select(Superbill)
         .where(
@@ -532,7 +540,8 @@ async def get_superbill(
 
     warnings = []
     if enc:
-        warnings = validate_cpt_icd_pointers(list(sb.line_items), list(enc.diagnoses))
+        active_items = [li for li in sb.line_items if not li.is_deleted]
+        warnings = validate_cpt_icd_pointers(active_items, list(enc.diagnoses))
 
     await log_action(
         db, ctx, AuditAction.READ, "superbill", sb.id,
@@ -552,13 +561,14 @@ async def get_superbill(
 
 @router.patch("/{encounter_id}/superbill", response_model=SuperbillResponse)
 async def update_superbill(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: SuperbillUpdateRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_BILLING)),
     db: AsyncSession = Depends(get_db),
 ):
     """Update superbill status or notes."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     sb = (
         await db.execute(
             select(Superbill)
@@ -607,13 +617,14 @@ async def update_superbill(
     status_code=status.HTTP_201_CREATED,
 )
 async def add_line_item(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: LineItemCreateRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_BILLING)),
     db: AsyncSession = Depends(get_db),
 ):
     """Add a CPT line item to an existing superbill."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     sb = (
         await db.execute(
             select(Superbill).where(
@@ -677,13 +688,14 @@ async def add_line_item(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_line_item(
-    encounter_id: UUID,
+    encounter_id: str,
     item_id: UUID,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_BILLING)),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a CPT line item from a superbill."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     sb = (
         await db.execute(
             select(Superbill).where(
@@ -701,6 +713,7 @@ async def delete_line_item(
             select(SuperbillLineItem).where(
                 SuperbillLineItem.id == item_id,
                 SuperbillLineItem.superbill_id == sb.id,
+                SuperbillLineItem.is_deleted == False,  # noqa: E712
             )
         )
     ).scalar_one_or_none()
@@ -721,7 +734,8 @@ async def delete_line_item(
         ip_address=request.client.host if request.client else None,
     )
 
-    await db.delete(li)
+    li.is_deleted = True
+    li.deleted_at = datetime.now(timezone.utc)
     await db.commit()
 
 
@@ -732,12 +746,13 @@ async def delete_line_item(
 
 @router.get("/{encounter_id}/superbill/mdm", response_model=MdmCalculationResult)
 async def get_mdm_calculation(
-    encounter_id: UUID,
+    encounter_id: str,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_BILLING)),
     db: AsyncSession = Depends(get_db),
 ):
     """Calculate MDM complexity for an encounter (does not persist)."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
     enc = (
         await db.execute(
             select(Encounter)

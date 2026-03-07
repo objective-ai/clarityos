@@ -127,6 +127,16 @@ export function AuditTrailSidebar({ encounterId, isOpen, onClose, isReadOnly = f
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -161,7 +171,10 @@ export function AuditTrailSidebar({ encounterId, isOpen, onClose, isReadOnly = f
           background: "var(--bg-elevated)",
           borderLeft: "1px solid var(--border-default)",
           transform: isOpen ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 250ms var(--ease-out-expo)",
+          visibility: isOpen ? "visible" : "hidden",
+          transition: isOpen
+            ? "transform 250ms var(--ease-out-expo), visibility 0ms"
+            : "transform 250ms var(--ease-out-expo), visibility 0ms 250ms",
         }}
       >
         {/* Header */}

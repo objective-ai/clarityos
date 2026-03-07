@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.config import settings
 from backend.core.permissions import ClinicalAction, require_permission
@@ -128,13 +129,14 @@ Rules:
 
 @router.post("/{encounter_id}/ai-scribe")
 async def generate_ai_scribe(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: AiScribeRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.GENERATE_AI_SCRIBE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Stream an AI-generated SOAP note + structured JSON from a clinical transcript."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
 
     # ── Validate API key ───────────────────────────────────────────────
     if not settings.ANTHROPIC_API_KEY:
@@ -217,13 +219,14 @@ async def generate_ai_scribe(
 
 @router.post("/{encounter_id}/ai-scribe/accept", status_code=status.HTTP_201_CREATED)
 async def accept_ai_scribe(
-    encounter_id: UUID,
+    encounter_id: str,
     payload: AiScribeAcceptRequest,
     request: Request,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.GENERATE_AI_SCRIBE)),
     db: AsyncSession = Depends(get_db),
 ):
     """Log that the doctor accepted AI auto-fill for this encounter."""
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
 
     enc = (
         await db.execute(
