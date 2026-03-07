@@ -13,6 +13,7 @@ import type {
   PlanName,
   StaffRole,
 } from "@/types/session";
+import { PLAN_FEATURES } from "@/lib/entitlements";
 
 /**
  * Build avatar initials from a name or email.
@@ -52,11 +53,25 @@ export function hydrateFromSupabaseSession(session: Session): AppSession {
   const userMeta = user.user_metadata ?? {};
 
   const fullName: string =
-    userMeta.full_name ?? userMeta.name ?? meta.full_name ?? user.email ?? "";
+    userMeta.full_name || userMeta.name || meta.full_name || user.email || "";
   const email: string = user.email ?? "";
 
   const role: StaffRole = meta.role ?? "doctor";
-  const entitlements: EntitlementKey[] = meta.entitlements ?? [];
+  const planName = (meta.plan_name ?? "Core") as PlanName;
+
+  // If the JWT hook doesn't inject entitlements, derive from plan name
+  const rawEntitlements: EntitlementKey[] = meta.entitlements ?? [];
+  const entitlements: EntitlementKey[] =
+    rawEntitlements.length > 0
+      ? rawEntitlements
+      : (PLAN_FEATURES[planName] ?? []);
+
+  // Fail loudly if tenant claims are missing — JWT hook must be enabled
+  if (!meta.tenant_id || !meta.tenant_slug || !meta.schema_name) {
+    throw new Error(
+      "Missing tenant claims in JWT. Ensure custom_access_token_hook is enabled in Supabase Dashboard."
+    );
+  }
 
   return {
     user: {
@@ -70,10 +85,11 @@ export function hydrateFromSupabaseSession(session: Session): AppSession {
       avatarInitials: buildInitials(fullName, email),
     },
     tenant: {
-      tenantId: meta.tenant_id ?? "demo-clinic",
-      schemaName: meta.schema_name ?? "public",
-      clinicName: meta.clinic_name ?? "ClarityOS Clinic",
-      planName: (meta.plan_name ?? "Core") as PlanName,
+      tenantId: meta.tenant_id,
+      tenantSlug: meta.tenant_slug,
+      schemaName: meta.schema_name,
+      clinicName: meta.clinic_name ?? meta.tenant_slug,
+      planName,
       entitlements: new Set(entitlements),
     },
     accessToken: session.access_token,

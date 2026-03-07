@@ -29,21 +29,25 @@ function LoginForm() {
 
     try {
       const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) {
+      if (authError || !data.session) {
         setError("Invalid email or password");
         setIsLoading(false);
         return;
       }
 
-      // Get tenant from session for direct dashboard redirect
-      const { data: { session: newSession } } = await supabase.auth.getSession();
-      const tenantId = newSession?.user?.app_metadata?.tenant_id ?? "demo-clinic";
-      const destination = returnTo ?? `/${tenantId}/dashboard`;
+      // Use the session from the login response directly (not getSession which may be stale)
+      const tenantSlug = data.session.user?.app_metadata?.tenant_slug;
+      if (!tenantSlug) {
+        setError("Account not linked to a clinic. Contact your admin.");
+        setIsLoading(false);
+        return;
+      }
+      const destination = returnTo ?? `/${tenantSlug}/dashboard`;
 
       // Full page load ensures middleware sees the new auth cookie
       window.location.href = destination;

@@ -13,7 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Refreshes the Supabase auth session and protects tenant routes.
  *
  * - Unauthenticated requests to tenant routes redirect to /login?returnTo=...
- * - Authenticated requests to /login redirect to /{tenantId}/dashboard
+ * - Authenticated requests to /login redirect to /{tenantSlug}/dashboard
  * - All other requests pass through with refreshed cookies
  */
 export async function updateSession(request: NextRequest) {
@@ -67,12 +67,14 @@ export async function updateSession(request: NextRequest) {
 
   // If authenticated and visiting /login, redirect to dashboard
   if (user && pathname === "/login") {
-    const tenantId =
-      user.app_metadata?.tenant_id ?? "demo-clinic";
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = `/${tenantId}/dashboard`;
-    dashboardUrl.search = "";
-    return NextResponse.redirect(dashboardUrl);
+    const tenantSlug = user.app_metadata?.tenant_slug;
+    if (tenantSlug) {
+      const dashboardUrl = request.nextUrl.clone();
+      dashboardUrl.pathname = `/${tenantSlug}/dashboard`;
+      dashboardUrl.search = "";
+      return NextResponse.redirect(dashboardUrl);
+    }
+    // Missing tenant_slug — let them through; AuthProvider will surface the error
   }
 
   return supabaseResponse;
