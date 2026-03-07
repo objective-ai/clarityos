@@ -18,7 +18,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
-    Enum,
+    Enum as _Enum,
     ForeignKey,
     Index,
     Integer,
@@ -28,6 +28,13 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+
+
+def Enum(enum_class, **kw):
+    """Wrapper that forces SQLAlchemy to use enum .value (lowercase) instead of .name (uppercase).
+    Uses native_enum=False to store as VARCHAR, avoiding missing PostgreSQL enum type errors."""
+    kw.setdefault("native_enum", False)
+    return _Enum(enum_class, values_callable=lambda e: [x.value for x in e], **kw)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -127,8 +134,10 @@ class AuditAction(str, enum.Enum):
     PHI_VIEWED = "phi_viewed"
     # Scheduling actions (added in Phase 3 — migration 0002_appointments)
     CHECK_IN = "check_in"
+    REVERT_CHECK_IN = "revert_check_in"
     START_EXAM = "start_exam"
     CANCEL_APPOINTMENT = "cancel_appointment"
+    RESCHEDULE = "reschedule"
     # Billing actions (added in Phase 4 — migration 0003_billing)
     CREATE_SUPERBILL = "create_superbill"
     UPDATE_SUPERBILL = "update_superbill"
@@ -137,6 +146,9 @@ class AuditAction(str, enum.Enum):
     VIEW_OPTICAL_QUEUE = "view_optical_queue"
     UPDATE_OPTICAL_STATUS = "update_optical_status"
     GENERATE_RX_PDF = "generate_rx_pdf"
+    # Intake actions (added in Phase 7 — patient intake)
+    GENERATE_INTAKE_TOKEN = "generate_intake_token"
+    INTAKE_SUBMITTED = "intake_submitted"
 
 
 # ---------------------------------------------------------------------------
@@ -155,8 +167,8 @@ class Staff(TimestampMixin, TenantBase):
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, index=True
     )
-    global_user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, unique=True, index=True
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, unique=True, index=True
     )
     role: Mapped[StaffRole] = mapped_column(
         Enum(StaffRole, name="staff_role"), nullable=False
@@ -306,6 +318,11 @@ class Appointment(TimestampMixin, TenantBase):
         DateTime(timezone=True), nullable=True
     )
 
+    # Intake (Phase 7) — null = no intake sent, "pending" = link sent, "submitted" = form received
+    intake_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # AI triage results: {urgency: "routine"|"moderate"|"urgent", flags: str[], reasoning: str}
+    triage_flags_jsonb: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # --- Relationships ---
     patient: Mapped["Patient"] = relationship("Patient", back_populates="appointments")
     provider: Mapped["Staff"] = relationship(
@@ -316,6 +333,9 @@ class Appointment(TimestampMixin, TenantBase):
     )
     encounter: Mapped["Encounter | None"] = relationship(
         "Encounter", back_populates="appointment", uselist=False
+    )
+    intake_token: Mapped["IntakeToken | None"] = relationship(  # noqa: F821
+        "IntakeToken", back_populates="appointment", uselist=False
     )
 
     def __repr__(self) -> str:
@@ -706,9 +726,18 @@ class Diagnosis(TimestampMixin, SoftDeleteMixin, TenantBase):
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # --- Relationships ---
     encounter: Mapped["Encounter"] = relationship(
         "Encounter", back_populates="diagnoses"
+    )
+    recorded_by: Mapped["Staff | None"] = relationship(
+        "Staff", foreign_keys=[recorded_by_id]
     )
 
     def __repr__(self) -> str:
@@ -956,7 +985,7 @@ class Superbill(TimestampMixin, TenantBase):
 # ---------------------------------------------------------------------------
 
 
-class SuperbillLineItem(TimestampMixin, TenantBase):
+class SuperbillLineItem(TimestampMixin, SoftDeleteMixin, TenantBase):
     """A single CPT line item on a superbill with diagnosis pointers."""
 
     __tablename__ = "superbill_line_items"

@@ -1,14 +1,27 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import logging
+import traceback
 
-from backend.api.routes import ai_scribe, appointment, audit, billing, diagnosis, encounter, exam_findings, optical, patient, patient_problem, promotion, refraction, staff, vitals
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from backend.api.routes import ai_scribe, appointment, audit, billing, diagnosis, encounter, exam_findings, intake, optical, patient, patient_problem, promotion, refraction, staff, vitals
 from backend.core.config import settings
+
+logger = logging.getLogger("clarityos")
 
 app = FastAPI(
     title="ClarityOS API",
     description="Multi-tenant clinical backend — Supabase Postgres + Auth",
     version="0.1.0",
 )
+
+
+@app.exception_handler(Exception)
+async def _global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    logger.error("Unhandled exception on %s %s:\n%s", request.method, request.url.path, "".join(tb))
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 # ── CORS ──────────────────────────────────────────────────────────────────
 app.add_middleware(
@@ -89,6 +102,16 @@ app.include_router(
     optical.router,
     prefix="/api/optical",
     tags=["Optical"],
+)
+app.include_router(
+    intake.public_router,
+    prefix="/api/public/intake",
+    tags=["Intake (Public)"],
+)
+app.include_router(
+    intake.staff_router,
+    prefix="/api/appointments",
+    tags=["Intake (Staff)"],
 )
 
 
