@@ -104,7 +104,7 @@ async def verify_dob(
     if intake_token.dob_verified:
         patient = (
             await db.execute(
-                select(Patient).where(Patient.id == appt.patient_id)
+                select(Patient).where(Patient.id == appt.patient_id, Patient.tenant_id == ictx.tenant_id)
             )
         ).scalar_one_or_none()
         return _build_dob_success(patient)
@@ -112,7 +112,7 @@ async def verify_dob(
     # Fetch patient to compare DOB
     patient = (
         await db.execute(
-            select(Patient).where(Patient.id == appt.patient_id)
+            select(Patient).where(Patient.id == appt.patient_id, Patient.tenant_id == ictx.tenant_id)
         )
     ).scalar_one_or_none()
 
@@ -180,12 +180,19 @@ async def submit_intake_form(
             detail="Date of birth verification required before submitting.",
         )
 
+    # --- Validate required consents ---
+    if not payload.consent_treat_bill or not payload.consent_privacy_notice:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Consent to treatment/billing and privacy notice acknowledgment are required.",
+        )
+
     appt = intake_token.appointment
 
     # --- Update Patient record ---
     patient = (
         await db.execute(
-            select(Patient).where(Patient.id == appt.patient_id)
+            select(Patient).where(Patient.id == appt.patient_id, Patient.tenant_id == ictx.tenant_id)
         )
     ).scalar_one_or_none()
 
@@ -220,6 +227,20 @@ async def submit_intake_form(
         # Medical history
         if payload.medical_history:
             patient.medical_history_jsonb = payload.medical_history.model_dump()
+
+        # --- Store consent audit trail ---
+        now_iso = datetime.now(timezone.utc).isoformat()
+        ip_address = request.client.host if request.client else None
+        patient.privacy_flags_jsonb = {
+            **(patient.privacy_flags_jsonb or {}),
+            "consent_treat_bill": True,
+            "consent_treat_bill_at": now_iso,
+            "consent_privacy_notice": True,
+            "consent_privacy_notice_at": now_iso,
+            "consent_digital_comm": payload.consent_digital_comm,
+            "consent_digital_comm_at": now_iso if payload.consent_digital_comm else None,
+            "consent_ip": ip_address,
+        }
 
     # --- Update Appointment ---
     appt.chief_complaint = payload.chief_complaint
