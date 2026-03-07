@@ -232,7 +232,7 @@ const channel = supabase
   .channel("appointments")
   .on(
     "postgres_changes",
-    { event: "*", schema: "clinic_sunview1", table: "appointments" },
+    { event: "*", schema: "clinic_sunview", table: "appointments" },
     (payload) => { refetchSlots(); }
   )
   .subscribe();

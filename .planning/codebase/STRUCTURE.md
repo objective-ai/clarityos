@@ -20,7 +20,7 @@ clarityos-erp/
 ├── app/                                DUAL PURPOSE — Next.js pages AND Python backend
 │   │
 │   ├── (tenant)/                       Next.js route group (no URL segment)
-│   │   └── [tenantId]/                 Dynamic route: /demo-clinic/...
+│   │   └── [tenantId]/                 Dynamic route: /sunview/...
 │   │       ├── layout.tsx              Tenant shell (Sidebar + TopNav + PatientStickyHeader)
 │   │       ├── dashboard/
 │   │       │   └── page.tsx            Command center: stat cards + quick nav
@@ -41,7 +41,7 @@ clarityos-erp/
 │   │           └── page.tsx            Logo upload + accent color customization
 │   │
 │   ├── layout.tsx                      Root Next.js layout (fonts + ThemeProvider)
-│   ├── page.tsx                        Root redirect → /demo-clinic/dashboard
+│   ├── page.tsx                        Root redirect → /sunview/dashboard
 │   ├── globals.css                     Design tokens, glass system, animations, utilities
 │   │
 │   ├── __init__.py                     Python package marker
@@ -321,7 +321,7 @@ Every store exports:
 
 | URL Pattern | Page File | Description |
 |------------|-----------|-------------|
-| `/` | `app/page.tsx` | Redirect to `/demo-clinic/dashboard` |
+| `/` | `app/page.tsx` | Redirect to `/sunview/dashboard` |
 | `/:tenantId/dashboard` | `app/(tenant)/[tenantId]/dashboard/page.tsx` | Command center |
 | `/:tenantId/schedule` | `app/(tenant)/[tenantId]/schedule/page.tsx` | Appointment timeline |
 | `/:tenantId/patients` | `app/(tenant)/[tenantId]/patients/page.tsx` | Patient list |
@@ -331,7 +331,7 @@ Every store exports:
 | `/:tenantId/analytics` | `app/(tenant)/[tenantId]/analytics/page.tsx` | Analytics |
 | `/:tenantId/settings` | `app/(tenant)/[tenantId]/settings/page.tsx` | Tenant settings |
 
-**Demo URL**: The hardcoded demo clinic slug is `demo-clinic`, so the default landing URL is `/demo-clinic/dashboard`.
+**Demo URL**: The hardcoded demo clinic slug is `sunview`, so the default landing URL is `/sunview/dashboard`.
 
 ### FastAPI Endpoint Patterns
 

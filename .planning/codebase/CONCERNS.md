@@ -353,7 +353,7 @@ The schedule page is 100% mock data from `lib/mock-schedule-data.ts`. There are 
 **File:** `app/page.tsx`
 
 ```typescript
-redirect("/demo-clinic/dashboard");
+redirect("/sunview/dashboard");
 ```
 
 The application has no authentication entry point. There is no `/login` page, no Supabase Auth UI integration, and no sign-up flow. The root URL goes directly into the demo tenant. Wiring up real auth requires creating the login page, connecting the Supabase Auth SDK, and replacing the mock session initialization in `sessionStore.ts`.
@@ -522,13 +522,13 @@ No security headers (`X-Frame-Options`, `Content-Security-Policy`, `Strict-Trans
 
 ---
 
-### [LOW] `app/page.tsx` hardcodes `/demo-clinic/dashboard` as the redirect target
+### [LOW] `app/page.tsx` hardcodes `/sunview/dashboard` as the redirect target
 
 ```typescript
-redirect("/demo-clinic/dashboard");
+redirect("/sunview/dashboard");
 ```
 
-The string `demo-clinic` is a hardcoded tenant slug. When real tenants are onboarded, this redirect makes no sense. It should redirect to `/login` in production or read the tenant from a cookie/session.
+The string `sunview` is a hardcoded tenant slug. When real tenants are onboarded, this redirect makes no sense. It should redirect to `/login` in production or read the tenant from a cookie/session.
 
 ---
 
@@ -620,7 +620,7 @@ These errors are invisible to operators. There is no error tracking (Sentry, Dat
 | 35 | `requirements.txt` uses `>=` with no pinned versions | MEDIUM | Tech Debt |
 | 36 | `venv/` may be in git tree | MEDIUM | Tech Debt |
 | 37 | `next.config.mjs` is empty — no security headers | LOW | Security |
-| 38 | `app/page.tsx` hardcodes `demo-clinic` tenant slug | LOW | Tech Debt |
+| 38 | `app/page.tsx` hardcodes `sunview` tenant slug | LOW | Tech Debt |
 | 39 | Zustand DevTools enabled unconditionally in production | LOW | Security |
 | 40 | No health check endpoint on FastAPI backend | LOW | Observability |
 | 41 | Audit log export runs no-limit query — OOM risk at scale | LOW | Performance |

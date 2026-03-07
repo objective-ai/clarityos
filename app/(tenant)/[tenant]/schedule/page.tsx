@@ -186,7 +186,7 @@ function AppointmentCard({
   if (hasEncounter && (appointment.status === "in_exam" || appointment.status === "completed")) {
     overflowItems.push({
       label: appointment.status === "in_exam" ? "Continue Encounter" : "View Encounter",
-      onClick: () => onViewEncounter(appointment.encounterId!),
+      onClick: () => onViewEncounter(appointment.encounterShortId!),
     });
   }
 
@@ -231,7 +231,7 @@ function AppointmentCard({
 
   const handleCardClick = () => {
     if (isClickable) {
-      onViewEncounter(appointment.encounterId!);
+      onViewEncounter(appointment.encounterShortId!);
     }
   };
 
@@ -983,7 +983,7 @@ export default function SchedulePage() {
       setActionError(null);
       try {
         const result = await startExam(id);
-        router.push(`/${tenant}/encounter/${result.encounterId}`);
+        router.push(`/${tenant}/encounter/${result.encounterShortId}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Start exam failed";
         setActionError(msg);

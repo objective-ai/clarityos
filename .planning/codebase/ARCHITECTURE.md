@@ -28,7 +28,7 @@ Both runtimes share a common identity contract: the Supabase JWT, which carries 
 ```
 app/
   layout.tsx                    Root layout — fonts + ThemeProvider
-  page.tsx                      Redirect to /demo-clinic/dashboard
+  page.tsx                      Redirect to /sunview/dashboard
   globals.css                   Global CSS tokens, glass system, animations
   (tenant)/
     [tenantId]/
@@ -49,7 +49,7 @@ app/
 
 The `(tenant)` directory is a Next.js **route group** — the parentheses are a convention that prevents the segment name from appearing in the URL. It exists solely to apply a shared layout (`[tenantId]/layout.tsx`) across all clinic pages without affecting the URL path.
 
-The resulting URL structure is: `/:tenantId/:section`, e.g., `/demo-clinic/dashboard`, `/demo-clinic/encounter/enc-001`.
+The resulting URL structure is: `/:tenantId/:section`, e.g., `/sunview/dashboard`, `/sunview/encounter/enc-001`.
 
 ### Layout Hierarchy
 

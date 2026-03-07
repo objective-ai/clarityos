@@ -73,7 +73,7 @@ Close all security gaps (dev bypass, hardcoded secrets, missing middleware), imp
 - Entitlement-based feature gating via `useEntitlements().has()`
 
 ### Integration Points
-- `app/page.tsx` currently redirects to /demo-clinic/dashboard — needs to redirect to /login or check auth
+- `app/page.tsx` currently redirects to /sunview/dashboard — needs to redirect to /login or check auth
 - `app/(tenant)/[tenantId]/layout.tsx` — middleware must protect this entire route group
 - `store/sessionStore.ts` line 61 — mock session seed point that needs to become null
 - `lib/auth/mock-session.ts` — 4 mock scenarios, referenced by sessionStore and possibly other files

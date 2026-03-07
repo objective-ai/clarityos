@@ -45,5 +45,12 @@ __pycache__/
 *.pyc
 *.bak
 
+# temporary files
+tmp/
+tmp-*.png
+tmp-*.js
+test-data.mjs
+test-login.mjs
+
 # claude code
 .claude/

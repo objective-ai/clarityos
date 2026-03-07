@@ -121,7 +121,7 @@ shadcn/ui components are hand-assembled on top of Radix UI in `components/ui/`.
 - `app/db/models/tenant/clinical.py` — clinical models (Staff, Patient, Encounter, Vitals, Refraction, Diagnosis, ExamFindings, AuditLog, etc.)
 - `app/db/mixins.py` — `TimestampMixin` (created_at/updated_at) + `SoftDeleteMixin` (is_deleted flag)
 
-**Multi-tenancy pattern:** Schema-per-tenant. Each clinic gets its own PostgreSQL schema (e.g., `clinic_sunview1`). The `TenantContext` from the JWT determines which schema is active via `SET search_path`.
+**Multi-tenancy pattern:** Schema-per-tenant. Each clinic gets its own PostgreSQL schema (e.g., `clinic_sunview`). The `TenantContext` from the JWT determines which schema is active via `SET search_path`.
 
 ### Data Validation
 

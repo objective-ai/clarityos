@@ -86,6 +86,10 @@ interface FormData {
   dizziness: boolean;
   // Chief complaint
   chiefComplaint: string;
+  // Consent
+  consentTreatBill: boolean;
+  consentPrivacyNotice: boolean;
+  consentDigitalComm: boolean;
 }
 
 const INITIAL_FORM: FormData = {
@@ -138,6 +142,9 @@ const INITIAL_FORM: FormData = {
   headaches: false,
   dizziness: false,
   chiefComplaint: "",
+  consentTreatBill: false,
+  consentPrivacyNotice: false,
+  consentDigitalComm: false,
 };
 
 const STEPS = ["Demographics", "Contact & Insurance", "Medical History", "Chief Complaint"];
@@ -220,7 +227,7 @@ export default function IntakePage() {
 
   // Submit form
   async function handleSubmit() {
-    if (!form.chiefComplaint.trim()) return;
+    if (!form.chiefComplaint.trim() || !form.consentTreatBill || !form.consentPrivacyNotice) return;
     setPageState("submitting");
     try {
       const payload = {
@@ -277,6 +284,9 @@ export default function IntakePage() {
           headaches: form.headaches,
           dizziness: form.dizziness,
         },
+        consent_treat_bill: form.consentTreatBill,
+        consent_privacy_notice: form.consentPrivacyNotice,
+        consent_digital_comm: form.consentDigitalComm,
       };
 
       const res = await fetch(`/api/public/intake/${token}`, {
@@ -584,6 +594,62 @@ export default function IntakePage() {
               />
             </div>
           )}
+
+          {/* Consent & Acknowledgments */}
+          <div className="mt-6 pt-5 border-t border-white/8">
+            <h3 className="text-base font-semibold text-[var(--text-primary)] mb-3">Consent & Acknowledgments</h3>
+
+            <label className="flex items-start gap-3 py-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.consentTreatBill}
+                onChange={(e) => set("consentTreatBill", e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-white/20 bg-white/5 text-[var(--accent)] focus:ring-[var(--accent)] flex-shrink-0"
+              />
+              <span className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                <span className="inline-flex items-center gap-1.5 mb-0.5">
+                  <span className="font-medium text-[var(--text-primary)]">Consent to Treat & Bill</span>
+                  <span className="text-[10px] font-semibold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Required</span>
+                </span>
+                <br />
+                I consent to optometric evaluation and treatment by the doctors and staff of {tokenInfo?.clinicName || "this clinic"}. I authorize the release of any medical information necessary to process my insurance claims and assign my insurance benefits directly to the clinic.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 py-3 border-t border-white/5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.consentPrivacyNotice}
+                onChange={(e) => set("consentPrivacyNotice", e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-white/20 bg-white/5 text-[var(--accent)] focus:ring-[var(--accent)] flex-shrink-0"
+              />
+              <span className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                <span className="inline-flex items-center gap-1.5 mb-0.5">
+                  <span className="font-medium text-[var(--text-primary)]">Notice of Privacy Practices (HIPAA & CMIA)</span>
+                  <span className="text-[10px] font-semibold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Required</span>
+                </span>
+                <br />
+                I acknowledge that I have received or been offered a copy of this clinic&apos;s Notice of Privacy Practices, which details how my medical information may be used and disclosed under federal (HIPAA) and California state law (CMIA).
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 py-3 border-t border-white/5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.consentDigitalComm}
+                onChange={(e) => set("consentDigitalComm", e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-white/20 bg-white/5 text-[var(--accent)] focus:ring-[var(--accent)] flex-shrink-0"
+              />
+              <span className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                <span className="inline-flex items-center gap-1.5 mb-0.5">
+                  <span className="font-medium text-[var(--text-primary)]">Digital Communication Consent</span>
+                  <span className="text-[10px] font-medium text-[var(--text-muted)] bg-white/5 px-1.5 py-0.5 rounded">Optional</span>
+                </span>
+                <br />
+                I consent to receive non-secure digital communications (such as SMS text messages and unencrypted emails) regarding my appointments, intake forms, and optical orders. I understand that unencrypted communication carries a small risk of interception.
+              </span>
+            </label>
+          </div>
         </div>
       )}
 
@@ -608,7 +674,7 @@ export default function IntakePage() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={!form.chiefComplaint.trim() || pageState === "submitting"}
+            disabled={!form.chiefComplaint.trim() || !form.consentTreatBill || !form.consentPrivacyNotice || pageState === "submitting"}
             className="flex-1 py-2.5 rounded-lg bg-[var(--accent)] text-[var(--text-inverse)] text-sm font-medium hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             {pageState === "submitting" ? "Submitting..." : "Submit"}

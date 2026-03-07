@@ -13,8 +13,8 @@ export default async function Home() {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
-    const tenantId = user.app_metadata?.tenant_id ?? "demo-clinic";
-    redirect(`/${tenantId}/dashboard`);
+    const tenantSlug = user.app_metadata?.tenant_slug ?? "clinic";
+    redirect(`/${tenantSlug}/dashboard`);
   }
 
   redirect("/login");

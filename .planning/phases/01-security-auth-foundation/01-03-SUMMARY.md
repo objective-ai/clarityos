@@ -101,7 +101,7 @@ Each task was committed atomically:
 - `lib/auth/session-hydrator.ts` - Maps Supabase Session to AppSession type
 - `app/login/layout.tsx` - Standalone login layout with ambient gradient background
 - `app/login/page.tsx` - Glassmorphism login form with signInWithPassword + returnTo redirect
-- `app/page.tsx` - Root redirect changed from /demo-clinic/dashboard to /login
+- `app/page.tsx` - Root redirect changed from /sunview/dashboard to /login
 - `store/sessionStore.ts` - Null initial state, isLoading: true, removed mock import
 - `components/auth/AuthProvider.tsx` - Listens to onAuthStateChange, hydrates sessionStore
 - `components/auth/SessionTimeoutModal.tsx` - 28-min warning + 30-min auto-logout with countdown

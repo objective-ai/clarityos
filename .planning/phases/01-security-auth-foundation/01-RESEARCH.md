@@ -158,7 +158,7 @@ backend/                     # Python backend (moved from app/)
 app/                         # Next.js — OWNED ENTIRELY by Next.js after relocation
 ├── login/
 │   └── page.tsx             # New — standalone login page (outside tenant layout)
-├── page.tsx                 # Changed: redirect to /login (not /demo-clinic/dashboard)
+├── page.tsx                 # Changed: redirect to /login (not /sunview/dashboard)
 ├── api/                     # BFF route handlers
 │   ├── audit-logs/
 │   │   └── route.ts         # New — proxies to FastAPI /api/audit-logs
@@ -237,7 +237,7 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from /login
   if (user && isAuthRoute) {
     // Extract tenantId from JWT custom claims
-    const tenantId = user.app_metadata?.tenant_id ?? 'demo-clinic'
+    const tenantId = user.app_metadata?.tenant_id ?? 'sunview'
     return NextResponse.redirect(new URL(`/${tenantId}/dashboard`, request.url))
   }
 
@@ -787,7 +787,7 @@ export default function LoginPage() {
       return
     }
     const returnTo = searchParams.get('returnTo')
-    router.push(returnTo ?? '/demo-clinic/dashboard') // fallback
+    router.push(returnTo ?? '/sunview/dashboard') // fallback
   }
   // Render glass card form
 }

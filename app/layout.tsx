@@ -39,6 +39,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=JSON.parse(localStorage.getItem("clarity-theme"));if(t&&t.state&&t.state.theme){document.documentElement.setAttribute("data-theme",t.state.theme)}else{document.documentElement.setAttribute("data-theme","light")}}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
+          }}
+        />
+      </head>
       <body className="font-jakarta antialiased">
         <ThemeProvider />
         {children}
