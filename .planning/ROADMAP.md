@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Billing & Coding** - Superbill, CPT/ICD mapping, CMS-1500 export, AI MDM calculator (completed 2026-03-06)
 - [x] **Phase 5: Patient Profile** - Patient CRUD, detail page, encounter timeline, clinical flowsheets, AI Prep Me (completed 2026-03-06)
 - [x] **Phase 6: Optical Handoff** - Optical dashboard, Rx PDF generator, optical queue, Rx change alerts (completed 2026-03-06)
-- [ ] **Phase 7: Patient Intake** - Public intake forms, AI triage, intake webhook
+- [x] **Phase 7: Patient Intake** - Public intake forms, QR code sharing, intake token system (completed 2026-03-07)
 
 ## Phase Details
 
@@ -120,11 +120,11 @@ Plans:
   1. Patient receives a link and can fill out demographics, medical history, ROS, and chief complaint on a mobile-friendly form without logging in
   2. Submitted intake data creates or updates the patient record and pre-seeds the encounter for that appointment
   3. AI triage flags urgent chief complaints (e.g., "flashing lights" flagged as possible retinal detachment) with a red badge on the schedule view
-**Plans**: TBD
+**Plans**: 2/2 plans complete
 
 Plans:
-- [ ] 07-01: Intake backend (public route, token auth, intake API, patient record creation)
-- [ ] 07-02: Intake frontend (mobile-first forms, AI triage, schedule integration)
+- [x] 07-01: Intake backend — IntakeToken model, seed data, token-based form access
+- [x] 07-02: Intake frontend — multi-step mobile form, IntakeLinkModal with QR code, sidebar/dashboard integration
 
 ## Progress
 
@@ -140,4 +140,18 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 | 4. Billing & Coding | 1/1 | Complete | 2026-03-06 |
 | 5. Patient Profile | 1/1 | Complete | 2026-03-06 |
 | 6. Optical Handoff | 1/1 | Complete | 2026-03-06 |
-| 7. Patient Intake | 0/2 | Not started | - |
+| 7. Patient Intake | 2/2 | Complete | 2026-03-07 |
+
+---
+
+## V2 Roadmap (Post-MVP)
+
+Features planned after MVP launch. No plans written yet — these are scoped ideas.
+
+| # | Feature | Description |
+|---|---------|-------------|
+| V2-01 | **Fee Schedule Management** | Admin UI for clinic-specific CPT fee schedules. DB table (`fee_schedules`) with tenant-scoped CRUD. Replaces hardcoded `CPT_CATALOG`. Support per-payer fee schedules later. |
+| V2-02 | **AI Scribe E2E** | Audio transcript → SOAP note generation, accept/reject flow |
+| V2-03 | **Encounter Addenda** | Timestamped amendments to finalized encounters without reopening |
+| V2-04 | **Patient Rx History** | Longitudinal refraction history on patient detail page |
+| V2-05 | **Multi-payer Billing** | Per-payer fee schedules, ERA/EOB import, claim status tracking |

@@ -1,8 +1,8 @@
-# ClarityOS Phase 1 — California-Compliant Technical Specification
+# ClarityOS — California-Compliant Technical Specification
 
-**Version:** 1.0
+**Version:** 2.0
 **Date:** March 2026
-**Status:** Phase 1 Complete — Production-Ready for California Optometry Clinics
+**Status:** MVP Complete — All 7 Phases Delivered
 **Stack:** Next.js 14 (App Router) / FastAPI / PostgreSQL (schema-per-tenant) / Supabase Auth
 
 ---
@@ -14,6 +14,11 @@
 3. [Master Patient Problem List (MPPL) Continuity](#3-master-patient-problem-list-mppl-continuity)
 4. [Security & Row-Level Tenant Isolation](#4-security--row-level-tenant-isolation)
 5. [Data Portability & FHIR Readiness](#5-data-portability--fhir-readiness)
+6. [Scheduling & Appointment Workflow](#6-scheduling--appointment-workflow)
+7. [Billing & Coding](#7-billing--coding)
+8. [Patient Profile & Clinical Flowsheets](#8-patient-profile--clinical-flowsheets)
+9. [Optical Handoff](#9-optical-handoff)
+10. [Patient Intake & AI Triage](#10-patient-intake--ai-triage)
 
 ---
 
@@ -35,6 +40,8 @@ PRE_TEST → IN_EXAM → FINALIZED (one-way, irreversible)
 | `in_exam` | Doctor (OD) | Exam findings, refraction, diagnoses entered |
 | `finalized` | Doctor (OD) | Assessment & Plan written, encounter signed and locked |
 
+Note: `status` is computed, not stored as a DB column. Derived from `is_finalized` + `appointment.status`.
+
 ### 1.3 Finalization Data Model
 
 **Database columns on `encounters` table:**
@@ -43,11 +50,10 @@ PRE_TEST → IN_EXAM → FINALIZED (one-way, irreversible)
 |--------|------|-----------|-------------|
 | `is_finalized` | `BOOLEAN` | NOT NULL, default `FALSE` | Lock flag — once `TRUE`, no further edits |
 | `finalized_at` | `TIMESTAMPTZ` | nullable | UTC timestamp of finalization |
-| `signed_by_id` | `UUID` | FK → `staff.id`, ON DELETE RESTRICT | Staff member who e-signed |
+| `signed_by_id` | `UUID` | FK -> `staff.id`, ON DELETE RESTRICT | Staff member who e-signed |
 | `signed_at` | `TIMESTAMPTZ` | nullable | UTC timestamp of signature |
 | `assessment_and_plan` | `TEXT` | nullable (required at finalization) | Doctor's clinical assessment and plan |
-
-**FK constraint:** `ON DELETE RESTRICT` prevents deletion of the signing staff record while signed encounters exist — ensuring audit trail integrity.
+| `appointment_id` | `UUID` | FK -> `appointments.id` | Links encounter to originating appointment |
 
 ### 1.4 Finalization Endpoint
 
@@ -63,7 +69,7 @@ additional_notes: str | None  # max 5,000 chars — optional
 
 **Server-side flow:**
 
-1. **Staff identity resolution:** Looks up the `Staff` record matching `global_user_id` (from JWT `sub` claim) + `tenant_id` + `is_active = True`
+1. **Staff identity resolution:** Looks up `Staff` record matching `user_id` (from JWT `sub` claim) + `tenant_id` + `is_active = True`
 2. **Authorization gate:** Returns `403 Forbidden` if no active staff record exists for the authenticated user
 3. **Idempotency guard:** Returns `409 Conflict` if the encounter is already finalized
 4. **The Seal:**
@@ -73,73 +79,44 @@ additional_notes: str | None  # max 5,000 chars — optional
    - Sets `signed_by_id = staff.id`
    - Sets `signed_at = NOW()` (UTC)
 5. **Post-finalization sync:** Propagates resolved diagnoses back to the Master Problem List (see Section 3)
+6. **Superbill auto-generation:** Creates a Superbill with AI-suggested CPT codes (see Section 7)
 
 ### 1.5 Frontend Finalization Flow
 
-1. Doctor clicks **"Finalize"** in the PatientStickyHeader status button OR EncounterBottomTabs action button
-2. Both trigger `useEncounterStore.setFinalizeModalOpen(true)` — a single `<FinalizeModal>` rendered at the encounter page level opens (no duplicate modals in the React tree)
-3. Modal displays a **5-section clinical summary** pulled from Zustand stores:
-   - **Chief Complaint** — read-only text from `encounterStore`
-   - **Vitals** — IOP OD/OS (with elevation alert if > 21 mmHg) and Blood Pressure from `vitalsStore`
-   - **Diagnoses** — Active ICD-10 codes with laterality badges from `diagnosisStore`
-   - **Final Rx** — OD/OS table (Sph/Cyl/Axis/Add) from `refractionStore` column 3
-   - **Assessment & Plan** — Editable textarea (min 10 characters, matches backend validation)
-4. **Diagnosis guardrail:** "Sign & Seal Chart" button is disabled if `activeDiagnoses.length === 0` — a chart cannot be legally billed without at least one ICD-10 code
-5. **Attestation checkpoint:** Required checkbox — "I attest that I have reviewed this encounter and the clinical data is accurate"
-6. **Submit gate:** Button enabled only when `attested && assessmentPlan.length >= 10 && hasDiagnoses && !isSubmitting`
-7. On confirmation: `POST /api/encounters/{id}/finalize` with `{ assessment_and_plan }` via `apiFetch`
-8. On success: `finalizeEncounter(id, response.signed_by_name, response.signed_at)` updates Zustand store
-9. **Post-finalization lockdown:**
-   - All clinical fields (vitals, refractions, exam findings, diagnoses) become **read-only**
-   - AI Scribe widget replaced with read-only saved summary (sans-serif prose, not monospace)
-   - Banner displays: **"Signed and finalized by Dr. Sarah Lin, OD on Mar 4, 2026"**
-   - Navigation links appear: **"Back to Patient"** and **"Schedule"**
+1. Doctor clicks **"Finalize"** in the TopNav status area or EncounterBottomTabs
+2. Both trigger `useEncounterStore.setFinalizeModalOpen(true)` — a single `<FinalizeModal>` opens
+3. Modal displays a **7-section clinical summary**:
+   - **Chief Complaint** — read-only
+   - **Vitals** — IOP OD/OS with elevation alert if > 21 mmHg, Blood Pressure
+   - **Diagnoses** — Active ICD-10 codes with laterality badges (hard block if none)
+   - **Final Rx** — OD/OS table (Sph/Cyl/Axis/Add)
+   - **Assessment & Plan** — Editable textarea (min 10 characters)
+   - **Attestation** — Required checkbox
+   - **Sign & Seal Chart** — Disabled until all gates satisfied
+4. **Gate logic:**
+```typescript
+const canSubmit = attested && assessmentPlan.trim().length >= 10
+  && activeDiagnoses.length > 0 && !isSubmitting;
+```
+5. On success: encounter locks, green banner shows signer name + timestamp
 
 ### 1.6 Dirty State Guard & Auto-Save
 
-ClarityOS protects in-progress clinical work from accidental data loss via two mechanisms on the AI Scribe transcript:
-
-**Exit Guard (`beforeunload`):**
-
-The `AiScribeWidget` component registers a `beforeunload` event listener on the browser `window`. When the transcript contains unsaved text and the encounter is not finalized, the browser displays a native confirmation dialog on tab close, refresh, or navigation away.
-
-```typescript
-const isDirty = transcript.trim().length > 0 && !isFinalized;
-// Registered from child component — attaches to global window
-window.addEventListener("beforeunload", handleBeforeUnload);
-```
-
-**localStorage Auto-Save:**
-
-The transcript is continuously synced to `localStorage` keyed by encounter ID. On component mount, any existing draft is recovered automatically.
-
-| Event | Action | Key |
-|-------|--------|-----|
-| Keystroke (non-empty) | `localStorage.setItem(key, transcript)` | `draft-transcript-${encounterId}` |
-| Keystroke (empty) | `localStorage.removeItem(key)` | Prevents stale draft recovery |
-| Component mount | Recover saved draft if present | Auto-restore on refresh/crash |
-| Encounter finalized | `isDirty` forced `false` | Guard deactivates |
-
-**Performance constraint:** All state is scoped to `AiScribeWidget`. The parent `EncounterPage` does not re-render on keystrokes — heavy clinical grids (vitals, refractions, exam findings) are unaffected.
-
-**File:** `app/(tenant)/[tenantId]/encounter/[encounterId]/page.tsx` — `AiScribeWidget` (lines 130–175)
+- **Exit Guard (`beforeunload`):** Browser prompts on tab close when unsaved transcript exists
+- **localStorage Auto-Save:** Transcript keyed by encounter ID, recovered on mount
+- **1.5s Debounced API Save:** All clinical stores auto-save to server after 1.5s of inactivity + flush on blur
+- **Finalization-aware:** Exit guard deactivates after signing
 
 ### 1.7 Immutability Guarantees
 
-- **Backend:** Every `PATCH /encounters/{id}` checks `is_finalized` and returns `409 Conflict` if locked
-- **Backend:** Every sub-resource mutation (vitals, refractions, diagnoses, exam findings) checks parent encounter finalization
-- **Frontend:** All form components accept `isReadOnly` prop, derived from `encounterState.isFinalized`
-- **Database:** `SoftDeleteMixin` ensures no clinical record is ever hard-deleted — `is_deleted` flag + `deleted_at` timestamp preserve full history
+- **Backend:** Every mutation checks `is_finalized` and returns `409 Conflict` if locked
+- **Backend:** Sub-resource mutations (vitals, refractions, diagnoses, exam findings) check parent encounter
+- **Frontend:** All form components accept `isReadOnly` prop derived from `encounterState.isFinalized`
+- **Database:** `SoftDeleteMixin` — no clinical record is ever hard-deleted
 
 ### 1.8 Timestamp Integrity
 
-All timestamps use PostgreSQL `server_default=func.now()` — the database server clock is the source of truth, not the application layer. This prevents clock-skew attacks or client-side timestamp manipulation.
-
-```python
-class TimestampMixin:
-    created_at: DateTime(timezone=True), server_default=func.now()  # immutable
-    updated_at: DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-```
+All timestamps use PostgreSQL `server_default=func.now()` — the database server clock is the source of truth, not the application layer.
 
 ---
 
@@ -147,40 +124,30 @@ class TimestampMixin:
 
 ### 2.1 Overview
 
-ClarityOS models optometric clinical data across five core entities, each scoped to a tenant and linked to an encounter:
-
 ```
 Encounter (master record)
 ├── VitalsAndPretest (1:1)
 ├── Refraction[] (1:many, ordered by created_at)
 ├── ExamFindings[] (1:many, keyed by exam_section)
-└── Diagnosis[] (1:many)
+├── Diagnosis[] (1:many)
+├── Superbill (1:1, auto-generated on finalization)
+└── Appointment (1:1, bidirectional link)
 ```
 
 ### 2.2 Vitals & Pre-Testing
 
-**Model:** `VitalsAndPretest` — one record per encounter (UNIQUE constraint on `encounter_id`)
+**Model:** `VitalsAndPretest` — one record per encounter (UNIQUE on `encounter_id`)
 
 | Domain | Fields | Validation |
 |--------|--------|-----------|
-| **Intraocular Pressure** | `iop_od`, `iop_os` (Numeric 5,1) | 0–80 mmHg; > 21 mmHg triggers elevated alert |
-| **IOP Metadata** | `iop_method` (String 50), `iop_time` (DateTime) | Method normalized to title-case |
-| **Distance VA** | `ucva_od`, `ucva_os`, `bcva_od`, `bcva_os` (String 20) | Snellen notation (e.g., "20/20") |
-| **Near VA** | `near_va_od`, `near_va_os` (String 20) | Snellen notation |
-| **Systemic** | `blood_pressure` (String 20), `pulse` (Integer) | BP: regex `^\d{2,3}/\d{2,3}$`, systolic 60–250, diastolic 30–150; Pulse: 30–250 bpm |
-| **Pupils** | `pupils_equal_round_reactive` (Boolean), `relative_afferent_pupillary_defect` (Boolean) | PERRLA + RAPD |
-| **Notes** | `cover_test_notes` (Text), `technician_notes` (Text) | Free-text |
-| **Audit** | `recorded_by_id` (FK → staff) | Technician who recorded |
-
-**IOP Elevation Alert:**
-```typescript
-// types/vitals.ts
-export function isIopElevated(value: number | null): boolean {
-  return value !== null && value > 21;  // Clinical threshold: 21 mmHg
-}
-```
-
-The `PatientStickyHeader` component derives IOP alerts in real-time from the vitals store — no hardcoded flags. If either eye exceeds 21 mmHg, an `IOP OD` or `IOP OS` warning badge appears in the alert row.
+| **IOP** | `iop_od`, `iop_os` (Numeric 5,1) | 0-80 mmHg; > 21 triggers alert |
+| **IOP Metadata** | `iop_method`, `iop_time` | Method normalized to title-case |
+| **Distance VA** | `ucva_od`, `ucva_os`, `bcva_od`, `bcva_os` | Snellen notation (e.g., "20/20") |
+| **Near VA** | `near_va_od`, `near_va_os` | Snellen notation |
+| **Systemic** | `blood_pressure`, `pulse` | BP regex, systolic 60-250, diastolic 30-150, pulse 30-250 |
+| **Pupils** | `pupils_equal_round_reactive`, `relative_afferent_pupillary_defect` | PERRLA + RAPD |
+| **Notes** | `cover_test_notes`, `technician_notes` | Free-text |
+| **Audit** | `recorded_by_id` (FK -> staff) | Technician who recorded |
 
 ### 2.3 Refraction
 
@@ -188,30 +155,17 @@ The `PatientStickyHeader` component derives IOP alerts in real-time from the vit
 
 **Types:** `habitual` | `auto` | `manifest` | `cycloplegic` | `final`
 
-| Field Group | OD Fields | OS Fields | Constraints |
-|------------|-----------|-----------|-------------|
-| **Sphere** | `od_sphere` | `os_sphere` | ±25.00 D, 0.25 D steps |
-| **Cylinder** | `od_cylinder` | `os_cylinder` | ±8.00 D, 0.25 D steps |
-| **Axis** | `od_axis` | `os_axis` | 1–180 degrees (CHECK constraint) |
-| **Add** | `od_add` | `os_add` | +0.75 to +3.50 D |
-| **Prism** | `od_prism` / `od_prism_base` | `os_prism` / `os_prism_base` | 0–20 Δ, direction: IN/OUT/UP/DOWN |
-| **VA** | `od_visual_acuity` | `os_visual_acuity` | Snellen notation |
-| **PD** | Binocular: `pd_distance` (50–80mm), `pd_near` (50–80mm) | Monocular: `pd_od` (25–45mm), `pd_os` (25–45mm) | Cannot mix binocular + monocular |
+| Field Group | Fields | Constraints |
+|------------|--------|-------------|
+| **Sphere** | `od_sphere`, `os_sphere` | +/-25.00 D, 0.25 D steps |
+| **Cylinder** | `od_cylinder`, `os_cylinder` | +/-8.00 D, 0.25 D steps |
+| **Axis** | `od_axis`, `os_axis` | 1-180 degrees (CHECK constraint) |
+| **Add** | `od_add`, `os_add` | +0.75 to +3.50 D |
+| **Prism** | `od_prism`/`od_prism_base`, `os_prism`/`os_prism_base` | 0-20 delta, IN/OUT/UP/DOWN |
+| **VA** | `od_visual_acuity`, `os_visual_acuity` | Snellen notation |
+| **PD** | `pd_distance`, `pd_near` (binocular) or `pd_od`, `pd_os` (monocular) | Mutually exclusive |
 
-**Cross-field validators (Pydantic):**
-- Cylinder requires axis (and vice versa) — a cylinder without an axis cannot be fabricated
-- Prism requires base direction (and vice versa)
-- At least one eye must have a sphere value
-- `is_final_rx = True` requires PD values (lenses cannot be fabricated without PD)
-- Binocular and monocular PD are mutually exclusive
-
-**Database constraints:**
-```sql
-CHECK (od_axis BETWEEN 1 AND 180)
-CHECK (os_axis BETWEEN 1 AND 180)
-CHECK (od_sphere BETWEEN -25.00 AND 25.00)
-CHECK (os_sphere BETWEEN -25.00 AND 25.00)
-```
+**Cross-field validators:** Cylinder requires axis, prism requires base direction, `is_final_rx = True` requires PD values.
 
 ### 2.4 Exam Findings
 
@@ -222,280 +176,359 @@ CHECK (os_sphere BETWEEN -25.00 AND 25.00)
 | `anterior_segment` | Anterior Segment (Slit Lamp) | Cornea, conjunctiva, iris, lens, anterior chamber |
 | `posterior_segment` | Posterior Segment (Fundus) | Retina, optic nerve, macula, vitreous |
 
-**UNIQUE constraint:** `(encounter_id, exam_section)` — one record per section per encounter
+**UNIQUE constraint:** `(encounter_id, exam_section)`
 
-**Key columns:**
-- `is_normal_wnl` (Boolean) — "Within Normal Limits" one-click documentation
-- `findings_od` (JSONB) — Right eye findings, structured by anatomical structure
-- `findings_os` (JSONB) — Left eye findings
-- `provider_notes` (Text) — Doctor's interpretation
-
-**WNL workflow:** Doctor clicks "Set WNL" → all structures in that section are marked normal. If abnormalities exist, individual structures are documented with dropdown selections and optional text annotations. The "OD → OS" copy button duplicates right-eye findings to left eye for symmetric conditions.
+**Key columns:** `is_normal_wnl` (Boolean), `findings_od` (JSONB), `findings_os` (JSONB), `provider_notes` (Text), `patient_id` (FK)
 
 ### 2.5 Diagnosis
 
-**Model:** `Diagnosis` — ICD-10-CM coded conditions attached to an encounter
+**Model:** `Diagnosis` — ICD-10-CM coded conditions
 
 | Field | Type | Validation |
 |-------|------|-----------|
-| `icd10_code` | String(20) | Regex: `^[A-Z]\d{2}(\.[A-Z0-9]{1,4})?$` (ICD-10-CM format) |
-| `description` | String(500) | Human-readable diagnosis name |
-| `eye_affected` | Enum | `OD` / `OS` / `OU` (laterality) |
+| `icd10_code` | String(20) | Regex: `^[A-Z]\d{2}(\.[A-Z0-9]{1,4})?$` |
+| `description` | String(500) | Human-readable name |
+| `eye_affected` | Enum | `OD` / `OS` / `OU` |
 | `severity` | String(50) | `mild` / `moderate` / `severe` |
-| `status` | String(50) | `active` / `resolved` / `chronic` / `suspect` (normalized lowercase) |
-
-**Index:** `(encounter_id, icd10_code)` — optimizes duplicate checks and billing queries.
+| `status` | String(50) | `active` / `resolved` / `chronic` / `suspect` |
 
 ---
 
 ## 3. Master Patient Problem List (MPPL) Continuity
 
-### 3.1 Design Philosophy
-
-The MPPL provides **longitudinal clinical continuity** across encounters. A patient's chronic conditions (e.g., glaucoma, diabetic retinopathy) persist on their problem list and can be "promoted" into any encounter with one click — preserving ICD-10 codes, laterality, and severity without re-entry.
-
-### 3.2 Data Model
+### 3.1 Data Model
 
 **Model:** `PatientProblem` — persistent condition list per patient
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `patient_id` | UUID FK → patients | The patient this problem belongs to |
+| `patient_id` | UUID FK -> patients | Owner patient |
 | `icd10_code` | String(20) | ICD-10 code |
 | `description` | String(500) | Condition name |
 | `eye_affected` | Enum(EyeAffected) | OD / OS / OU |
-| `severity` | String(50) | Clinical severity |
 | `status` | String(50) | `active` / `inactive` / `resolved` |
-| `onset_date` | Date | When condition was identified |
-| `resolved_date` | Date | When resolved (if applicable) |
-| `source_encounter_id` | UUID FK → encounters | Encounter that identified this problem |
+| `onset_date` | Date | When identified |
+| `source_encounter_id` | UUID FK -> encounters | Originating encounter |
 
-**Mixins:** `TimestampMixin` + `SoftDeleteMixin` (problems are never hard-deleted)
-
-### 3.3 Copy-on-Promotion
+### 3.2 Copy-on-Promotion
 
 ```
 POST /encounters/{encounter_id}/diagnoses/from-problem/{problem_id}
 ```
 
-**What happens:**
-1. Validates the encounter exists and is not finalized (`409 Conflict` if locked)
-2. Validates the problem exists and is not soft-deleted
-3. **Patient ownership check:** Verifies `problem.patient_id == encounter.patient_id` (`400 Bad Request` if mismatch)
-4. Creates a new `Diagnosis` record by copying fields from the `PatientProblem`:
-   - `icd10_code`, `description`, `eye_affected`, `severity` — direct copy
-   - `status` — unconditionally set to `"active"` (a promoted problem starts active in the new encounter)
-   - `notes` — `"Promoted from master problem list (problem_id: {uuid})"`
-5. Returns the new `DiagnosisResponse` with `201 Created`
+Creates a new Diagnosis by copying from PatientProblem. Patient ownership check prevents cross-patient data leaks. Frontend deduplicates by ICD-10 code.
 
-**Frontend deduplication:** The `ContinuitySidebar` component checks existing diagnoses by ICD-10 code before allowing promotion. If a diagnosis with the same code already exists in the encounter, the "Bring Forward" button is replaced with an "Added" label.
+### 3.3 Post-Finalization Sync-Back
 
-### 3.4 Post-Finalization Sync-Back
-
-When an encounter is finalized, the system scans all diagnoses for promoted entries (identified by `problem_id:` in the notes field). If a promoted diagnosis was marked `"resolved"` during the encounter, the corresponding `PatientProblem` is updated:
-
-```python
-# app/api/routes/encounter.py — finalize_encounter()
-for dx in enc.diagnoses:
-    if "problem_id:" not in (dx.notes or ""):
-        continue
-    # Extract problem_id, look up PatientProblem
-    if dx.status.lower() == "resolved":
-        problem.status = "resolved"
-        problem.resolved_date = enc.encounter_date
-```
-
-This creates a **bidirectional link** between encounter-level diagnoses and the master problem list — ensuring that resolving a condition in one encounter updates the patient's longitudinal record.
+When finalized, promoted diagnoses marked "resolved" update the corresponding PatientProblem to "resolved" with `resolved_date = encounter_date`.
 
 ---
 
 ## 4. Security & Row-Level Tenant Isolation
 
-### 4.1 Multi-Tenancy Architecture
+### 4.1 Authentication
 
-ClarityOS uses **schema-per-tenant** isolation in PostgreSQL. Each clinic (tenant) operates in a separate database schema, providing:
+**Provider:** Supabase Auth with custom access token hook (SQL, `SECURITY DEFINER`)
 
-- **Data isolation:** No SQL query can accidentally cross tenant boundaries
-- **Independent migrations:** Schema changes can be rolled out per-tenant
-- **Compliance:** Meets HIPAA requirements for logical separation of PHI
+**JWT claims injected via hook:**
 
-### 4.2 Tenant Context
+| Claim | Purpose |
+|-------|---------|
+| `sub` | Supabase user ID |
+| `app_metadata.tenant_id` | Clinic tenant UUID |
+| `app_metadata.tenant_slug` | URL slug (e.g., "sunview") |
+| `app_metadata.role` | Staff role |
+| `app_metadata.schema_name` | PostgreSQL schema name |
+| `app_metadata.staff_id` | Staff record UUID |
+| `app_metadata.full_name` | Display name |
+| `app_metadata.plan_name` | Subscription tier |
+| `app_metadata.clinic_name` | Practice name |
 
-Every authenticated request carries a `TenantContext` — an immutable, frozen dataclass extracted from the verified JWT:
+### 4.2 TenantContext
+
+Every authenticated backend request carries an immutable `TenantContext`:
 
 ```python
 @dataclass(frozen=True, slots=True)
 class TenantContext:
-    user_id: UUID      # Supabase auth user ID (JWT sub claim)
-    tenant_id: UUID    # Clinic tenant ID (JWT app_metadata.tenant_id)
-    role: str          # Staff role: doctor/technician/receptionist/admin/owner
+    user_id: UUID      # Supabase auth user ID
+    tenant_id: UUID    # Clinic tenant ID
+    role: str          # Staff role
 ```
 
-### 4.3 JWT Verification
+### 4.3 Query Scoping
 
-**Provider:** Supabase Auth (HS256)
+Every database query includes `WHERE tenant_id = ctx.tenant_id` via `TenantBase` mixin. Schema isolation via `SET search_path TO {schema_name}`.
 
-| JWT Claim | Maps To | Purpose |
-|-----------|---------|---------|
-| `sub` | `user_id` | Unique user identity |
-| `app_metadata.tenant_id` | `tenant_id` | Clinic association (set by DB trigger at signup) |
-| `app_metadata.role` | `role` | RBAC role (defaults to `"receptionist"`) |
+### 4.4 RBAC
 
-**Error responses:**
-- Missing `sub` → `401 Unauthorized`
-- Missing `tenant_id` → `403 Forbidden` ("User not associated with a clinic")
-- Invalid JWT signature → `401 Unauthorized`
-- No active staff record for user → `403 Forbidden`
+Five roles (doctor, technician, receptionist, admin, owner) with 16-action permission matrix. Enforcement is dual-layered: server rejects unauthorized requests; UI removes controls entirely.
 
-### 4.4 Query Scoping
+### 4.5 HIPAA Audit Trail
 
-Every database query includes `WHERE tenant_id = ctx.tenant_id`. This is enforced at the application layer via the `TenantBase` mixin — all clinical models inherit `tenant_id` as a required, indexed column.
+- Append-only `audit_logs` table
+- Logs all ePHI access (reads and writes)
+- Staff-linked with timestamp and IP address
+- CSV export for compliance review
+- Soft-delete only — no clinical record ever hard-deleted (6-year retention)
 
-```python
-# Example: encounter retrieval
-select(Encounter).where(
-    Encounter.id == encounter_id,
-    Encounter.tenant_id == ctx.tenant_id,
-    Encounter.is_deleted == False,
-)
-```
+### 4.6 Session Security
 
-### 4.5 Role-Based Access Control (RBAC)
-
-**Staff roles and capabilities:**
-
-| Role | Clinical Access | Administrative Access |
-|------|----------------|----------------------|
-| `doctor` | Full: vitals, refractions, exam findings, diagnoses, finalization | View reports |
-| `technician` | Pre-testing: vitals, autorefraction, scribing | None |
-| `receptionist` | View-only: demographics, scheduling | Appointment management |
-| `admin` | None | Billing, reporting, user management |
-| `owner` | All doctor capabilities | All admin + subscription management |
-
-**Frontend entitlement gating:**
-
-```typescript
-const { has } = useEntitlements();
-if (has(Entitlement.AI_SCRIBE)) {
-  // Show AI Scribe feature
-}
-```
-
-Entitlements are carried in the JWT payload as an `entitlements[]` array, checked client-side via the `useEntitlements()` hook. Server-side enforcement uses the `TenantContext.role` for authorization.
-
-### 4.6 Soft-Delete & Audit Trail
-
-Clinical records are never hard-deleted. The `SoftDeleteMixin` provides:
-
-```python
-is_deleted: Boolean    # default False, set to True on "deletion"
-deleted_at: DateTime   # UTC timestamp of soft-deletion
-```
-
-Query filters explicitly exclude soft-deleted records:
-```python
-Encounter.is_deleted == False  # Applied to GET and PATCH queries
-PatientProblem.is_deleted == False  # Applied to problem lookups
-```
-
-This satisfies HIPAA's requirement that clinical records be retained and accessible for audit purposes (45 CFR 164.530(j) — 6-year retention minimum).
+- 30-minute inactivity timeout
+- Logout clears all clinical Zustand stores + localStorage keys
+- `beforeunload` exit guard for unsaved clinical data
 
 ---
 
 ## 5. Data Portability & FHIR Readiness
 
-### 5.1 Architecture for Interoperability
+### 5.1 FHIR Resource Mapping
 
-ClarityOS stores clinical data in structured, typed fields that map directly to FHIR R4 resources. While Phase 1 does not include a live FHIR endpoint, the data model is designed for straightforward export.
+| ClarityOS Model | FHIR R4 Resource | Key Mappings |
+|-----------------|-----------------|-------------|
+| Patient | Patient | name, birthDate, gender, telecom |
+| Encounter | Encounter | status, class, type, period, participant |
+| VitalsAndPretest | Observation | LOINC codes for IOP, VA, BP |
+| Refraction | VisionPrescription | lensSpecification (sphere, cylinder, axis, add) |
+| ExamFindings | Observation | SNOMED codes for anterior/posterior sections |
+| Diagnosis | Condition | ICD-10-CM code, laterality, clinicalStatus |
+| PatientProblem | Condition (longitudinal) | onsetDateTime, abatementDateTime |
 
-### 5.2 FHIR Resource Mapping
+### 5.2 Export Strategy
 
-#### Patient → FHIR Patient
+Export-only FHIR endpoints (no full FHIR server). Appropriate for target market — solo practices need referral export, not FHIR server compliance.
 
-| ClarityOS Field | FHIR Path | Type |
-|-----------------|-----------|------|
-| `first_name` | `Patient.name[0].given` | HumanName |
-| `last_name` | `Patient.name[0].family` | HumanName |
-| `dob` | `Patient.birthDate` | date |
-| `sex` | `Patient.gender` | code |
-| `contact_info_jsonb` | `Patient.telecom[]` | ContactPoint[] |
+---
 
-#### VitalsAndPretest → FHIR Observation
+## 6. Scheduling & Appointment Workflow
 
-| ClarityOS Field | FHIR Observation.code | FHIR value |
-|-----------------|----------------------|------------|
-| `iop_od` | LOINC 56844-4 (IOP right) | `valueQuantity` (mmHg) |
-| `iop_os` | LOINC 56845-1 (IOP left) | `valueQuantity` (mmHg) |
-| `ucva_od` | LOINC 79880-1 (VA uncorrected right) | `valueString` (Snellen) |
-| `bcva_od` | LOINC 79881-9 (VA corrected right) | `valueString` (Snellen) |
-| `blood_pressure` | LOINC 85354-9 (Blood pressure) | `component[]` (systolic/diastolic) |
-| `pulse` | LOINC 8867-4 (Heart rate) | `valueQuantity` (bpm) |
-| `pupils_equal_round_reactive` | SNOMED 271731001 (Pupil reaction) | `valueBoolean` |
+### 6.1 Appointment Model
 
-#### Refraction → FHIR DiagnosticReport
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `tenant_id` | UUID | Tenant isolation |
+| `patient_id` | UUID FK -> patients | Patient being seen |
+| `provider_id` | UUID FK -> staff | Treating provider |
+| `booked_by_id` | UUID FK -> staff | Who created the appointment |
+| `start_time` | TIMESTAMPTZ | Appointment start |
+| `duration_minutes` | Integer | Default 30 |
+| `type` | String | comprehensive, follow_up, emergency, contact_lens, etc. |
+| `status` | String | scheduled, confirmed, checked_in, in_exam, completed, cancelled, no_show |
+| `chief_complaint` | Text | Reason for visit |
+| `cancel_reason` | Text | Required if cancelled (min 3 chars) |
 
-| ClarityOS Field | FHIR Component | Type |
-|-----------------|---------------|------|
-| `od_sphere` | `DiagnosticReport.result[].component[sphere]` | Decimal (diopters) |
-| `od_cylinder` | `DiagnosticReport.result[].component[cylinder]` | Decimal (diopters) |
-| `od_axis` | `DiagnosticReport.result[].component[axis]` | Integer (degrees) |
-| `refraction_type` | `DiagnosticReport.category` | CodeableConcept |
-| `is_final_rx` | `DiagnosticReport.conclusion` | boolean flag |
+`end_time` is always derived: `start_time + duration_minutes`. Never accepted as input.
 
-#### ExamFindings → FHIR Observation
-
-| ClarityOS Field | FHIR Path | Notes |
-|-----------------|-----------|-------|
-| `exam_section` | `Observation.code` | Maps to SNOMED codes (anterior/posterior) |
-| `is_normal_wnl` | `Observation.interpretation` | Normal = "N" (HL7 interpretation code) |
-| `findings_od` | `Observation.component[].valueString` | Per-structure findings |
-| `findings_os` | `Observation.component[].valueString` | Per-structure findings |
-
-#### Diagnosis → FHIR Condition
-
-| ClarityOS Field | FHIR Path | Type |
-|-----------------|-----------|------|
-| `icd10_code` | `Condition.code.coding[0].code` | ICD-10-CM system |
-| `description` | `Condition.code.coding[0].display` | string |
-| `eye_affected` | `Condition.bodySite` | SNOMED coded (OD/OS/OU) |
-| `status` | `Condition.clinicalStatus` | active/resolved/inactive |
-| `severity` | `Condition.severity` | CodeableConcept |
-
-#### PatientProblem → FHIR Condition (longitudinal)
-
-| ClarityOS Field | FHIR Path | Type |
-|-----------------|-----------|------|
-| `icd10_code` | `Condition.code.coding[0].code` | ICD-10-CM |
-| `onset_date` | `Condition.onsetDateTime` | date |
-| `resolved_date` | `Condition.abatementDateTime` | date |
-| `status` | `Condition.clinicalStatus` | active/resolved |
-
-### 5.3 Export Strategy (Phase 2+)
-
-The FHIR export layer will be implemented as a read-only API surface:
+### 6.2 Status Transitions
 
 ```
-GET /fhir/Patient/{id}
-GET /fhir/Encounter/{id}/$everything    # Bundle of all clinical data
-GET /fhir/Condition?patient={id}        # Problem list
+scheduled → confirmed → checked_in → in_exam → completed
+                ↘ cancelled (with reason)
+scheduled → no_show
 ```
 
-JSONB fields (`findings_od`, `findings_os`, `contact_info_jsonb`, `medical_history_jsonb`) are already structured to decompose into FHIR components without lossy transformation.
+### 6.3 Start Exam Flow
+
+```
+POST /appointments/{id}/start-exam
+```
+
+1. Validates appointment is `checked_in`
+2. Creates linked `Encounter` record (patient_id, provider_id, appointment_id)
+3. Sets appointment status to `in_exam`
+4. Returns encounter ID
+5. **Idempotent:** Returns HTTP 200 + `already_existed=true` if encounter pre-exists
+
+### 6.4 Frontend
+
+- Day view with timeline cards
+- Date navigation (prev/next/today/date picker)
+- Booking modal (patient, provider, type, date/time, duration, chief complaint)
+- Status badges with color coding
+- AI triage badges from intake submissions (urgent = red pulse, moderate = amber)
+
+---
+
+## 7. Billing & Coding
+
+### 7.1 Superbill Model
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `encounter_id` | UUID FK (UNIQUE) | 1:1 with encounter |
+| `patient_id` | UUID FK | Patient |
+| `provider_id` | UUID FK | Treating provider |
+| `status` | String | draft, ready_to_bill, submitted, paid, denied |
+| `total_amount_cents` | Integer | Sum of line items |
+| `claim_json` | JSONB | CMS-1500 format export |
+
+### 7.2 Line Items
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cpt_code` | String(10) | CPT procedure code |
+| `description` | String(500) | CPT description |
+| `units` | Integer | Default 1 |
+| `charge_cents` | Integer | Fee |
+| `modifier` | String(10) | CPT modifier |
+| `diagnosis_pointers` | JSONB | Array of ICD-10 codes linked to this CPT |
+
+### 7.3 AI MDM Calculator
+
+Evaluates Medical Decision Making using 2021 E&M 2-of-3 rule:
+- **Problem complexity:** Number and severity of diagnoses
+- **Data reviewed:** Labs, imaging, external records referenced
+- **Risk:** Morbidity/mortality risk of the management options
+
+Suggests E&M level: 99213 (low), 99214 (moderate), 99215 (high).
+
+### 7.4 CMS-1500 Export
+
+Standard clearinghouse JSON format with: patient demographics, provider NPI/license, diagnosis codes with laterality, CPT codes with modifiers, place of service, date of service.
+
+---
+
+## 8. Patient Profile & Clinical Flowsheets
+
+### 8.1 Patient Model
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `tenant_id` | UUID | Tenant isolation |
+| `first_name`, `last_name` | String | Demographics |
+| `dob` | Date | Date of birth |
+| `sex` | String | male, female, other |
+| `contact_info_jsonb` | JSONB | Phone, email, address |
+| `medical_history_jsonb` | JSONB | Conditions, medications, allergies |
+| `insurance_jsonb` | JSONB | Primary/secondary insurance |
+| `emergency_contact_jsonb` | JSONB | Emergency contact info |
+
+### 8.2 Patient Detail Page
+
+- **Demographics tab:** Editable patient information
+- **Encounter timeline:** Chronological list with date, provider, chief complaint, diagnoses
+- **Clinical flowsheets:** IOP and refraction data across visits in tabular format
+- **Active problems:** Master Problem List with status indicators
+
+### 8.3 AI Prep Me
+
+```
+POST /patients/{id}/prep-me
+```
+
+Sends last 3 finalized SOAP notes to Claude Sonnet with a 300 max_token limit. Returns a 2-sentence clinical summary. Logs `PHI_VIEWED` audit action on access.
+
+Prefers FINAL refraction for flowsheet display, falls back to MANIFEST.
+
+---
+
+## 9. Optical Handoff
+
+### 9.1 Optical Queue
+
+When an encounter is finalized with an `is_final_rx` refraction, the patient automatically appears in the optical dashboard queue.
+
+**Query:** Finalized encounters with `is_final_rx = True` refractions, joined with patient demographics and provider info.
+
+### 9.2 Rx PDF Generation
+
+Uses `window.print()` with a print-optimized div containing:
+- Patient name, DOB
+- Provider name, license number, NPI
+- OD/OS prescription (sphere, cylinder, axis, add, PD)
+- Date written, expiration (1 year)
+- Provider signature line
+
+Print styles use `dangerouslySetInnerHTML` for cross-browser compatibility.
+
+### 9.3 Rx Change Alert
+
+Spherical Equivalent formula: `SE = sphere + (cylinder / 2)`
+
+If `|SE_current - SE_prior| > 0.50D` for either eye, a bright badge alerts optical staff. Clinically significant changes may require patient counseling about adaptation.
+
+### 9.4 Status Tracking
+
+Optical staff update status: `waiting -> in_progress -> dispensed`.
+
+---
+
+## 10. Patient Intake & AI Triage
+
+### 10.1 IntakeToken Model
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `tenant_id` | UUID | Tenant isolation |
+| `appointment_id` | UUID FK -> appointments | Linked appointment |
+| `token` | String(64) | 64-char hex (secrets.token_hex(32)), URL-safe |
+| `status` | String | pending, submitted, expired, revoked |
+| `expires_at` | TIMESTAMPTZ | Token expiration |
+| `dob_attempts` | Integer | Failed DOB verification attempts (lock after 3) |
+| `dob_verified` | Boolean | Whether patient passed DOB check |
+| `intake_data_jsonb` | JSONB | Raw form submission (HIPAA audit) |
+| `triage_flags_jsonb` | JSONB | AI triage results: {urgency, flags[], reasoning} |
+| `ip_address` | String(45) | Submitter IP for audit |
+
+### 10.2 Intake Flow
+
+```
+Staff generates intake link → patient receives URL or scans QR code
+  → /intake/[token] → DOB verification (3 attempts max)
+  → Multi-step form: demographics, medical history, ROS, chief complaint
+  → Submit → AI triage classifies chief complaint
+  → intake_data_jsonb + triage_flags_jsonb stored
+  → Status → submitted
+```
+
+### 10.3 AI Triage
+
+**Model:** Claude Sonnet with structured JSON output
+
+**Classification:**
+- **urgent:** sudden vision loss, flashing lights with new floaters, eye trauma, chemical exposure, acute angle closure symptoms
+- **moderate:** new-onset double vision, persistent eye pain, significant redness with discharge
+- **routine:** blurry vision (gradual), dry eyes, itching, routine exam, glasses update
+
+**Fallback:** Returns `{urgency: "unknown"}` when `ANTHROPIC_API_KEY` not set.
+
+**Schedule integration:** Urgent = red pulsing badge, moderate = amber badge, with hover tooltip showing AI reasoning and flags.
+
+### 10.4 QR Code Sharing
+
+`IntakeLinkModal` provides two sharing modes:
+- **Link tab:** Copy-to-clipboard URL
+- **QR Code tab:** Rendered via `qrcode.react` (QRCodeSVG), patient scans with phone camera
 
 ---
 
 ## Appendix A: Database Schema Summary
 
 ```
-staff                    — clinic staff (doctors, techs, admins)
-patients                 — patient demographics + JSONB contact/medical/privacy
-appointments             — scheduled visits with status workflow
-encounters               — master clinical record (anchors all sub-resources)
-vitals_and_pretest       — IOP, VA, pupils, systemic vitals (1:1 with encounter)
-refractions              — prescription measurements (1:many, typed)
-exam_findings            — structured exam notes with JSONB (1:many, keyed by section)
-diagnoses                — ICD-10 coded conditions (1:many per encounter)
-patient_problems         — master problem list (longitudinal, per patient)
+-- Public Schema (SaaS Control Plane)
+subscription_plans           — tier definitions (Core, Plus, Premium)
+tenants                      — clinic registry with schema_name
+tenant_addons                — per-tenant feature toggles
+tenant_members               — user-tenant associations
+
+-- Tenant Schema (Per-Clinic, Isolated)
+staff                        — clinic staff with role, license, NPI
+patients                     — demographics + JSONB (contact, medical, insurance)
+appointments                 — scheduled visits with status workflow
+encounters                   — master clinical record (anchors all sub-resources)
+vitals_and_pretest           — IOP, VA, pupils, systemic vitals (1:1 with encounter)
+refractions                  — prescription measurements (1:many, typed)
+exam_findings                — structured exam notes with JSONB (1:many, keyed by section)
+diagnoses                    — ICD-10 coded conditions (1:many per encounter)
+patient_problems             — master problem list (longitudinal, per patient)
+superbills                   — billing records (1:1 with encounter)
+superbill_line_items         — CPT line items (1:many per superbill)
+intake_tokens                — patient intake with DOB verification + AI triage
+audit_logs                   — HIPAA audit trail (append-only)
 ```
 
 ## Appendix B: API Route Summary
@@ -504,25 +537,44 @@ patient_problems         — master problem list (longitudinal, per patient)
 |--------|------|-------------|
 | `POST` | `/encounters/` | Create encounter |
 | `GET` | `/encounters/{id}` | Get encounter with all sub-resources |
-| `PATCH` | `/encounters/{id}` | Update narrative fields (chief complaint, A&P) |
+| `PATCH` | `/encounters/{id}` | Update narrative fields |
 | `POST` | `/encounters/{id}/finalize` | Sign and lock encounter |
 | `PUT` | `/encounters/{id}/vitals` | Create/update vitals |
-| `POST` | `/encounters/{id}/refractions` | Add refraction measurement |
+| `POST` | `/encounters/{id}/refractions` | Add refraction |
 | `PATCH` | `/encounters/{id}/refractions/{rx_id}` | Update refraction |
 | `POST` | `/encounters/{id}/diagnoses` | Add diagnosis |
 | `PATCH` | `/encounters/{id}/diagnoses/{dx_id}` | Update diagnosis |
 | `DELETE` | `/encounters/{id}/diagnoses/{dx_id}` | Remove diagnosis |
-| `POST` | `/encounters/{id}/diagnoses/from-problem/{problem_id}` | Promote MPPL problem |
+| `POST` | `/encounters/{id}/diagnoses/from-problem/{pid}` | Promote MPPL problem |
 | `PUT` | `/encounters/{id}/exam-findings/{section}` | Upsert exam findings |
+| `POST` | `/encounters/{id}/ai-scribe` | Stream AI SOAP note (SSE) |
+| `POST` | `/encounters/{id}/ai-scribe/accept` | Log AI autofill acceptance |
+| `GET` | `/patients/` | Search patients |
+| `POST` | `/patients/` | Create patient |
+| `GET` | `/patients/{id}` | Patient detail |
+| `PATCH` | `/patients/{id}` | Update patient |
 | `GET` | `/patients/{id}/problems` | List patient problems |
 | `POST` | `/patients/{id}/problems` | Add problem to MPPL |
-| `PATCH` | `/patients/{id}/problems/{problem_id}` | Update problem |
-| `DELETE` | `/patients/{id}/problems/{problem_id}` | Soft-delete problem |
-| `POST` | `/encounters/{id}/ai-scribe` | Stream AI SOAP note + structured JSON (SSE) |
-| `POST` | `/encounters/{id}/ai-scribe/accept` | Log AI autofill acceptance with diff |
+| `PATCH` | `/patients/{id}/problems/{pid}` | Update problem |
+| `DELETE` | `/patients/{id}/problems/{pid}` | Soft-delete problem |
+| `POST` | `/patients/{id}/prep-me` | AI clinical summary |
+| `GET` | `/appointments/` | List appointments (date/provider filter) |
+| `POST` | `/appointments/` | Book appointment |
+| `PATCH` | `/appointments/{id}` | Update appointment |
+| `POST` | `/appointments/{id}/check-in` | Check in patient |
+| `POST` | `/appointments/{id}/start-exam` | Create encounter from appointment |
+| `POST` | `/appointments/{id}/cancel` | Cancel with reason |
+| `GET` | `/superbills/{id}` | Get superbill |
+| `PATCH` | `/superbills/{id}` | Update superbill |
+| `GET` | `/superbills/{id}/cms1500` | CMS-1500 JSON export |
+| `GET` | `/optical/queue` | Optical dispensing queue |
+| `PATCH` | `/optical/{id}/status` | Update optical status |
+| `GET` | `/staff/` | List clinic staff |
+| `POST` | `/staff/` | Create staff member |
+| `PATCH` | `/staff/{id}` | Update staff |
+| `GET` | `/audit-logs/` | Tenant-wide audit logs (paginated) |
+| `GET` | `/audit-logs/export` | CSV export |
 | `GET` | `/encounters/{id}/audit-logs` | Encounter-level audit trail |
-| `GET` | `/audit-logs` | Tenant-wide audit logs (paginated, filterable) |
-| `GET` | `/audit-logs/export` | CSV export of audit logs |
-| `GET` | `/staff` | List clinic staff (admin/owner) |
-| `POST` | `/staff` | Create staff member |
-| `PATCH` | `/staff/{id}` | Update staff role/profile |
+| `POST` | `/intake/validate-token` | Validate intake token |
+| `POST` | `/intake/verify-dob` | DOB verification |
+| `POST` | `/intake/submit` | Submit intake form |

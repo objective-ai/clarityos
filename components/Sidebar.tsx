@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { useCurrentUser, useCurrentTenant } from "@/store/sessionStore";
@@ -67,8 +66,17 @@ const Icon = {
   ),
   Settings: () => (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.7 3.7l1.4 1.4M10.9 10.9l1.4 1.4M3.7 12.3l1.4-1.4M10.9 5.1l1.4-1.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M2 4h8M14 4h0M2 8h3M9 8h5M2 12h10M14 12h0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <circle cx="12" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="7" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="13" cy="12" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  ),
+  Clipboard: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="3" y="2.5" width="10" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6 2.5V2a2 2 0 014 0v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M6 7h4M6 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   ),
   Lock: () => (
@@ -96,22 +104,23 @@ interface NavItem {
 // ---------------------------------------------------------------------------
 
 interface SidebarProps {
-  tenantId: string;
+  tenant: string;
   isCollapsed: boolean;
   onToggle: () => void;
 }
 
-export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
+export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { has, requireRole } = useEntitlements();
   const user = useCurrentUser();
   const tenant = useCurrentTenant();
   const logoUrl = useTenantCustomizationStore((s) => s.logoUrl);
 
-  const base = `/${tenantId}`;
+  const base = `/${tenantSlug}`;
 
   const navItems: NavItem[] = [
     { label: "Dashboard", href: `${base}/dashboard`, icon: Icon.Dashboard },
+    { label: "Intake Form", href: "/intake", icon: Icon.Clipboard },
     { label: "Schedule", href: `${base}/schedule`, icon: Icon.Calendar, requiredEntitlement: Entitlement.SCHEDULING },
     { label: "Patients", href: `${base}/patients`, icon: Icon.Patients, requiredEntitlement: Entitlement.PATIENT_DEMOGRAPHICS },
     { label: "Analytics", href: `${base}/analytics`, icon: Icon.Analytics, requiredEntitlement: Entitlement.ADVANCED_ANALYTICS },
@@ -273,10 +282,6 @@ export function Sidebar({ tenantId, isCollapsed, onToggle }: SidebarProps) {
             </div>
           </div>
         )}
-        <LogoutButton
-          collapsed={isCollapsed}
-          className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-        />
       </div>
     </aside>
   );

@@ -167,7 +167,7 @@ export function SuperbillModal({
 
   const allDiagnoses = useDiagnoses(encounterId);
   const activeDiagnoses = allDiagnoses.filter((dx) => dx.status === "Active");
-  const icdCodes = activeDiagnoses.map((dx) => dx.icd10_code);
+  const icdCodes = activeDiagnoses.map((dx) => dx.icd10Code);
 
   // Load or create superbill on open
   useEffect(() => {
@@ -180,10 +180,10 @@ export function SuperbillModal({
   // Auto-create superbill if none exists after load
   useEffect(() => {
     if (!open) return;
-    if (loadStatus === "loaded" && !superbill && !isSaving) {
+    if (loadStatus === "loaded" && !superbill && !isSaving && !storeError) {
       createSuperbill(encounterId);
     }
-  }, [open, loadStatus, superbill, isSaving, encounterId, createSuperbill]);
+  }, [open, loadStatus, superbill, isSaving, storeError, encounterId, createSuperbill]);
 
   // ── Handlers ──────────────────────────────────────────────────────────
 
@@ -222,7 +222,7 @@ export function SuperbillModal({
       superbill,
       {
         firstName: nameParts[0] ?? "",
-        lastName: nameParts.slice(1).join(" ") || nameParts[0] ?? "",
+        lastName: (nameParts.slice(1).join(" ") || nameParts[0]) ?? "",
         dob: "1970-01-01", // Would come from patient record
         sex: "unknown",
       },
@@ -256,7 +256,7 @@ export function SuperbillModal({
     superbill?.lineItems?.map((li) => li.cptCode) ?? [],
   );
   const isReadyToBill = superbill?.claimStatus === "ready_to_bill";
-  const isLoading = loadStatus === "loading" || (loadStatus === "loaded" && !superbill && isSaving);
+  const isLoading = (loadStatus === "loading" || (loadStatus === "loaded" && !superbill && isSaving)) && !storeError;
 
   // ── Render ────────────────────────────────────────────────────────────
 
@@ -511,11 +511,11 @@ export function SuperbillModal({
                 {activeDiagnoses.map((dx) => (
                   <div key={dx.id} className="flex items-center gap-2 text-xs">
                     <Badge variant="secondary" className="text-[9px] font-mono flex-shrink-0">
-                      {dx.icd10_code}
+                      {dx.icd10Code}
                     </Badge>
                     <span style={{ color: "var(--text-primary)" }}>{dx.description}</span>
-                    {dx.eye_affected && (
-                      <Badge variant="outline" className="text-[9px]">{dx.eye_affected}</Badge>
+                    {dx.eyeAffected && (
+                      <Badge variant="outline" className="text-[9px]">{dx.eyeAffected}</Badge>
                     )}
                   </div>
                 ))}

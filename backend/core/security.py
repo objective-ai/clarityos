@@ -19,11 +19,15 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+import jwt as pyjwt
+from jwt import PyJWKClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+
+# Cache the JWKS client so we don't re-fetch on every request
+_jwks_client = PyJWKClient(f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json")
 
 # ---------------------------------------------------------------------------
 # Bearer token extractor
@@ -67,13 +71,14 @@ async def get_current_tenant(
 
     # ── Verify JWT ────────────────────────────────────────────────────────
     try:
-        payload = jwt.decode(
+        signing_key = _jwks_client.get_signing_key_from_jwt(token)
+        payload = pyjwt.decode(
             token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256", "HS256"],
             audience="authenticated",
         )
-    except JWTError as exc:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid or expired token: {exc}",
@@ -120,7 +125,7 @@ async def resolve_staff(
     ctx: TenantContext,
     db: AsyncSession,
 ) -> "Staff | None":
-    """Resolve the authenticated user's Staff record (maps global_user_id → staff.id).
+    """Resolve the authenticated user's Staff record (maps user_id → staff.id).
 
     Returns None if no active staff record exists for the user in this tenant.
     """
@@ -129,7 +134,7 @@ async def resolve_staff(
     return (
         await db.execute(
             select(Staff).where(
-                Staff.global_user_id == ctx.user_id,
+                Staff.user_id == ctx.user_id,
                 Staff.tenant_id == ctx.tenant_id,
                 Staff.is_active == True,  # noqa: E712
             )

@@ -8,6 +8,7 @@
  */
 
 import { useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 interface IntakeLinkModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export default function IntakeLinkModal({
   appointmentDate,
 }: IntakeLinkModalProps) {
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   if (!isOpen) return null;
 
@@ -34,7 +36,6 @@ export default function IntakeLinkModal({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
       const input = document.createElement("input");
       input.value = url;
       document.body.appendChild(input);
@@ -61,24 +62,60 @@ export default function IntakeLinkModal({
           {appointmentDate && <> for their {appointmentDate} appointment</>}.
         </p>
 
-        {/* URL display */}
-        <div className="flex gap-2 mb-4">
-          <input
-            readOnly
-            value={url}
-            className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-[var(--text-secondary)] font-mono truncate"
-          />
+        {/* Tab toggle: Link / QR Code */}
+        <div className="flex gap-1 mb-4 rounded-lg bg-white/5 p-1">
           <button
-            onClick={copyLink}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              copied
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                : "bg-[var(--accent)] text-[var(--text-inverse)] hover:bg-[var(--accent-hover)]"
+            onClick={() => setShowQR(false)}
+            className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${
+              !showQR
+                ? "bg-white/10 text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
             }`}
           >
-            {copied ? "Copied!" : "Copy"}
+            Link
+          </button>
+          <button
+            onClick={() => setShowQR(true)}
+            className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${
+              showQR
+                ? "bg-white/10 text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+            }`}
+          >
+            QR Code
           </button>
         </div>
+
+        {showQR ? (
+          /* QR Code display */
+          <div className="flex flex-col items-center gap-3 mb-4">
+            <div className="rounded-xl bg-white p-4">
+              <QRCodeSVG value={url} size={200} level="M" />
+            </div>
+            <p className="text-xs text-[var(--text-muted)] text-center">
+              Patient can scan this with their phone camera
+            </p>
+          </div>
+        ) : (
+          /* URL display */
+          <div className="flex gap-2 mb-4">
+            <input
+              readOnly
+              value={url}
+              className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-[var(--text-secondary)] font-mono truncate"
+            />
+            <button
+              onClick={copyLink}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                copied
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "bg-[var(--accent)] text-[var(--text-inverse)] hover:bg-[var(--accent-hover)]"
+              }`}
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        )}
 
         <p className="text-xs text-[var(--text-muted)] mb-4">
           This link expires in 72 hours. The patient will need to verify their date of birth before accessing the form.

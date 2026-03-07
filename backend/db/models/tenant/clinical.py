@@ -9,6 +9,7 @@ Tenant isolation is enforced at the Python level — every query MUST include
 """
 
 import enum
+import secrets
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -216,10 +217,12 @@ class Patient(TimestampMixin, SoftDeleteMixin, TenantBase):
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     preferred_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     dob: Mapped[str] = mapped_column(Date, nullable=False)  # type: ignore[assignment]
-    sex: Mapped[Sex] = mapped_column(Enum(Sex, name="sex_enum"), nullable=False)
+    sex: Mapped[Sex] = mapped_column(Enum(Sex, name="sex", create_type=False), nullable=False)
 
     # Encrypted at the infrastructure level (RDS encryption / pgcrypto).
     # Do NOT log or expose these fields in API responses unless explicitly needed.
+    chart_number: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+
     ssn_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
 
     contact_info_jsonb: Mapped[dict] = mapped_column(
@@ -363,6 +366,9 @@ class Encounter(TimestampMixin, SoftDeleteMixin, TenantBase):
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, index=True
+    )
+    short_id: Mapped[str] = mapped_column(
+        String(12), nullable=False, unique=True, default=lambda: secrets.token_urlsafe(6)
     )
 
     # --- FKs ---
@@ -840,9 +846,7 @@ class AuditLog(TenantBase):
     )  # resolved internal staff ID
 
     # What
-    action: Mapped[AuditAction] = mapped_column(
-        Enum(AuditAction, name="audit_action_enum"), nullable=False
-    )
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
     resource_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 

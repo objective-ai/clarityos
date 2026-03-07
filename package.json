@@ -10,7 +10,9 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "api:restart": "bash scripts/dev.sh restart-api",
+    "api:check": "bash scripts/dev.sh check-api"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -22,6 +24,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.576.0",
     "next": "14.2.5",
+    "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-idle-timer": "^5.7.2",
@@ -41,6 +44,7 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "jsdom": "^28.1.0",
+    "playwright": "^1.58.2",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",

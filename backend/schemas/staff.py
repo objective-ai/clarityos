@@ -22,6 +22,7 @@ class StaffListItem(AppBaseModel):
     last_name: str
     role: str
     is_active: bool
+    user_id: UUID | None = None
     created_at: datetime
 
 
@@ -29,10 +30,20 @@ class StaffDetailResponse(StaffListItem):
     """Full staff member detail."""
 
     tenant_id: UUID
-    global_user_id: UUID
+    user_id: UUID | None = None
     license_number: str | None = None
     npi_number: str | None = None
     updated_at: datetime | None = None
+
+
+class StaffCreateRequest(BaseModel):
+    """Create a new staff member."""
+
+    first_name: str
+    last_name: str
+    role: str
+    license_number: str | None = None
+    npi_number: str | None = None
 
 
 class StaffUpdateRequest(BaseModel):
@@ -44,3 +55,4 @@ class StaffUpdateRequest(BaseModel):
     license_number: str | None = None
     npi_number: str | None = None
     is_active: bool | None = None
+    user_id: str | None = None  # UUID string or "" to unlink
