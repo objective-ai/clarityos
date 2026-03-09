@@ -65,3 +65,6 @@ test-results/
 
 # claude code
 .claude/
+
+# local docs / specs (not for repo)
+docs/
