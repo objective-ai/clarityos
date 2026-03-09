@@ -433,6 +433,41 @@ class EncounterFinalizeRequest(AppBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Encounter: Addenda
+# ---------------------------------------------------------------------------
+
+
+class AddendumCreate(AppBaseModel):
+    """Request body for POST /encounters/{id}/addenda"""
+
+    content: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="Immutable post-finalization amendment text.",
+    )
+
+    @field_validator("content")
+    @classmethod
+    def strip_content(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 10:
+            raise ValueError("Addendum must be at least 10 characters.")
+        return v
+
+
+class AddendumResponse(AppBaseModel):
+    """A single post-finalization addendum."""
+
+    id: uuid.UUID
+    encounter_id: uuid.UUID
+    content: str
+    created_by_id: uuid.UUID
+    created_by_name: str
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Encounter: Response schemas
 # ---------------------------------------------------------------------------
 
@@ -487,6 +522,7 @@ class EncounterResponse(AppBaseModel):
     refractions: list[RefractionSummary] = Field(default_factory=list)
     diagnoses: list[DiagnosisResponse] = Field(default_factory=list)
     exam_findings: list[ExamFindingsResponse] = Field(default_factory=list)
+    addenda: list[AddendumResponse] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: datetime

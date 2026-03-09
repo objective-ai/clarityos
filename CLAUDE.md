@@ -18,6 +18,14 @@ Before starting work, run `git log --oneline -5` to see recent changes. Don't tr
 - **SQLAlchemy:** After `db.flush()`, re-fetch with `selectinload` (never `db.refresh` — MissingGreenlet). Enums stored as VARCHAR (`native_enum=False`).
 - **DB:** Seed into `public` schema only. `clinic_sunview` schema is unused (future v2/v3).
 
+## Development Workflow
+- **Features:** Plan Mode → Execute → sub-architect review → commit
+- **Major features / before merge:** add `/second-opinion` (Gemini/Codex external review)
+- **Bug fixes:** can skip Plan Mode → fix → sub-architect review → commit
+- **Plan Mode:** Ctrl+Shift+P → "Enter Plan Mode" — forces research and design before code
+- **sub-architect:** spawned automatically after implementation to review against the plan
+- **`/second-opinion`:** calls Gemini CLI or Codex for cross-model review of the diff
+
 ## Anti-Hallucination Rules
 - **Read before writing:** Always read a file before editing it. Never assume file contents from memory.
 - **Verify selectors:** Read the actual component TSX before writing Playwright selectors — button text, IDs, and class names change.

@@ -151,6 +151,8 @@ class AuditAction(str, enum.Enum):
     # Intake actions (added in Phase 7 — patient intake)
     GENERATE_INTAKE_TOKEN = "generate_intake_token"
     INTAKE_SUBMITTED = "intake_submitted"
+    # Addendum actions (added in Sprint 4.2 — encounter addenda)
+    CREATE_ADDENDUM = "create_addendum"
 
 
 # ---------------------------------------------------------------------------
@@ -449,12 +451,56 @@ class Encounter(TimestampMixin, SoftDeleteMixin, TenantBase):
     diagnoses: Mapped[list["Diagnosis"]] = relationship(
         "Diagnosis", back_populates="encounter", cascade="all, delete-orphan"
     )
+    addenda: Mapped[list["EncounterAddendum"]] = relationship(
+        "EncounterAddendum", back_populates="encounter",
+        cascade="all, delete-orphan", order_by="EncounterAddendum.created_at"
+    )
 
     def __repr__(self) -> str:
         return (
             f"<Encounter patient_id={self.patient_id} "
             f"date={self.encounter_date} finalized={self.is_finalized}>"
         )
+
+
+# ---------------------------------------------------------------------------
+# EncounterAddendum — post-finalization timestamped amendments
+# ---------------------------------------------------------------------------
+
+
+class EncounterAddendum(TimestampMixin, TenantBase):
+    """Immutable post-finalization note appended to a locked encounter.
+
+    Once created, addenda cannot be edited or deleted — they serve as
+    a legally compliant audit trail of amendments to the clinical record.
+    """
+
+    __tablename__ = "encounter_addenda"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    encounter_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("encounters.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+
+    # --- Relationships ---
+    encounter: Mapped["Encounter"] = relationship(
+        "Encounter", back_populates="addenda"
+    )
+    created_by: Mapped["Staff"] = relationship("Staff")
 
 
 # ---------------------------------------------------------------------------

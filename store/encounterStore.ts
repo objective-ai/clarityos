@@ -82,8 +82,8 @@ const NEXT_STATUS: Record<EncounterStatus, EncounterStatus | null> = {
   finalized: null,
 };
 
-// V2: Add unlockForAddendum(id) action — creates timestamped amendment record
-// rather than reopening original fields. Finalization remains one-way in MVP.
+// Addenda are handled by AddendumSection (self-contained, no store needed).
+// Finalization remains one-way — addenda append without unlocking.
 
 // ---------------------------------------------------------------------------
 // Store

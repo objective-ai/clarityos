@@ -22,13 +22,17 @@ from backend.db.models.tenant.clinical import (
     AuditAction,
     Diagnosis,
     Encounter,
+    EncounterAddendum,
     ExamFindings,
     PatientProblem,
     Refraction,
+    Staff,
     VitalsAndPretest,
 )
 from backend.db.session import get_db
 from backend.schemas.encounter import (
+    AddendumCreate,
+    AddendumResponse,
     DiagnosisResponse,
     EncounterCreateRequest,
     EncounterFinalizeRequest,
@@ -45,6 +49,31 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+async def _refetch_encounter(db: AsyncSession, encounter_id) -> Encounter:
+    """Re-fetch an encounter with all relationships via selectinload.
+
+    Use this instead of db.refresh() after db.flush() to avoid
+    MissingGreenlet errors in async SQLAlchemy.
+    """
+    return (
+        await db.execute(
+            select(Encounter)
+            .where(Encounter.id == encounter_id)
+            .options(
+                selectinload(Encounter.vitals),
+                selectinload(Encounter.refractions),
+                selectinload(Encounter.diagnoses),
+                selectinload(Encounter.exam_findings),
+                selectinload(Encounter.addenda).selectinload(EncounterAddendum.created_by),
+                selectinload(Encounter.signed_by),
+                selectinload(Encounter.patient),
+                selectinload(Encounter.provider),
+                selectinload(Encounter.appointment),
+            )
+        )
+    ).scalar_one()
 
 
 def _build_encounter_response(enc: Encounter) -> EncounterResponse:
@@ -153,6 +182,17 @@ def _build_encounter_response(enc: Encounter) -> EncounterResponse:
             )
             for ef in enc.exam_findings
         ],
+        addenda=[
+            AddendumResponse(
+                id=a.id,
+                encounter_id=a.encounter_id,
+                content=a.content,
+                created_by_id=a.created_by_id,
+                created_by_name=a.created_by.full_name if a.created_by else "Unknown",
+                created_at=a.created_at,
+            )
+            for a in enc.addenda
+        ],
         created_at=enc.created_at,
         updated_at=enc.updated_at,
     )
@@ -189,7 +229,7 @@ async def create_encounter(
         detail="Created encounter",
         ip_address=request.client.host if request.client else None,
     )
-    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings", "signed_by", "patient", "provider", "appointment"])
+    enc = await _refetch_encounter(db, enc.id)
     return _build_encounter_response(enc)
 
 
@@ -218,6 +258,7 @@ async def get_encounter(
             selectinload(Encounter.refractions),
             selectinload(Encounter.diagnoses),
             selectinload(Encounter.exam_findings),
+            selectinload(Encounter.addenda).selectinload(EncounterAddendum.created_by),
             selectinload(Encounter.signed_by),
             selectinload(Encounter.patient),
             selectinload(Encounter.provider),
@@ -288,7 +329,7 @@ async def update_encounter(
         ip_address=request.client.host if request.client else None,
     )
     await db.flush()
-    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings", "signed_by", "patient", "provider", "appointment"])
+    enc = await _refetch_encounter(db, enc.id)
     return _build_encounter_response(enc)
 
 
@@ -391,5 +432,128 @@ async def finalize_encounter(
             problem.resolved_date = enc.encounter_date
 
     await db.flush()
-    await db.refresh(enc, attribute_names=["vitals", "refractions", "diagnoses", "exam_findings", "signed_by", "patient", "provider", "appointment"])
+    enc = await _refetch_encounter(db, enc.id)
     return _build_encounter_response(enc)
+
+
+# ---------------------------------------------------------------------------
+# GET /encounters/{id}/addenda — list addenda
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{encounter_id}/addenda", response_model=list[AddendumResponse])
+async def list_addenda(
+    encounter_id: str,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_ENCOUNTER)),
+    db: AsyncSession = Depends(get_db),
+):
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
+
+    enc = (
+        await db.execute(
+            select(Encounter)
+            .where(Encounter.id == encounter_id, Encounter.tenant_id == ctx.tenant_id, Encounter.is_deleted == False)  # noqa: E712
+        )
+    ).scalar_one_or_none()
+    if not enc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+
+    rows = (
+        await db.execute(
+            select(EncounterAddendum)
+            .where(
+                EncounterAddendum.encounter_id == encounter_id,
+                EncounterAddendum.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(EncounterAddendum.created_by))
+            .order_by(EncounterAddendum.created_at.asc())
+        )
+    ).scalars().all()
+
+    return [
+        AddendumResponse(
+            id=a.id,
+            encounter_id=a.encounter_id,
+            content=a.content,
+            created_by_id=a.created_by_id,
+            created_by_name=a.created_by.full_name if a.created_by else "Unknown",
+            created_at=a.created_at,
+        )
+        for a in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# POST /encounters/{id}/addenda — create addendum (finalized only)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{encounter_id}/addenda", response_model=AddendumResponse, status_code=status.HTTP_201_CREATED)
+async def create_addendum(
+    encounter_id: str,
+    payload: AddendumCreate,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.FINALIZE_ENCOUNTER)),
+    db: AsyncSession = Depends(get_db),
+):
+    encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
+
+    staff = await resolve_staff(ctx, db)
+    if not staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No active staff record found for the current user.",
+        )
+
+    enc = (
+        await db.execute(
+            select(Encounter)
+            .where(Encounter.id == encounter_id, Encounter.tenant_id == ctx.tenant_id, Encounter.is_deleted == False)  # noqa: E712
+        )
+    ).scalar_one_or_none()
+
+    if not enc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+    if not enc.is_finalized:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Addenda can only be added to finalized encounters.",
+        )
+
+    addendum = EncounterAddendum(
+        tenant_id=ctx.tenant_id,
+        encounter_id=enc.id,
+        content=payload.content,
+        created_by_id=staff.id,
+    )
+    db.add(addendum)
+
+    await log_action(
+        db, ctx, AuditAction.CREATE_ADDENDUM, "encounter_addendum", addendum.id,
+        encounter_id=enc.id,
+        patient_id=enc.patient_id,
+        staff_id=staff.id,
+        detail=f"Addendum added by {staff.full_name}",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    await db.flush()
+
+    # Re-fetch with selectinload (never db.refresh — MissingGreenlet)
+    addendum = (
+        await db.execute(
+            select(EncounterAddendum)
+            .where(EncounterAddendum.id == addendum.id)
+            .options(selectinload(EncounterAddendum.created_by))
+        )
+    ).scalar_one()
+
+    return AddendumResponse(
+        id=addendum.id,
+        encounter_id=addendum.encounter_id,
+        content=addendum.content,
+        created_by_id=addendum.created_by_id,
+        created_by_name=addendum.created_by.full_name if addendum.created_by else "Unknown",
+        created_at=addendum.created_at,
+    )

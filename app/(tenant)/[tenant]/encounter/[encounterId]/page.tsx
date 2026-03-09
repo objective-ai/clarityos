@@ -27,6 +27,7 @@ import { ExamFindings } from "@/components/encounter/ExamFindings";
 import { ExamFindingsCard } from "@/components/encounter/ExamFindingsCard";
 import { DiagnosisPicker } from "@/components/encounter/DiagnosisPicker";
 import { ContinuitySidebar } from "@/components/encounter/ContinuitySidebar";
+import { AddendumSection } from "@/components/encounter/AddendumSection";
 import { GlassCardSkeleton } from "@/components/ui/skeleton";
 import { useProblemListStore } from "@/store/problemListStore";
 import {
@@ -608,6 +609,32 @@ export default function EncounterPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 
+  // --- Cross-store dirty guard: warn before closing with unsaved clinical data -
+  const vitalsDirty = useVitalsStore(
+    (s) => s.encounters[params.encounterId]?.saveStatus === "dirty"
+  );
+  const refractionDirty = useRefractionStore(
+    (s) => s.encounterId === params.encounterId && s.columns.some((c) => c.saveStatus === "dirty")
+  );
+  const examAnteriorDirty = useExamFindingsStore(
+    (s) => s.findings[`${params.encounterId}:anterior_segment` as FindingsStoreKey]?.saveStatus === "dirty"
+  );
+  const examPosteriorDirty = useExamFindingsStore(
+    (s) => s.findings[`${params.encounterId}:posterior_segment` as FindingsStoreKey]?.saveStatus === "dirty"
+  );
+  const hasUnsavedClinical = vitalsDirty || refractionDirty || examAnteriorDirty || examPosteriorDirty;
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedClinical) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedClinical]);
+
   // Show full-page skeleton while encounter header is loading
   if (encounterLoadStatus === "loading" || encounterLoadStatus === "idle") {
     return (
@@ -817,6 +844,15 @@ export default function EncounterPage({
           ) : null}
         </PermissionGate>
       </div>
+
+      {/* Addenda — post-finalization amendments (doctors & owners only) */}
+      {isFinalized && (
+        <div id="section-addenda">
+          <PermissionGate roles={["doctor", "owner"]}>
+            <AddendumSection encounterId={params.encounterId} />
+          </PermissionGate>
+        </div>
+      )}
 
       {/* Spacer so fixed bottom bar doesn't overlap content */}
       <div className="h-16" />
