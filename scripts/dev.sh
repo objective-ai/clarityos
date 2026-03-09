@@ -6,6 +6,17 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$PROJECT_DIR/venv/Scripts/activate"
 
 case "${1:-help}" in
+  ensure-api)
+    # Only restart if API is not responding — prevents wasteful restart loops
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "000")
+    if [ "$STATUS" = "200" ]; then
+      echo "FastAPI already UP (HTTP $STATUS) — no restart needed"
+      exit 0
+    fi
+    echo "FastAPI not responding ($STATUS) — restarting..."
+    # Fall through to restart-api
+    ;&
+
   restart-api)
     echo "--- Killing existing uvicorn ---"
     taskkill //F //IM uvicorn.exe 2>/dev/null || true
@@ -36,6 +47,20 @@ case "${1:-help}" in
     echo "FastAPI: $API | Next.js: $NEXT"
     ;;
 
+  pre-test)
+    # Quick gate: ensure both servers are up before any test run
+    API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "000")
+    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
+    FAIL=0
+    if [ "$API" != "200" ]; then echo "FAIL: FastAPI not responding ($API)"; FAIL=1; fi
+    if [ "$NEXT" != "200" ]; then echo "FAIL: Next.js not responding ($NEXT)"; FAIL=1; fi
+    if [ "$FAIL" = "1" ]; then
+      echo "Start servers before running tests: npm run dev + uvicorn backend.main:app --reload"
+      exit 1
+    fi
+    echo "OK: FastAPI ($API) + Next.js ($NEXT)"
+    ;;
+
   verify)
     SCRIPT="${2:?Usage: dev.sh verify /tmp/script.js}"
     cd ~/.claude/skills/playwright-skill
@@ -49,11 +74,13 @@ case "${1:-help}" in
     ;;
 
   help)
-    echo "Usage: scripts/dev.sh {restart-api|check-api|verify <script>|smoke}"
+    echo "Usage: scripts/dev.sh {ensure-api|restart-api|check-api|pre-test|verify <script>|smoke}"
     echo ""
     echo "Commands:"
+    echo "  ensure-api    Start FastAPI only if not already running (idempotent)"
     echo "  restart-api   Kill uvicorn, verify imports, start fresh, health-check"
     echo "  check-api     Quick health-check of FastAPI + Next.js"
+    echo "  pre-test      Gate: verify both servers up before tests (exits 1 if not)"
     echo "  verify <js>   Run a Playwright test script"
     echo "  smoke         Run smoke test (login + schedule + patients)"
     ;;

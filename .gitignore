@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+tests/e2e/.auth-session.json
+.eslintcache
 
 # next.js
 /.next/

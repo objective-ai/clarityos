@@ -7,10 +7,17 @@
  *   const { launchBrowser, login, extractJwt, setupTracking, printResults } = require('./helpers/test-utils');
  */
 
+const fs = require('fs');
+const path = require('path');
+
 const TARGET_URL = process.env.TARGET_URL || 'http://localhost:3000';
 const API_URL = process.env.API_URL || 'http://localhost:8000';
 const EMAIL = process.env.E2E_EMAIL || 'duytran@yahoo.com';
 const PASSWORD = process.env.E2E_PASSWORD || '123456';
+
+// Session cache — avoids full UI login on every test file
+const SESSION_FILE = path.join(__dirname, '..', '.auth-session.json');
+const SESSION_TTL = 45 * 60 * 1000; // 45 min (Supabase JWT expires in 1hr)
 
 // Console error patterns to ignore (SSR hydration, expected resource loads)
 const IGNORED_CONSOLE_PATTERNS = [
@@ -26,7 +33,7 @@ const IGNORED_CONSOLE_PATTERNS = [
 async function launchBrowser(opts = {}) {
   const { chromium } = require('playwright');
   const headless = opts.headless ?? false;
-  const browser = await chromium.launch({ headless, slowMo: opts.slowMo ?? 50 });
+  const browser = await chromium.launch({ headless, slowMo: opts.slowMo ?? (headless ? 0 : 50) });
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
   });
@@ -58,6 +65,45 @@ async function login(page, opts = {}) {
   const slug = match ? match[1] : null;
 
   if (!slug || slug === 'login') return null;
+  return slug;
+}
+
+/**
+ * Log in via UI OR restore a cached session (saves ~15-20s per test file).
+ * Falls back to full UI login if cache is missing/expired.
+ * Returns the tenant slug or null on failure.
+ */
+async function loginOrRestore(context, page, opts = {}) {
+  // Try restore cached session
+  if (fs.existsSync(SESSION_FILE)) {
+    try {
+      const saved = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf-8'));
+      if (Date.now() - saved.timestamp < SESSION_TTL) {
+        await context.addCookies(saved.cookies);
+        // Verify session is still valid by navigating
+        const url = opts.url || TARGET_URL;
+        await page.goto(`${url}/${saved.slug}/dashboard`, { waitUntil: 'networkidle', timeout: 15000 });
+        const finalUrl = page.url();
+        if (finalUrl.includes(saved.slug) && !finalUrl.includes('/login')) {
+          return saved.slug;
+        }
+        // Session expired server-side, fall through to fresh login
+      }
+    } catch {
+      // Corrupted cache, fall through
+    }
+  }
+
+  // Fresh UI login
+  const slug = await login(page, opts);
+  if (slug) {
+    try {
+      const cookies = await context.cookies();
+      fs.writeFileSync(SESSION_FILE, JSON.stringify({ cookies, slug, timestamp: Date.now() }));
+    } catch {
+      // Non-fatal — session caching is best-effort
+    }
+  }
   return slug;
 }
 
@@ -159,6 +205,7 @@ module.exports = {
   PASSWORD,
   launchBrowser,
   login,
+  loginOrRestore,
   extractJwt,
   setupTracking,
   getFailedApiCalls,
