@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext
 from backend.db.models.tenant.clinical import (
+    ClaimStatus,
     Superbill,
 )
 from backend.db.session import get_db
@@ -28,8 +29,7 @@ router = APIRouter()
 
 @router.get("/", response_model=list[SuperbillListItem])
 async def list_superbills(
-    request: Request,
-    status: Optional[str] = Query(None, description="Filter by claim_status"),
+    status: Optional[ClaimStatus] = Query(None, description="Filter by claim_status"),
     date_from: Optional[date] = Query(None, description="Start date (inclusive)"),
     date_to: Optional[date] = Query(None, description="End date (inclusive)"),
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_BILLING)),
@@ -70,11 +70,7 @@ async def list_superbills(
                 if sb.patient else "Unknown"
             ),
             provider_name=sb.provider.full_name if sb.provider else "Unknown",
-            claim_status=(
-                sb.claim_status.value
-                if hasattr(sb.claim_status, "value")
-                else sb.claim_status
-            ),
+            claim_status=sb.claim_status.value,
             cpt_codes=[
                 li.cpt_code for li in (sb.line_items or []) if not li.is_deleted
             ],
