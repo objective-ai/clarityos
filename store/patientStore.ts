@@ -19,6 +19,7 @@ import type {
   PatientSummary,
   PatientUpdatePayload,
   PrepMeResponse,
+  RxHistoryRow,
 } from "@/types/patient";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -50,6 +51,11 @@ interface PatientStoreState {
   flowsheetLoading: boolean;
   flowsheetError: string | null;
 
+  // Rx History
+  rxHistory: RxHistoryRow[];
+  rxHistoryLoading: boolean;
+  rxHistoryError: string | null;
+
   // Prep Me
   prepMeSummary: string | null;
   prepMeLoading: boolean;
@@ -72,6 +78,9 @@ interface PatientStoreActions {
 
   // Flowsheet
   fetchFlowsheet: (patientId: string) => Promise<void>;
+
+  // Rx History
+  fetchRxHistory: (patientId: string, modality?: string) => Promise<void>;
 
   // Prep Me
   fetchPrepMe: (patientId: string) => Promise<void>;
@@ -108,6 +117,10 @@ export const usePatientStore = create<PatientStore>()(
       flowsheet: [],
       flowsheetLoading: false,
       flowsheetError: null,
+
+      rxHistory: [],
+      rxHistoryLoading: false,
+      rxHistoryError: null,
 
       prepMeSummary: null,
       prepMeLoading: false,
@@ -225,6 +238,21 @@ export const usePatientStore = create<PatientStore>()(
         }
       },
 
+      // -- Rx History --
+      fetchRxHistory: async (patientId, modality) => {
+        set({ rxHistoryLoading: true, rxHistoryError: null }, false, "fetchRxHistory/start");
+        try {
+          const params = modality ? `?modality=${modality}` : "";
+          const data = await apiFetch<RxHistoryRow[]>(
+            `/api/patients/${patientId}/rx-history${params}`
+          );
+          set({ rxHistory: data, rxHistoryLoading: false }, false, "fetchRxHistory/success");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to load Rx history";
+          set({ rxHistoryLoading: false, rxHistoryError: msg }, false, "fetchRxHistory/error");
+        }
+      },
+
       // -- Prep Me --
       fetchPrepMe: async (patientId) => {
         set({ prepMeLoading: true, prepMeSummary: null, prepMeError: null }, false, "fetchPrepMe/start");
@@ -251,6 +279,7 @@ export const usePatientStore = create<PatientStore>()(
             activePatient: null,
             encounters: [],
             flowsheet: [],
+            rxHistory: [],
             prepMeSummary: null,
           },
           false,
@@ -270,3 +299,4 @@ export const usePatients = () => usePatientStore((s) => s.patients);
 export const useActivePatient = () => usePatientStore((s) => s.activePatient);
 export const usePatientEncounters = () => usePatientStore((s) => s.encounters);
 export const usePatientFlowsheet = () => usePatientStore((s) => s.flowsheet);
+export const usePatientRxHistory = () => usePatientStore((s) => s.rxHistory);

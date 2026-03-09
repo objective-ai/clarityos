@@ -44,6 +44,7 @@ from backend.schemas.patient import (
     PatientSummary,
     PatientUpdateRequest,
     PrepMeResponse,
+    RxHistoryRow,
 )
 
 router = APIRouter()
@@ -556,6 +557,97 @@ async def get_patient_flowsheet(
             cylinder_os=rx.os_cylinder if rx else None,
             add_od=rx.od_add if rx else None,
             add_os=rx.os_add if rx else None,
+        ))
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# GET /api/patients/{id}/rx-history — finalized prescription history
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{patient_id}/rx-history", response_model=list[RxHistoryRow])
+async def get_rx_history(
+    patient_id: str,
+    request: Request,
+    modality: str | None = Query(None, description="Filter: glasses or contact_lens"),
+    limit: int = Query(50, ge=1, le=200),
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_PATIENT)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get finalized prescription history across encounters."""
+    patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
+
+    # Verify patient
+    patient = (
+        await db.execute(
+            select(Patient).where(
+                Patient.id == patient_id,
+                Patient.tenant_id == ctx.tenant_id,
+                Patient.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not patient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+
+    # Validate modality filter
+    if modality and modality not in ("glasses", "contact_lens"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="modality must be 'glasses' or 'contact_lens'",
+        )
+
+    await log_action(
+        db, ctx, AuditAction.PHI_VIEWED, "patient", patient.id,
+        patient_id=patient.id,
+        detail="Viewed Rx history",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    # Get finalized encounters with final Rx
+    stmt = (
+        select(Refraction)
+        .join(Encounter, Refraction.encounter_id == Encounter.id)
+        .where(
+            Encounter.patient_id == patient_id,
+            Encounter.tenant_id == ctx.tenant_id,
+            Encounter.is_deleted == False,  # noqa: E712
+            Encounter.is_finalized == True,  # noqa: E712
+            Refraction.is_final_rx == True,  # noqa: E712
+        )
+        .options(
+            selectinload(Refraction.encounter).selectinload(Encounter.provider),
+        )
+        .order_by(Encounter.encounter_date.desc())
+        .limit(limit)
+    )
+
+    if modality:
+        stmt = stmt.where(Refraction.rx_modality == modality)
+
+    result = await db.execute(stmt)
+    refractions = result.scalars().all()
+
+    rows: list[RxHistoryRow] = []
+    for rx in refractions:
+        enc = rx.encounter
+        rows.append(RxHistoryRow(
+            encounter_id=enc.id,
+            encounter_date=enc.encounter_date,
+            provider_name=enc.provider.full_name if enc.provider else None,
+            rx_modality=rx.rx_modality,
+            rx_type=rx.refraction_type.value if hasattr(rx.refraction_type, "value") else str(rx.refraction_type),
+            od_sphere=rx.od_sphere,
+            od_cylinder=rx.od_cylinder,
+            od_axis=rx.od_axis,
+            od_add=rx.od_add,
+            os_sphere=rx.os_sphere,
+            os_cylinder=rx.os_cylinder,
+            os_axis=rx.os_axis,
+            os_add=rx.os_add,
         ))
 
     return rows

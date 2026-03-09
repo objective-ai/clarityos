@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { usePatientStore } from "@/store/patientStore";
@@ -10,7 +12,7 @@ import type { PatientEncounterSummary } from "@/types/patient";
 // Timeline item
 // ---------------------------------------------------------------------------
 
-function TimelineItem({ encounter }: { encounter: PatientEncounterSummary }) {
+function TimelineItem({ encounter, tenant }: { encounter: PatientEncounterSummary; tenant: string }) {
   const dateStr = new Date(encounter.encounterDate).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -31,6 +33,7 @@ function TimelineItem({ encounter }: { encounter: PatientEncounterSummary }) {
         }`}
       />
 
+      <Link href={`/${tenant}/encounter/${encounter.id}`} className="block cursor-pointer">
       <Card className="glass-card-hover transition-all duration-200">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -87,6 +90,7 @@ function TimelineItem({ encounter }: { encounter: PatientEncounterSummary }) {
           )}
         </CardContent>
       </Card>
+      </Link>
     </div>
   );
 }
@@ -100,6 +104,7 @@ interface EncounterTimelineProps {
 }
 
 export function EncounterTimeline({ patientId }: EncounterTimelineProps) {
+  const { tenant } = useParams<{ tenant: string }>();
   const encounters = usePatientStore((s) => s.encounters);
   const loading = usePatientStore((s) => s.encountersLoading);
   const fetchEncounters = usePatientStore((s) => s.fetchEncounters);
@@ -133,7 +138,7 @@ export function EncounterTimeline({ patientId }: EncounterTimelineProps) {
   return (
     <div className="relative">
       {encounters.map((enc) => (
-        <TimelineItem key={enc.id} encounter={enc} />
+        <TimelineItem key={enc.id} encounter={enc} tenant={tenant} />
       ))}
     </div>
   );

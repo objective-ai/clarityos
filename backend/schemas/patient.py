@@ -162,6 +162,29 @@ class FlowsheetRow(AppBaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Rx History row (finalized prescriptions over time)
+# ---------------------------------------------------------------------------
+
+
+class RxHistoryRow(AppBaseModel):
+    """One finalized prescription from a past encounter."""
+
+    encounter_id: uuid.UUID
+    encounter_date: date
+    provider_name: str | None = None
+    rx_modality: str = "glasses"
+    rx_type: str
+    od_sphere: Decimal | None = None
+    od_cylinder: Decimal | None = None
+    od_axis: int | None = None
+    od_add: Decimal | None = None
+    os_sphere: Decimal | None = None
+    os_cylinder: Decimal | None = None
+    os_axis: int | None = None
+    os_add: Decimal | None = None
+
+
+# ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
 

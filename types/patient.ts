@@ -123,6 +123,26 @@ export interface FlowsheetRow {
 }
 
 // ---------------------------------------------------------------------------
+// Rx History row (finalized prescriptions over time)
+// ---------------------------------------------------------------------------
+
+export interface RxHistoryRow {
+  encounterId: string;
+  encounterDate: string;
+  providerName?: string | null;
+  rxModality: "glasses" | "contact_lens";
+  rxType: string;
+  odSphere?: number | null;
+  odCylinder?: number | null;
+  odAxis?: number | null;
+  odAdd?: number | null;
+  osSphere?: number | null;
+  osCylinder?: number | null;
+  osAxis?: number | null;
+  osAdd?: number | null;
+}
+
+// ---------------------------------------------------------------------------
 // AI Prep Me
 // ---------------------------------------------------------------------------
 

@@ -656,6 +656,11 @@ class Refraction(TimestampMixin, TenantBase):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_final_rx: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # glasses | contact_lens — validated at Pydantic/TS level
+    rx_modality: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="glasses", server_default="glasses"
+    )
+
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("staff.id", ondelete="SET NULL"),

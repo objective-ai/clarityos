@@ -12,6 +12,8 @@ import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import { usePatientStore } from "@/store/patientStore";
 import { EncounterTimeline } from "@/components/patient/EncounterTimeline";
 import { ClinicalFlowsheet } from "@/components/patient/ClinicalFlowsheet";
+import { RxHistoryTable } from "@/components/patient/RxHistoryTable";
+import { ProblemListCard } from "@/components/patient/ProblemListCard";
 import { PrepMeButton } from "@/components/patient/PrepMeButton";
 import type { PatientDetail, PatientUpdatePayload } from "@/types/patient";
 
@@ -19,12 +21,13 @@ import type { PatientDetail, PatientUpdatePayload } from "@/types/patient";
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabKey = "demographics" | "encounters" | "flowsheets";
+type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "demographics", label: "Patient Info" },
   { key: "encounters", label: "Encounters" },
   { key: "flowsheets", label: "Flowsheets" },
+  { key: "rx-history", label: "Rx History" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -200,11 +203,15 @@ function EditableSelect({
 
 function DemographicsTab({ patient, patientId }: { patient: PatientDetail; patientId: string }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <ContactInfoCard patient={patient} patientId={patientId} />
-      <InsuranceCard patient={patient} patientId={patientId} />
-      <EmergencyContactCard patient={patient} patientId={patientId} />
-      <NotesCard patient={patient} patientId={patientId} />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ContactInfoCard patient={patient} patientId={patientId} />
+        <InsuranceCard patient={patient} patientId={patientId} />
+        <EmergencyContactCard patient={patient} patientId={patientId} />
+        <NotesCard patient={patient} patientId={patientId} />
+      </div>
+      {/* Active problems — spans full width */}
+      <ProblemListCard patientId={patientId} />
     </div>
   );
 }
@@ -556,6 +563,9 @@ export default function PatientDetailPage() {
         {activeTab === "flowsheets" && (
           <ClinicalFlowsheet patientId={patientId} />
         )}
+        {activeTab === "rx-history" && (
+          <RxHistoryTable patientId={patientId} />
+        )}
       </div>
     </div>
   );
@@ -655,6 +665,7 @@ function PatientHeaderCard({
                   </button>
                 </div>
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
+                  <Badge variant="outline">#{patient.chartNumber}</Badge>
                   <span className="text-body text-[var(--text-secondary)]">
                     {dobFormatted} ({age} y/o)
                   </span>

@@ -174,7 +174,7 @@ async function runUiTests(page, slug) {
   await page.waitForTimeout(2000);
 
   // ── 1. Tab Switching ──────────────────────────────────────────────────
-  const tabs = ['Patient Info', 'Encounters', 'Flowsheets'];
+  const tabs = ['Patient Info', 'Encounters', 'Flowsheets', 'Rx History'];
   let tabsWorking = 0;
 
   for (const tabLabel of tabs) {
