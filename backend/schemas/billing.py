@@ -219,3 +219,22 @@ class MdmCalculationResult(AppBaseModel):
         ...,
         description="Risk of complications or mortality assessment.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Superbill List (dashboard)
+# ---------------------------------------------------------------------------
+
+
+class SuperbillListItem(AppBaseModel):
+    """Lightweight superbill for dashboard list view."""
+
+    id: uuid.UUID
+    encounter_id: uuid.UUID
+    patient_id: uuid.UUID
+    patient_name: str
+    provider_name: str
+    claim_status: str
+    cpt_codes: list[str]
+    total_fee: float
+    created_at: datetime
