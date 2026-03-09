@@ -1,347 +1,365 @@
 /**
- * smoke-booking.spec.js — Sprint 3.3: Public Booking API E2E verification
+ * smoke-booking.spec.js — Sprint 3.3: Public Booking E2E verification
  *
- * Verifies: clinic info endpoint, availability endpoint, public booking
- * (patient + appointment + intake token creation), double-booking rejection.
+ * Two test suites in one file:
+ *   A) API contract tests — pure fetch, no browser (clinic info, availability,
+ *      booking, double-book 409, intake token, BFF parity)
+ *   B) UI wizard flow — Playwright browser walk-through of the /book/[slug]
+ *      multi-step form (type+provider → date+time → patient info → confirmation)
  *
- * These are public (unauthenticated) endpoints — no login required.
- * Run: node tests/e2e/smoke-booking.spec.js
+ * Run: bash scripts/dev.sh verify tests/e2e/smoke-booking.spec.js
  */
+const { launchBrowser, printResults, assert, API_URL, TARGET_URL } = require('./helpers/test-utils');
 
-const API_URL = 'http://localhost:8000';
-const BFF_URL = 'http://localhost:3000';
 const SLUG = 'sunview';
 
-// Known provider IDs from seed_db.py (Sarah Lin = doctor, Duy Tran = owner)
+// Known provider IDs from seed_db.py
 const PROVIDER_SARAH = 'c0000000-0000-0000-0000-000000000001';
 const PROVIDER_DUY = 'c0000000-0000-0000-0000-000000000003';
 
-function assert(condition, msg) {
-  if (!condition) throw new Error(`FAIL: ${msg}`);
+/** Next weekday YYYY-MM-DD, skipping weekends */
+function getNextWeekday(dayOffset = 7) {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d.toISOString().split('T')[0];
 }
 
-(async () => {
+// ============================================================================
+// A) API Contract Tests (no browser needed)
+// ============================================================================
+async function runApiTests() {
   const results = {};
-
-  // Helper: generate a future date string (next Monday)
-  function getNextWeekday(dayOffset = 7) {
-    const d = new Date();
-    d.setDate(d.getDate() + dayOffset);
-    // Skip weekends
-    while (d.getDay() === 0 || d.getDay() === 6) {
-      d.setDate(d.getDate() + 1);
-    }
-    return d.toISOString().split('T')[0]; // YYYY-MM-DD
-  }
-
   const futureDate = getNextWeekday(7);
-  console.log(`Using future date: ${futureDate}`);
+  console.log(`\nAPI tests — using future date: ${futureDate}`);
 
-  // =========================================================================
-  // 1. GET /api/public/booking/{slug}/info/ — clinic info
-  // =========================================================================
-  console.log('\n=== 1. Clinic Info ===');
+  // 1. Clinic info
   try {
     const res = await fetch(`${API_URL}/api/public/booking/${SLUG}/info/`);
     const data = await res.json();
-
     assert(res.status === 200, `Expected 200, got ${res.status}`);
     assert(data.clinic_name === 'Sunview Eye Care', `Expected clinic name, got: ${data.clinic_name}`);
     assert(data.timezone, 'Missing timezone');
-    assert(Array.isArray(data.bookable_types), 'bookable_types should be array');
-    assert(data.bookable_types.length >= 1, 'Should have at least 1 bookable type');
-    assert(Array.isArray(data.providers), 'providers should be array');
-    assert(data.providers.length >= 1, 'Should have at least 1 provider');
-
-    // Verify bookable types don't include urgent_care or follow_up
+    assert(Array.isArray(data.bookable_types) && data.bookable_types.length >= 1, 'bookable_types missing');
+    assert(Array.isArray(data.providers) && data.providers.length >= 1, 'providers missing');
     const typeValues = data.bookable_types.map(t => t.value);
     assert(!typeValues.includes('urgent_care'), 'urgent_care should not be bookable');
     assert(!typeValues.includes('follow_up'), 'follow_up should not be bookable');
     assert(typeValues.includes('comprehensive_exam'), 'comprehensive_exam should be bookable');
-
-    console.log(`  Clinic: ${data.clinic_name}`);
-    console.log(`  Types: ${typeValues.join(', ')}`);
-    console.log(`  Providers: ${data.providers.map(p => `${p.first_name} ${p.last_name}`).join(', ')}`);
     results['clinic_info'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['clinic_info'] = 'FAIL';
-  }
+  } catch (e) { results['clinic_info'] = `FAIL (${e.message})`; }
 
-  // =========================================================================
-  // 2. GET /api/public/booking/{slug}/info/ — invalid slug → 404
-  // =========================================================================
-  console.log('\n=== 2. Invalid Slug → 404 ===');
+  // 2. Invalid slug → 404
   try {
     const res = await fetch(`${API_URL}/api/public/booking/nonexistent-clinic/info/`);
     assert(res.status === 404, `Expected 404, got ${res.status}`);
-    console.log('  Got 404 as expected');
     results['invalid_slug'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['invalid_slug'] = 'FAIL';
-  }
+  } catch (e) { results['invalid_slug'] = `FAIL (${e.message})`; }
 
-  // =========================================================================
-  // 3. GET /api/public/booking/{slug}/availability/ — available slots
-  // =========================================================================
-  console.log('\n=== 3. Availability ===');
+  // 3. Availability
   let availableSlot = null;
   try {
-    const qs = new URLSearchParams({
-      date: futureDate,
-      provider_id: PROVIDER_SARAH,
-      appointment_type: 'comprehensive_exam',
-    });
+    const qs = new URLSearchParams({ date: futureDate, provider_id: PROVIDER_SARAH, appointment_type: 'comprehensive_exam' });
     const res = await fetch(`${API_URL}/api/public/booking/${SLUG}/availability/?${qs}`);
     const data = await res.json();
-
     assert(res.status === 200, `Expected 200, got ${res.status}`);
     assert(data.date === futureDate, `Expected date ${futureDate}, got ${data.date}`);
-    assert(Array.isArray(data.slots), 'slots should be array');
-    assert(data.slots.length > 0, 'Should have at least 1 available slot');
+    assert(Array.isArray(data.slots) && data.slots.length > 0, 'Should have >= 1 slot');
     assert(data.provider_name, 'Missing provider_name');
-
-    availableSlot = data.slots[0]; // Use first available slot
-    console.log(`  Provider: ${data.provider_name}`);
-    console.log(`  Available slots: ${data.slots.length}`);
-    console.log(`  First slot: ${availableSlot}`);
+    availableSlot = data.slots[0];
     results['availability'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['availability'] = 'FAIL';
-  }
+  } catch (e) { results['availability'] = `FAIL (${e.message})`; }
 
-  // =========================================================================
-  // 4. Availability — past date → 400
-  // =========================================================================
-  console.log('\n=== 4. Past Date → 400 ===');
+  // 4. Past date → 400
   try {
-    const qs = new URLSearchParams({
-      date: '2020-01-01',
-      provider_id: PROVIDER_SARAH,
-      appointment_type: 'comprehensive_exam',
-    });
+    const qs = new URLSearchParams({ date: '2020-01-01', provider_id: PROVIDER_SARAH, appointment_type: 'comprehensive_exam' });
     const res = await fetch(`${API_URL}/api/public/booking/${SLUG}/availability/?${qs}`);
     assert(res.status === 400, `Expected 400, got ${res.status}`);
-    console.log('  Got 400 as expected');
     results['past_date_rejection'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['past_date_rejection'] = 'FAIL';
-  }
+  } catch (e) { results['past_date_rejection'] = `FAIL (${e.message})`; }
 
-  // =========================================================================
-  // 5. POST /api/public/booking/{slug}/book/ — successful booking
-  // =========================================================================
-  console.log('\n=== 5. Create Public Booking ===');
+  // 5. Create booking
   let bookingResult = null;
   if (availableSlot) {
     try {
       const payload = {
-        first_name: 'Test',
-        last_name: 'BookingPatient',
-        dob: '1990-05-15',
-        sex: 'female',
-        phone: '555-0199',
-        email: 'test.booking@example.com',
-        provider_id: PROVIDER_SARAH,
-        appointment_type: 'comprehensive_exam',
-        start_time: availableSlot,
-        chief_complaint: 'Annual eye exam',
+        first_name: 'Test', last_name: 'BookingPatient', dob: '1990-05-15',
+        sex: 'female', phone: '555-0199', email: 'test.booking@example.com',
+        provider_id: PROVIDER_SARAH, appointment_type: 'comprehensive_exam',
+        start_time: availableSlot, chief_complaint: 'Annual eye exam',
       };
-
       const res = await fetch(`${API_URL}/api/public/booking/${SLUG}/book/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-
       assert(res.status === 201, `Expected 201, got ${res.status}: ${JSON.stringify(data)}`);
       assert(data.success === true, 'Expected success=true');
       assert(data.appointment_id, 'Missing appointment_id');
       assert(data.intake_url, 'Missing intake_url');
       assert(data.provider_name, 'Missing provider_name');
       assert(data.appointment_type_label === 'Comprehensive Exam', `Unexpected label: ${data.appointment_type_label}`);
-
       bookingResult = data;
-      console.log(`  Appointment: ${data.appointment_id}`);
-      console.log(`  Date: ${data.appointment_date}`);
-      console.log(`  Provider: ${data.provider_name}`);
-      console.log(`  Intake URL: ${data.intake_url}`);
       results['create_booking'] = 'PASS';
-    } catch (e) {
-      console.error('  ', e.message);
-      results['create_booking'] = 'FAIL';
-    }
+    } catch (e) { results['create_booking'] = `FAIL (${e.message})`; }
   } else {
-    console.log('  SKIP — no available slot from step 3');
-    results['create_booking'] = 'SKIP';
+    results['create_booking'] = 'SKIP (no available slot)';
   }
 
-  // =========================================================================
-  // 6. POST same slot again → 409 Conflict (double-booking prevention)
-  // =========================================================================
-  console.log('\n=== 6. Double-Book → 409 ===');
+  // 6. Double-book → 409
   if (availableSlot) {
     try {
       const payload = {
-        first_name: 'Another',
-        last_name: 'Patient',
-        dob: '1985-08-20',
-        sex: 'male',
-        provider_id: PROVIDER_SARAH,
-        appointment_type: 'comprehensive_exam',
+        first_name: 'Another', last_name: 'Patient', dob: '1985-08-20',
+        sex: 'male', provider_id: PROVIDER_SARAH, appointment_type: 'comprehensive_exam',
         start_time: availableSlot,
       };
-
       const res = await fetch(`${API_URL}/api/public/booking/${SLUG}/book/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       assert(res.status === 409, `Expected 409, got ${res.status}`);
-      console.log('  Got 409 Conflict as expected (double-booking prevented)');
       results['double_book_rejection'] = 'PASS';
-    } catch (e) {
-      console.error('  ', e.message);
-      results['double_book_rejection'] = 'FAIL';
-    }
+    } catch (e) { results['double_book_rejection'] = `FAIL (${e.message})`; }
   } else {
-    console.log('  SKIP — no available slot');
-    results['double_book_rejection'] = 'SKIP';
+    results['double_book_rejection'] = 'SKIP (no available slot)';
   }
 
-  // =========================================================================
-  // 7. Verify the intake token is valid (public endpoint)
-  // =========================================================================
-  console.log('\n=== 7. Validate Intake Token ===');
+  // 7. Intake token validation
   if (bookingResult?.intake_url) {
     try {
-      // Extract token from URL: .../intake/{token}
       const token = bookingResult.intake_url.split('/intake/').pop();
       const res = await fetch(`${API_URL}/api/public/intake/${token}/`);
       const data = await res.json();
-
       assert(res.status === 200, `Expected 200, got ${res.status}`);
       assert(data.clinic_name === 'Sunview Eye Care', `Expected clinic name, got: ${data.clinic_name}`);
       assert(data.requires_dob_verification === true, 'Should require DOB verification');
-
-      console.log(`  Token valid. Clinic: ${data.clinic_name}`);
-      console.log(`  Appointment: ${data.appointment_date}`);
       results['intake_token_valid'] = 'PASS';
-    } catch (e) {
-      console.error('  ', e.message);
-      results['intake_token_valid'] = 'FAIL';
-    }
+    } catch (e) { results['intake_token_valid'] = `FAIL (${e.message})`; }
   } else {
-    console.log('  SKIP — no intake URL from booking');
-    results['intake_token_valid'] = 'SKIP';
+    results['intake_token_valid'] = 'SKIP (no intake URL)';
   }
 
-  // =========================================================================
-  // 8. BFF Parity: GET /api/public/booking/{slug}/info (via Next.js :3000)
-  // =========================================================================
-  console.log('\n=== 8. BFF Parity: Clinic Info ===');
+  // 8. BFF Parity: clinic info
   try {
-    const res = await fetch(`${BFF_URL}/api/public/booking/${SLUG}/info`);
+    const res = await fetch(`${TARGET_URL}/api/public/booking/${SLUG}/info`);
     const data = await res.json();
-
     assert(res.status === 200, `BFF expected 200, got ${res.status}`);
     assert(data.clinic_name === 'Sunview Eye Care', `BFF clinic name mismatch: ${data.clinic_name}`);
     assert(Array.isArray(data.bookable_types), 'BFF bookable_types missing');
     assert(Array.isArray(data.providers), 'BFF providers missing');
-
-    console.log(`  BFF clinic info OK: ${data.clinic_name}, ${data.providers.length} providers`);
     results['bff_clinic_info'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['bff_clinic_info'] = 'FAIL';
-  }
+  } catch (e) { results['bff_clinic_info'] = `FAIL (${e.message})`; }
 
-  // =========================================================================
-  // 9. BFF Parity: GET /api/public/booking/{slug}/availability (via :3000)
-  // =========================================================================
-  console.log('\n=== 9. BFF Parity: Availability ===');
+  // 9. BFF Parity: availability
   try {
-    const qs = new URLSearchParams({
-      date: futureDate,
-      provider_id: PROVIDER_SARAH,
-      appointment_type: 'comprehensive_exam',
-    });
-    const res = await fetch(`${BFF_URL}/api/public/booking/${SLUG}/availability?${qs}`);
+    const qs = new URLSearchParams({ date: futureDate, provider_id: PROVIDER_SARAH, appointment_type: 'comprehensive_exam' });
+    const res = await fetch(`${TARGET_URL}/api/public/booking/${SLUG}/availability?${qs}`);
     const data = await res.json();
-
     assert(res.status === 200, `BFF expected 200, got ${res.status}`);
     assert(Array.isArray(data.slots), 'BFF slots missing');
-
-    console.log(`  BFF availability OK: ${data.slots.length} slots`);
     results['bff_availability'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['bff_availability'] = 'FAIL';
-  }
+  } catch (e) { results['bff_availability'] = `FAIL (${e.message})`; }
 
-  // =========================================================================
-  // 10. BFF Parity: POST /api/public/booking/{slug}/book (via :3000)
-  // =========================================================================
-  console.log('\n=== 10. BFF Parity: Create Booking ===');
+  // 10. BFF Parity: create booking
   try {
-    // Use a different slot (second available) to avoid conflict with test 5
-    const qs = new URLSearchParams({
-      date: futureDate,
-      provider_id: PROVIDER_DUY, // different provider to avoid overlap
-      appointment_type: 'contact_lens_exam',
-    });
-    const availRes = await fetch(`${BFF_URL}/api/public/booking/${SLUG}/availability?${qs}`);
+    const qs = new URLSearchParams({ date: futureDate, provider_id: PROVIDER_DUY, appointment_type: 'contact_lens_exam' });
+    const availRes = await fetch(`${TARGET_URL}/api/public/booking/${SLUG}/availability?${qs}`);
     const availData = await availRes.json();
     assert(availData.slots?.length > 0, 'BFF: no slots for Duy');
 
     const bffSlot = availData.slots[0];
-    const res = await fetch(`${BFF_URL}/api/public/booking/${SLUG}/book`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch(`${TARGET_URL}/api/public/booking/${SLUG}/book`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        first_name: 'BFF',
-        last_name: 'TestPatient',
-        dob: '1988-12-01',
-        sex: 'male',
-        phone: '555-0200',
-        provider_id: PROVIDER_DUY,
-        appointment_type: 'contact_lens_exam',
-        start_time: bffSlot,
+        first_name: 'BFF', last_name: 'TestPatient', dob: '1988-12-01',
+        sex: 'male', phone: '555-0200', provider_id: PROVIDER_DUY,
+        appointment_type: 'contact_lens_exam', start_time: bffSlot,
       }),
     });
     const data = await res.json();
-
     assert(res.status === 201, `BFF expected 201, got ${res.status}: ${JSON.stringify(data)}`);
     assert(data.success === true, 'BFF booking success=false');
     assert(data.intake_url, 'BFF missing intake_url');
-
-    console.log(`  BFF booking OK: ${data.appointment_id}, intake: ${data.intake_url.substring(0, 50)}...`);
     results['bff_create_booking'] = 'PASS';
-  } catch (e) {
-    console.error('  ', e.message);
-    results['bff_create_booking'] = 'FAIL';
+  } catch (e) { results['bff_create_booking'] = `FAIL (${e.message})`; }
+
+  return results;
+}
+
+// ============================================================================
+// B) UI Wizard Flow (browser-based)
+// ============================================================================
+async function runUiTests() {
+  const results = {};
+  const futureDate = getNextWeekday(14); // Use a different date to avoid slot conflicts with API tests
+
+  const { browser, page } = await launchBrowser();
+
+  try {
+    // Navigate to public booking page (no auth required)
+    await page.goto(`${TARGET_URL}/book/${SLUG}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+
+    // Page should load with clinic name and step 1 visible
+    const clinicName = await page.locator('h1').first().textContent().catch(() => '');
+    results.ui_page_loads = clinicName.includes('Sunview')
+      ? 'PASS (clinic name visible)'
+      : `FAIL (h1 text: "${clinicName}")`;
+
+    // -----------------------------------------------------------------------
+    // Step 1: Select Type + Provider
+    // -----------------------------------------------------------------------
+    const typeBtn = page.locator('button:has-text("Comprehensive Exam")');
+    if (await typeBtn.count() > 0) {
+      await typeBtn.click();
+      results.ui_select_type = 'PASS';
+    } else {
+      results.ui_select_type = 'FAIL (no Comprehensive Exam button)';
+    }
+
+    // Pick first provider
+    const providerBtns = page.locator('button:has-text("Dr.")');
+    if (await providerBtns.count() > 0) {
+      await providerBtns.first().click();
+      results.ui_select_provider = 'PASS';
+    } else {
+      results.ui_select_provider = 'FAIL (no provider buttons)';
+    }
+
+    // Click Continue
+    const continueBtn = page.locator('button:has-text("Continue")');
+    await continueBtn.click();
+    await page.waitForTimeout(1000);
+
+    // -----------------------------------------------------------------------
+    // Step 2: Pick Date + Time
+    // -----------------------------------------------------------------------
+    const dateInput = page.locator('input[type="date"]');
+    if (await dateInput.count() > 0) {
+      await dateInput.fill(futureDate);
+      await page.waitForTimeout(2000); // wait for availability fetch
+      results.ui_date_input = 'PASS';
+    } else {
+      results.ui_date_input = 'FAIL (no date input)';
+    }
+
+    // Wait for time slots to appear (Morning/Afternoon sections)
+    await page.waitForTimeout(2000);
+
+    // Click first available time slot button (they render as plain buttons with time text)
+    const timeSlots = page.locator('button:has-text(/\\d+:\\d+ [AP]M/)');
+    const slotCount = await timeSlots.count();
+    if (slotCount > 0) {
+      await timeSlots.first().click();
+      results.ui_select_slot = `PASS (${slotCount} slots available)`;
+    } else {
+      results.ui_select_slot = 'FAIL (no time slots rendered)';
+    }
+
+    // Continue to step 3
+    const continueBtn2 = page.locator('button:has-text("Continue")');
+    if (await continueBtn2.count() > 0) {
+      await continueBtn2.click();
+      await page.waitForTimeout(1000);
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3: Patient Info + Validation
+    // -----------------------------------------------------------------------
+
+    // Try submitting empty form — validation should fire
+    const bookBtn = page.locator('button:has-text("Book Appointment")');
+    if (await bookBtn.count() > 0) {
+      await bookBtn.click();
+      await page.waitForTimeout(500);
+
+      // Check for "Required" validation messages
+      const requiredErrors = await page.locator('text=Required').count();
+      results.ui_validation = requiredErrors > 0
+        ? `PASS (${requiredErrors} "Required" errors shown)`
+        : 'FAIL (no validation errors after empty submit)';
+    } else {
+      results.ui_validation = 'FAIL (no "Book Appointment" button)';
+    }
+
+    // Fill out the form
+    const firstNameInput = page.locator('input[placeholder="First name"]');
+    const lastNameInput = page.locator('input[placeholder="Last name"]');
+    const dobInput = page.locator('input[type="date"]');
+    const sexSelect = page.locator('select');
+    const phoneInput = page.locator('input[type="tel"]');
+    const emailInput = page.locator('input[type="email"]');
+
+    if (await firstNameInput.count() > 0) {
+      await firstNameInput.fill('Playwright');
+      await lastNameInput.fill('Tester');
+      await dobInput.fill('1985-06-15');
+      await sexSelect.selectOption('female');
+      await phoneInput.fill('555-0199');
+      await emailInput.fill('playwright@example.com');
+      results.ui_fill_form = 'PASS';
+    } else {
+      results.ui_fill_form = 'FAIL (form fields not found)';
+    }
+
+    await page.screenshot({ path: '/tmp/pw-e2e-booking-form.png', fullPage: true });
+
+    // Submit
+    if (await bookBtn.count() > 0) {
+      await bookBtn.click();
+      await page.waitForTimeout(5000); // wait for API response
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 4: Confirmation
+    // -----------------------------------------------------------------------
+    const confirmedHeading = await page.locator('text=Appointment Booked!').count();
+    results.ui_confirmation = confirmedHeading > 0
+      ? 'PASS (confirmation page visible)'
+      : 'FAIL (no "Appointment Booked!" text)';
+
+    // Check for intake form link
+    const intakeLink = page.locator('a:has-text("Complete Intake Form")');
+    if (await intakeLink.count() > 0) {
+      const href = await intakeLink.getAttribute('href');
+      results.ui_intake_link = href && href.includes('/intake/')
+        ? `PASS (href: ${href.substring(0, 50)}...)`
+        : `FAIL (href: ${href})`;
+    } else {
+      results.ui_intake_link = 'FAIL (no "Complete Intake Form" link)';
+    }
+
+    // Check for copy link button
+    const copyBtn = await page.locator('button:has-text("Copy Intake Link")').count();
+    results.ui_copy_button = copyBtn > 0 ? 'PASS' : 'FAIL (no "Copy Intake Link" button)';
+
+    await page.screenshot({ path: '/tmp/pw-e2e-booking-confirmed.png', fullPage: true });
+
+  } catch (err) {
+    results.ui_error = `FAIL (${err.message.substring(0, 200)})`;
+    await page.screenshot({ path: '/tmp/pw-e2e-booking-error.png', fullPage: true }).catch(() => {});
+  } finally {
+    await browser.close();
   }
 
-  // =========================================================================
-  // Summary
-  // =========================================================================
-  console.log('\n========================================');
-  console.log('  Public Booking E2E Results');
-  console.log('========================================');
-  let allPass = true;
-  for (const [test, result] of Object.entries(results)) {
-    const icon = result === 'PASS' ? 'v' : result === 'SKIP' ? '-' : 'X';
-    console.log(`  [${icon}] ${test}: ${result}`);
-    if (result === 'FAIL') allPass = false;
-  }
-  console.log('========================================');
-  console.log(allPass ? '  ALL TESTS PASSED' : '  SOME TESTS FAILED');
-  console.log('========================================');
+  return results;
+}
 
+// ============================================================================
+// Main — run both suites
+// ============================================================================
+(async () => {
+  // API tests first (fast, no browser)
+  const apiResults = await runApiTests();
+  const apiPass = printResults('Public Booking — API Contracts', apiResults);
+
+  // UI wizard test (slower, needs browser)
+  const uiResults = await runUiTests();
+  const uiPass = printResults('Public Booking — UI Wizard', uiResults);
+
+  // Overall
+  const allPass = apiPass && uiPass;
+  console.log('\n' + (allPass ? 'ALL BOOKING TESTS PASSED' : 'SOME BOOKING TESTS FAILED'));
   process.exit(allPass ? 0 : 1);
 })();

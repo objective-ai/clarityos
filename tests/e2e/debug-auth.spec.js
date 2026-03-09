@@ -3,17 +3,12 @@
  *
  * Not a pass/fail test. Captures all auth-related responses and error
  * responses for debugging login/JWT/hook issues.
- * Run: cd ~/.claude/skills/playwright-skill && node run.js ../../Projects/clarityos/tests/e2e/debug-auth.spec.js
+ * Run: bash scripts/dev.sh verify tests/e2e/debug-auth.spec.js
  */
-const { chromium } = require('playwright');
-
-const TARGET_URL = 'http://localhost:3000';
-const EMAIL = 'duytran@yahoo.com';
-const PASSWORD = '123456';
+const { launchBrowser, TARGET_URL, EMAIL } = require('./helpers/test-utils');
 
 (async () => {
-  const browser = await chromium.launch({ headless: false, slowMo: 50 });
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  const { browser, page } = await launchBrowser();
 
   const responses = [];
 
@@ -43,7 +38,7 @@ const PASSWORD = '123456';
   await page.goto(`${TARGET_URL}/login`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#email', { timeout: 15000 });
   await page.fill('#email', EMAIL);
-  await page.fill('#password', PASSWORD);
+  await page.fill('#password', require('./helpers/test-utils').PASSWORD);
   await page.click('button[type="submit"]');
   await page.waitForTimeout(8000);
 
