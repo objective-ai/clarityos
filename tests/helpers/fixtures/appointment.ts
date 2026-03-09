@@ -39,7 +39,7 @@ export function makeAppointmentListResponse(
   items?: Appointment[]
 ): AppointmentListResponse {
   const list = items ?? [makeAppointment()];
-  return { items: list, total: list.length };
+  return { items: list, total: list.length, timezone: "America/Los_Angeles" };
 }
 
 export function makeStartExamResponse(

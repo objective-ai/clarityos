@@ -274,3 +274,4 @@ class AppointmentListResponse(AppBaseModel):
 
     items: list[AppointmentResponse]
     total: int
+    timezone: str = "America/Los_Angeles"

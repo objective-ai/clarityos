@@ -343,6 +343,10 @@ async def finalize_encounter(
     enc.signed_by_id = staff.id
     enc.signed_at = datetime.now(timezone.utc)
 
+    # Transition appointment status to finalized
+    if enc.appointment:
+        enc.appointment.status = AppointmentStatus.FINALIZED.value
+
     await log_action(
         db, ctx, AuditAction.FINALIZE, "encounter", enc.id,
         staff_id=staff.id,

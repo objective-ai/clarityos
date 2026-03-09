@@ -198,6 +198,20 @@ async def list_patients(
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+async def _next_chart_number(tenant_id: UUID, db: AsyncSession) -> int:
+    """Generate next sequential chart number for a tenant (e.g. 1001, 1002, ...)."""
+    result = await db.execute(
+        select(func.max(Patient.chart_number)).where(Patient.tenant_id == tenant_id)
+    )
+    current_max = result.scalar_one_or_none()
+    return (current_max or 1000) + 1
+
+
+# ---------------------------------------------------------------------------
 # POST /api/patients — create
 # ---------------------------------------------------------------------------
 
@@ -218,8 +232,11 @@ async def create_patient(
     if data.get("notes"):
         medical_jsonb["notes"] = data["notes"]
 
+    chart_number = await _next_chart_number(ctx.tenant_id, db)
+
     patient = Patient(
         tenant_id=ctx.tenant_id,
+        chart_number=chart_number,
         first_name=data["first_name"],
         last_name=data["last_name"],
         preferred_name=data.get("preferred_name"),

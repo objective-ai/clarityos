@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api-client";
 import type { PatientSummary, PatientListResponse } from "@/types/patient";
 import IntakeLinkModal from "@/components/schedule/IntakeLinkModal";
+import TimelineView from "@/components/schedule/TimelineView";
+import ClinicView from "@/components/schedule/ClinicView";
 import type {
   Appointment,
   AppointmentStatus,
@@ -27,11 +29,12 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, tz?: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: tz,
   });
 }
 
@@ -153,6 +156,7 @@ function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
 
 function AppointmentCard({
   appointment,
+  tz,
   onCheckIn,
   onStartExam,
   onCancel,
@@ -163,6 +167,7 @@ function AppointmentCard({
   onSendIntake,
 }: {
   appointment: Appointment;
+  tz?: string;
   onCheckIn: (id: string) => void;
   onStartExam: (id: string) => void;
   onCancel: (id: string) => void;
@@ -251,7 +256,7 @@ function AppointmentCard({
         {/* Time */}
         <div className="shrink-0 w-[4.5rem] text-center">
           <p className="text-sm font-semibold text-[var(--text-primary)]">
-            {formatTime(appointment.startTime)}
+            {formatTime(appointment.startTime, tz)}
           </p>
           <p className="text-[11px] text-[var(--text-muted)]">
             {appointment.durationMinutes} min
@@ -276,18 +281,12 @@ function AppointmentCard({
           )}
         </div>
 
-        {/* Status + Intake badges */}
+        {/* Status + Triage badges */}
         <div className="flex items-center gap-1.5 shrink-0">
           {appointment.intakeStatus === "submitted" && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
               Intake
-            </span>
-          )}
-          {appointment.intakeStatus === "pending" && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              Pending
             </span>
           )}
           {appointment.triageFlags?.urgency === "urgent" && (
@@ -311,6 +310,15 @@ function AppointmentCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {appointment.intakeStatus === "pending" && (canCheckIn || canStartExam) && (
+            <button
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 transition-colors"
+              onClick={() => onSendIntake(appointment)}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+              Intake Form
+            </button>
+          )}
           {canCheckIn && (
             <Button size="sm" onClick={() => onCheckIn(appointment.id)}>
               Check In
@@ -445,6 +453,21 @@ function BookAppointmentModal({
   useEffect(() => {
     setDuration(APPOINTMENT_TYPE_DURATIONS[appointmentType]);
   }, [appointmentType]);
+
+  // Conflict detection: check for overlapping appointments
+  const { appointments: allAppointments } = useAppointmentStore();
+  const conflicts = useMemo(() => {
+    if (!providerId || !date || !time) return [];
+    const newStart = new Date(`${date}T${time}:00`).getTime();
+    const newEnd = newStart + duration * 60 * 1000;
+    return allAppointments.filter((a) => {
+      if (a.providerId !== providerId) return false;
+      if (a.status === "cancelled" || a.status === "no_show") return false;
+      const aStart = new Date(a.startTime).getTime();
+      const aEnd = new Date(a.endTime).getTime();
+      return newStart < aEnd && newEnd > aStart;
+    });
+  }, [allAppointments, providerId, date, time, duration]);
 
   if (!open) return null;
 
@@ -668,6 +691,26 @@ function BookAppointmentModal({
           </div>
         </div>
 
+        {/* Conflict warning */}
+        {conflicts.length > 0 && (
+          <div className="rounded-lg p-3 bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs space-y-1">
+            <p className="font-semibold flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+              Double-booking detected
+            </p>
+            {conflicts.map((c) => (
+              <p key={c.id} className="text-amber-400/80 pl-5">
+                {c.patientName ?? "Patient"} &middot;{" "}
+                {APPOINTMENT_TYPE_LABELS[c.appointmentType]} at{" "}
+                {formatTime(c.startTime, useAppointmentStore.getState().clinicTimezone)}
+              </p>
+            ))}
+            <p className="text-amber-400/60 pl-5">
+              You can still book — this will create a double-booking.
+            </p>
+          </div>
+        )}
+
         <div className="flex gap-3 justify-end pt-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
@@ -777,7 +820,7 @@ function RescheduleModal({
       const start = new Date(appointment.startTime);
       setDate(localDateISO(start));
       setTime(
-        start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+        start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: useAppointmentStore.getState().clinicTimezone })
       );
       setDuration("");
     }
@@ -893,6 +936,7 @@ export default function SchedulePage() {
   const {
     appointments,
     selectedDate,
+    clinicTimezone,
     loading,
     error,
     setSelectedDate,
@@ -905,6 +949,39 @@ export default function SchedulePage() {
     startExam,
     generateIntakeToken,
   } = useAppointmentStore();
+
+  // View mode: list | timeline | clinic
+  type ViewMode = "list" | "timeline" | "clinic";
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("schedule-view") as ViewMode) || "list";
+    }
+    return "list";
+  });
+  const handleViewChange = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("schedule-view", mode);
+  }, []);
+
+  // Provider filter
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const [staffList, setStaffList] = useState<
+    { id: string; firstName: string; lastName: string; role: string }[]
+  >([]);
+
+  // Fetch staff list for provider filter
+  useEffect(() => {
+    apiFetch<{ id: string; firstName: string; lastName: string; role: string }[]>(
+      "/api/staff"
+    )
+      .then((list) => setStaffList(list))
+      .catch(() => {});
+  }, []);
+
+  // Re-fetch when provider filter changes
+  useEffect(() => {
+    fetchAppointments(selectedDate, selectedProviderId || undefined);
+  }, [selectedProviderId, selectedDate, fetchAppointments]);
 
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingDefaults, setBookingDefaults] = useState<{
@@ -945,10 +1022,7 @@ export default function SchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch appointments when date changes
-  useEffect(() => {
-    fetchAppointments(selectedDate);
-  }, [selectedDate, fetchAppointments]);
+  // Note: fetching is handled by the provider filter effect above
 
   // Subtitle
   useEffect(() => {
@@ -1148,8 +1222,45 @@ export default function SchedulePage() {
           ) : null}
         </div>
 
-        {/* Right — date nav + book */}
-        <div className="flex items-center gap-2">
+        {/* Right — provider filter, view toggle, date nav, book */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Provider filter */}
+          <select
+            value={selectedProviderId}
+            onChange={(e) => setSelectedProviderId(e.target.value)}
+            className="glass-input px-2 py-1.5 rounded-lg text-xs h-8"
+          >
+            <option value="">All Providers</option>
+            {staffList
+              .filter((s) => s.role === "doctor" || s.role === "owner")
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  Dr. {s.firstName} {s.lastName}
+                </option>
+              ))}
+          </select>
+
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden">
+            {(["list", "timeline", "clinic"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => handleViewChange(mode)}
+                className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  viewMode === mode
+                    ? "bg-[var(--accent)] text-[var(--text-inverse)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+                }`}
+              >
+                {mode === "list" ? "List" : mode === "timeline" ? "Timeline" : "Clinic"}
+              </button>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div className="w-px h-5 bg-[var(--border-subtle)]" />
+
+          {/* Date nav */}
           <Button
             variant="ghost"
             size="icon"
@@ -1276,12 +1387,47 @@ export default function SchedulePage() {
             Book an appointment
           </Button>
         </div>
+      ) : viewMode === "timeline" ? (
+        <TimelineView
+          appointments={appointments}
+          selectedDate={selectedDate}
+          onAppointmentClick={(appt) => {
+            // For appointments with encounters, navigate; otherwise open reschedule
+            if (appt.encounterId && (appt.status === "in_exam" || appt.status === "completed")) {
+              router.push(`/${tenant}/encounter/${appt.encounterShortId}`);
+            } else if (appt.status === "scheduled" || appt.status === "confirmed") {
+              setRescheduleTarget(appt);
+            }
+          }}
+          onSlotClick={(time) => {
+            setBookingDefaults(undefined);
+            setBookingOpen(true);
+          }}
+        />
+      ) : viewMode === "clinic" ? (
+        <ClinicView
+          appointments={appointments}
+          selectedDate={selectedDate}
+          selectedProviderId={selectedProviderId || undefined}
+          onAppointmentClick={(appt) => {
+            if (appt.encounterId && (appt.status === "in_exam" || appt.status === "completed")) {
+              router.push(`/${tenant}/encounter/${appt.encounterShortId}`);
+            } else if (appt.status === "scheduled" || appt.status === "confirmed") {
+              setRescheduleTarget(appt);
+            }
+          }}
+          onSlotClick={(time, providerId) => {
+            setBookingDefaults(providerId ? { providerId } : undefined);
+            setBookingOpen(true);
+          }}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {appointments.map((appt) => (
             <AppointmentCard
               key={appt.id}
               appointment={appt}
+              tz={clinicTimezone}
               onCheckIn={handleCheckIn}
               onStartExam={handleStartExam}
               onCancel={(id) => setCancelTarget(id)}

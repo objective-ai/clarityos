@@ -120,7 +120,7 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
 
   const navItems: NavItem[] = [
     { label: "Dashboard", href: `${base}/dashboard`, icon: Icon.Dashboard },
-    { label: "Intake Form", href: "/intake", icon: Icon.Clipboard },
+    { label: "Intake Form", href: `${base}/schedule`, icon: Icon.Clipboard },
     { label: "Schedule", href: `${base}/schedule`, icon: Icon.Calendar, requiredEntitlement: Entitlement.SCHEDULING },
     { label: "Patients", href: `${base}/patients`, icon: Icon.Patients, requiredEntitlement: Entitlement.PATIENT_DEMOGRAPHICS },
     { label: "Analytics", href: `${base}/analytics`, icon: Icon.Analytics, requiredEntitlement: Entitlement.ADVANCED_ANALYTICS },

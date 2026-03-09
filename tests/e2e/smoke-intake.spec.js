@@ -442,6 +442,57 @@ const PASSWORD = '123456';
   console.log('Token after submit:', results.tokenExpiredAfterSubmit);
 
   // =========================================================================
+  // 12. BFF Parity: Validate Token (via Next.js :3000)
+  // =========================================================================
+  console.log('\n=== BFF Parity: Validate Token ===');
+
+  // Generate a fresh token for BFF test (previous token was consumed)
+  const bffTokenRes = await page.request.post(
+    `${API_URL}/api/appointments/${appointment.id}/generate-intake-token/`,
+    { headers: { Authorization: `Bearer ${jwt}` } }
+  );
+
+  if (bffTokenRes.ok()) {
+    const bffTokenData = await bffTokenRes.json();
+    const bffToken = bffTokenData.token;
+
+    // Test via BFF (no trailing slash — Next.js route)
+    const bffValidateRes = await page.request.get(
+      `${TARGET_URL}/api/public/intake/${bffToken}`
+    );
+    if (bffValidateRes.ok()) {
+      const data = await bffValidateRes.json();
+      results.bffValidateToken = (data.clinic_name && data.appointment_date)
+        ? `PASS (clinic: ${data.clinic_name})`
+        : `FAIL (missing fields)`;
+    } else {
+      results.bffValidateToken = `FAIL (${bffValidateRes.status()})`;
+    }
+
+    // BFF: verify-dob
+    const bffDobRes = await page.request.post(
+      `${TARGET_URL}/api/public/intake/${bffToken}/verify-dob`,
+      {
+        headers: { 'Content-Type': 'application/json' },
+        data: { dob: patientDob },
+      }
+    );
+    if (bffDobRes.ok()) {
+      const data = await bffDobRes.json();
+      results.bffVerifyDob = data.verified === true
+        ? `PASS (verified via BFF)`
+        : `FAIL (verified: ${data.verified})`;
+    } else {
+      results.bffVerifyDob = `FAIL (${bffDobRes.status()})`;
+    }
+  } else {
+    results.bffValidateToken = 'SKIP (could not generate fresh token)';
+    results.bffVerifyDob = 'SKIP';
+  }
+  console.log('BFF validate token:', results.bffValidateToken);
+  console.log('BFF verify DOB:', results.bffVerifyDob);
+
+  // =========================================================================
   // Results
   // =========================================================================
   printResults(results);

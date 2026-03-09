@@ -14,6 +14,7 @@ export type AppointmentStatus =
   | "in_pretest"
   | "in_exam"
   | "completed"
+  | "finalized"
   | "cancelled"
   | "no_show";
 
@@ -59,6 +60,7 @@ export interface Appointment {
 export interface AppointmentListResponse {
   items: Appointment[];
   total: number;
+  timezone: string;
 }
 
 // ---- Request types ----
@@ -121,8 +123,22 @@ export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   in_pretest: "Pre-Test",
   in_exam: "In Exam",
   completed: "Completed",
+  finalized: "Finalized",
   cancelled: "Cancelled",
   no_show: "No Show",
+};
+
+/** 3-4 char abbreviations for compact grid views (ClinicView) */
+export const STATUS_SHORT_LABELS: Record<AppointmentStatus, string> = {
+  scheduled: "Sched",
+  confirmed: "Conf",
+  arrived: "In",
+  in_pretest: "Pre",
+  in_exam: "Exam",
+  completed: "Done",
+  finalized: "Final",
+  cancelled: "Canc",
+  no_show: "N/S",
 };
 
 export const STATUS_COLORS: Record<AppointmentStatus, string> = {
@@ -132,6 +148,7 @@ export const STATUS_COLORS: Record<AppointmentStatus, string> = {
   in_pretest: "#8b5cf6",
   in_exam: "#3b82f6",
   completed: "#22c55e",
+  finalized: "#10b981",
   cancelled: "#ef4444",
   no_show: "#ef4444",
 };

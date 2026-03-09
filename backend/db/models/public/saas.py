@@ -83,6 +83,9 @@ class Tenant(TimestampMixin, PublicBase):
         PG_UUID(as_uuid=True), ForeignKey("public.subscription_plans.id"), nullable=True
     )
     owner_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    timezone: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="America/Los_Angeles"
+    )
     settings_jsonb: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     plan: Mapped[SubscriptionPlan | None] = relationship(back_populates="tenants")

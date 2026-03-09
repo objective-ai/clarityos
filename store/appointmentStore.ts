@@ -24,6 +24,8 @@ interface AppointmentState {
   total: number;
   /** Currently selected date (ISO date string, e.g. "2026-03-10") */
   selectedDate: string;
+  /** Clinic IANA timezone from tenant settings (e.g. "America/Los_Angeles") */
+  clinicTimezone: string;
   /** Loading state */
   loading: boolean;
   /** Error message */
@@ -53,6 +55,7 @@ export const useAppointmentStore = create<AppointmentState>()(
       appointments: [],
       total: 0,
       selectedDate: localDateISO(),
+      clinicTimezone: "America/Los_Angeles",
       loading: false,
       error: null,
 
@@ -69,7 +72,12 @@ export const useAppointmentStore = create<AppointmentState>()(
           const data = await apiFetch<AppointmentListResponse>(
             `/api/appointments?${params.toString()}`
           );
-          set({ appointments: data.items, total: data.total, loading: false });
+          set({
+            appointments: data.items,
+            total: data.total,
+            clinicTimezone: data.timezone || "America/Los_Angeles",
+            loading: false,
+          });
         } catch (err) {
           set({
             error: err instanceof Error ? err.message : "Failed to load appointments",

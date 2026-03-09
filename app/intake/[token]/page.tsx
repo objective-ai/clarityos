@@ -6,11 +6,11 @@
  * Public patient intake form — mobile-first, no auth required.
  * 1. Validates token → shows clinic info
  * 2. DOB verification gate → unlocks form
- * 3. 4-step wizard: Demographics → Contact → Medical History → Chief Complaint
+ * 3. 4-step wizard: Patient Info → Contact → Medical History → Chief Complaint
  * 4. Submit → success screen
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ const INITIAL_FORM: FormData = {
   consentDigitalComm: false,
 };
 
-const STEPS = ["Demographics", "Contact & Insurance", "Medical History", "Chief Complaint"];
+const STEPS = ["Patient Info", "Contact & Insurance", "Medical History", "Chief Complaint"];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -167,6 +167,13 @@ export default function IntakePage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [successDate, setSuccessDate] = useState("");
+
+  // --- Address autocomplete state ---
+  const [addressSuggestions, setAddressSuggestions] = useState<{ placeRef: string; description: string }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addressContainerRef = useRef<HTMLDivElement>(null);
 
   // Validate token on mount
   useEffect(() => {
@@ -311,6 +318,55 @@ export default function IntakePage() {
   const set = (field: keyof FormData, value: string | boolean) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  // --- Address autocomplete ---
+  const handleAddressInput = useCallback((value: string) => {
+    set("addressLine1", value);
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    if (value.length < 3) { setAddressSuggestions([]); setShowSuggestions(false); return; }
+    addressDebounceRef.current = setTimeout(async () => {
+      setAddressLoading(true);
+      try {
+        const res = await fetch(`/api/address/autocomplete?input=${encodeURIComponent(value)}`);
+        const data = await res.json();
+        setAddressSuggestions(data.suggestions || []);
+        setShowSuggestions((data.suggestions || []).length > 0);
+      } catch { setAddressSuggestions([]); }
+      setAddressLoading(false);
+    }, 350);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectAddress = useCallback(async (placeRef: string, description: string) => {
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+    set("addressLine1", description.split(",")[0] || description);
+    try {
+      const res = await fetch(`/api/address/place-details?placeRef=${encodeURIComponent(placeRef)}`);
+      const data = await res.json();
+      if (data.address) {
+        setForm((f) => ({
+          ...f,
+          addressLine1: data.address.addressLine1 || f.addressLine1,
+          city: data.address.city || f.city,
+          state: data.address.state || f.state,
+          zipCode: data.address.zipCode || f.zipCode,
+        }));
+      }
+    } catch { /* keep what we have */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (addressContainerRef.current && !addressContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
@@ -434,10 +490,10 @@ export default function IntakePage() {
         </div>
       </div>
 
-      {/* Step 1: Demographics */}
+      {/* Step 1: Patient Info */}
       {step === 0 && (
         <div className="space-y-4">
-          <h3 className="text-base font-semibold text-[var(--text-primary)]">Demographics</h3>
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">Patient Info</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-[var(--text-secondary)] mb-1">First Name *</label>
@@ -485,10 +541,38 @@ export default function IntakePage() {
               <input className={inputClass} value={form.email} onChange={(e) => set("email", e.target.value)} type="email" />
             </div>
           </div>
-          <div>
+          <div ref={addressContainerRef} className="relative">
             <label className="block text-xs text-[var(--text-secondary)] mb-1">Address</label>
-            <input className={inputClass} value={form.addressLine1} onChange={(e) => set("addressLine1", e.target.value)} placeholder="Street address" />
+            <div className="relative">
+              <input
+                className={inputClass}
+                value={form.addressLine1}
+                onChange={(e) => handleAddressInput(e.target.value)}
+                onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
+                placeholder="Start typing an address..."
+                autoComplete="off"
+              />
+              {addressLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            {showSuggestions && addressSuggestions.length > 0 && (
+              <ul className="absolute z-50 w-full mt-1 rounded-lg border border-white/10 bg-[var(--glass-bg,rgba(15,15,15,0.95))] backdrop-blur-xl shadow-xl overflow-hidden">
+                {addressSuggestions.map((s) => (
+                  <li
+                    key={s.placeRef}
+                    className="px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-white/10 cursor-pointer transition"
+                    onMouseDown={() => selectAddress(s.placeRef, s.description)}
+                  >
+                    {s.description}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+          <input className={inputClass} value={form.addressLine2} onChange={(e) => set("addressLine2", e.target.value)} placeholder="Apt, suite, unit (optional)" />
           <div className="grid grid-cols-3 gap-3">
             <input className={inputClass} value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="City" />
             <input className={inputClass} value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="State" />

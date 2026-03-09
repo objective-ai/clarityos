@@ -20,6 +20,7 @@ Endpoints:
 from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -29,6 +30,7 @@ from sqlalchemy.orm import selectinload
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
+from backend.db.models.public.saas import Tenant
 from backend.db.models.tenant.clinical import (
     Appointment,
     AppointmentStatus,
@@ -194,10 +196,17 @@ async def list_appointments(
             detail=f"Invalid date format. Expected YYYY-MM-DD.",
         )
 
-    day_start = datetime(
-        target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=timezone.utc
-    )
-    day_end = day_start + timedelta(days=1) - timedelta(seconds=1)
+    # Fetch tenant timezone for proper day boundary calculation
+    tenant = (
+        await db.execute(select(Tenant).where(Tenant.id == ctx.tenant_id))
+    ).scalar_one_or_none()
+    tz = ZoneInfo(tenant.timezone) if tenant and tenant.timezone else ZoneInfo("America/Los_Angeles")
+
+    # Calculate day boundaries in clinic-local time, then convert to UTC
+    local_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=tz)
+    local_end = local_start + timedelta(days=1)
+    day_start = local_start.astimezone(timezone.utc)
+    day_end = local_end.astimezone(timezone.utc) - timedelta(seconds=1)
 
     stmt = (
         select(Appointment)
@@ -221,7 +230,11 @@ async def list_appointments(
     appointments = result.scalars().all()
 
     items = [_build_appointment_response(a) for a in appointments]
-    return AppointmentListResponse(items=items, total=len(items))
+    return AppointmentListResponse(
+        items=items,
+        total=len(items),
+        timezone=str(tz),
+    )
 
 
 # ---------------------------------------------------------------------------

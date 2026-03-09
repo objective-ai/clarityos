@@ -173,10 +173,16 @@ ADDON_ID = uuid.UUID("00000000-0007-0007-0007-000000000001")
 # Date constants (hardcoded for reproducibility)
 TODAY = datetime.date(2026, 3, 7)
 
+# Clinic timezone — seed times are specified in local clinic time and converted to UTC
+from zoneinfo import ZoneInfo
+CLINIC_TZ = ZoneInfo("America/Los_Angeles")
+
 def _dt(date: datetime.date, hour: int, minute: int = 0) -> datetime.datetime:
-    """Helper to build timezone-aware datetime from date + time."""
-    return datetime.datetime(date.year, date.month, date.day, hour, minute, 0,
-                              tzinfo=datetime.timezone.utc)
+    """Build a UTC datetime from a local clinic time (Pacific).
+    e.g. _dt(TODAY, 8) → 8:00 AM PST → 16:00 UTC (or 15:00 UTC during PDT)."""
+    local = datetime.datetime(date.year, date.month, date.day, hour, minute, 0,
+                               tzinfo=CLINIC_TZ)
+    return local.astimezone(datetime.timezone.utc)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -260,6 +266,27 @@ def seed_public_schema(session: Session) -> None:
             status=TenantStatus.ACTIVE,
             plan_id=PLAN_PREMIUM_ID,
             owner_id=USER_DUY_SUPABASE,
+            settings_jsonb={
+                "booking": {
+                    "enabled": True,
+                    "hours": {
+                        "mon": {"start": "08:00", "end": "17:00"},
+                        "tue": {"start": "08:00", "end": "17:00"},
+                        "wed": {"start": "08:00", "end": "17:00"},
+                        "thu": {"start": "08:00", "end": "17:00"},
+                        "fri": {"start": "08:00", "end": "16:00"},
+                        "sat": None,
+                        "sun": None,
+                    },
+                    "slot_interval_minutes": 15,
+                    "bookable_types": [
+                        "comprehensive_exam",
+                        "contact_lens_exam",
+                        "pediatric_exam",
+                    ],
+                    "max_advance_days": 90,
+                },
+            },
         ))
         ok("Created tenant: Sunview Eye Care")
 
@@ -370,7 +397,7 @@ def _seed_patients(session: Session) -> None:
     patients_data = [
         # 1: Robert Hargrove — myopia, diabetes, HTN
         dict(
-            id=PATIENT_IDS[0], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[0], tenant_id=TENANT_ID, chart_number=1001,
             first_name="Robert", last_name="Hargrove", preferred_name="Bob",
             dob=datetime.date(1968, 3, 14), sex=Sex.MALE,
             contact_info_jsonb={
@@ -392,7 +419,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 2: Elena Vasquez — presbyopia, CL wearer, dry eye
         dict(
-            id=PATIENT_IDS[1], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[1], tenant_id=TENANT_ID, chart_number=1002,
             first_name="Elena", last_name="Vasquez", preferred_name=None,
             dob=datetime.date(1973, 9, 22), sex=Sex.FEMALE,
             contact_info_jsonb={
@@ -414,7 +441,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 3: James Thornton — glaucoma suspect
         dict(
-            id=PATIENT_IDS[2], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[2], tenant_id=TENANT_ID, chart_number=1003,
             first_name="James", last_name="Thornton", preferred_name=None,
             dob=datetime.date(1955, 11, 3), sex=Sex.MALE,
             contact_info_jsonb={
@@ -436,7 +463,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 4: Priya Patel — young adult, first comprehensive exam
         dict(
-            id=PATIENT_IDS[3], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[3], tenant_id=TENANT_ID, chart_number=1004,
             first_name="Priya", last_name="Patel", preferred_name=None,
             dob=datetime.date(2001, 6, 17), sex=Sex.FEMALE,
             contact_info_jsonb={
@@ -458,7 +485,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 5: William Donovan — post-LASIK, presbyopia
         dict(
-            id=PATIENT_IDS[4], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[4], tenant_id=TENANT_ID, chart_number=1005,
             first_name="William", last_name="Donovan", preferred_name="Will",
             dob=datetime.date(1962, 1, 28), sex=Sex.MALE,
             contact_info_jsonb={
@@ -480,7 +507,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 6: Maria Santos — CL refit, keratoconus suspect
         dict(
-            id=PATIENT_IDS[5], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[5], tenant_id=TENANT_ID, chart_number=1006,
             first_name="Maria", last_name="Santos", preferred_name=None,
             dob=datetime.date(1980, 4, 22), sex=Sex.FEMALE,
             contact_info_jsonb={
@@ -502,7 +529,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 7: David Kim — digital eye strain
         dict(
-            id=PATIENT_IDS[6], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[6], tenant_id=TENANT_ID, chart_number=1007,
             first_name="David", last_name="Kim", preferred_name=None,
             dob=datetime.date(1990, 8, 15), sex=Sex.MALE,
             contact_info_jsonb={
@@ -524,7 +551,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 8: Barbara Thompson — cataracts, AMD screening
         dict(
-            id=PATIENT_IDS[7], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[7], tenant_id=TENANT_ID, chart_number=1008,
             first_name="Barbara", last_name="Thompson", preferred_name="Barb",
             dob=datetime.date(1948, 12, 1), sex=Sex.FEMALE,
             contact_info_jsonb={
@@ -546,7 +573,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 9: Michael Chen — diabetic retinopathy monitoring
         dict(
-            id=PATIENT_IDS[8], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[8], tenant_id=TENANT_ID, chart_number=1009,
             first_name="Michael", last_name="Chen", preferred_name="Mike",
             dob=datetime.date(1975, 6, 30), sex=Sex.MALE,
             contact_info_jsonb={
@@ -568,7 +595,7 @@ def _seed_patients(session: Session) -> None:
         ),
         # 10: Sophia Rodriguez — pediatric myopia management
         dict(
-            id=PATIENT_IDS[9], tenant_id=TENANT_ID,
+            id=PATIENT_IDS[9], tenant_id=TENANT_ID, chart_number=1010,
             first_name="Sophia", last_name="Rodriguez", preferred_name=None,
             dob=datetime.date(2015, 2, 14), sex=Sex.FEMALE,
             contact_info_jsonb={
@@ -611,71 +638,84 @@ def _seed_appointments(session: Session) -> None:
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
              status=AppointmentStatus.COMPLETED, start_time=_dt(datetime.date(2026, 2, 20), 9),
              end_time=_dt(datetime.date(2026, 2, 20), 9, 45), duration_minutes=45,
-             chief_complaint="Annual comprehensive exam — diabetic patient"),
+             chief_complaint="Annual comprehensive exam — diabetic patient",
+             intake_status="submitted"),
         dict(id=APPT_IDS[1], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[1], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
              status=AppointmentStatus.COMPLETED, start_time=_dt(datetime.date(2026, 2, 21), 10),
              end_time=_dt(datetime.date(2026, 2, 21), 10, 30), duration_minutes=30,
-             chief_complaint="Difficulty reading at near, dry eye worsening"),
+             chief_complaint="Difficulty reading at near, dry eye worsening",
+             intake_status="submitted"),
         dict(id=APPT_IDS[2], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[2], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
              status=AppointmentStatus.COMPLETED, start_time=_dt(datetime.date(2026, 1, 14), 9),
              end_time=_dt(datetime.date(2026, 1, 14), 9, 30), duration_minutes=30,
-             chief_complaint="12-month glaucoma follow-up"),
+             chief_complaint="12-month glaucoma follow-up",
+             intake_status="submitted"),
 
         # Today (2026-03-07)
         dict(id=APPT_IDS[3], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[3], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
              status=AppointmentStatus.ARRIVED, start_time=_dt(TODAY, 8, 30),
              end_time=_dt(TODAY, 9, 15), duration_minutes=45,
-             chief_complaint="First comprehensive eye exam"),
+             chief_complaint="First comprehensive eye exam",
+             intake_status="submitted"),
         dict(id=APPT_IDS[4], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[4], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
              status=AppointmentStatus.IN_EXAM, start_time=_dt(TODAY, 9),
              end_time=_dt(TODAY, 9, 45), duration_minutes=45,
-             chief_complaint="Post-LASIK annual, presbyopia worsening"),
+             chief_complaint="Post-LASIK annual, presbyopia worsening",
+             intake_status="submitted"),
         dict(id=APPT_IDS[5], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[7], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
              status=AppointmentStatus.CONFIRMED, start_time=_dt(TODAY, 9, 30),
              end_time=_dt(TODAY, 10, 15), duration_minutes=45,
-             chief_complaint="Cataract monitoring, AMD follow-up"),
+             chief_complaint="Cataract monitoring, AMD follow-up",
+             intake_status="submitted"),
         dict(id=APPT_IDS[6], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[8], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 10),
              end_time=_dt(TODAY, 10, 30), duration_minutes=30,
-             chief_complaint="Diabetic retinopathy monitoring — annual dilated exam"),
+             chief_complaint="Diabetic retinopathy monitoring — annual dilated exam",
+             intake_status="pending"),
         dict(id=APPT_IDS[7], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[5], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 10, 30),
              end_time=_dt(TODAY, 11), duration_minutes=30,
-             chief_complaint="Contact lens refit — progressive astigmatism"),
+             chief_complaint="Contact lens refit — progressive astigmatism",
+             intake_status="submitted"),
         dict(id=APPT_IDS[8], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[6], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 11),
              end_time=_dt(TODAY, 11, 45), duration_minutes=45,
-             chief_complaint="Digital eye strain, headaches with screen use"),
+             chief_complaint="Digital eye strain, headaches with screen use",
+             intake_status="pending"),
         dict(id=APPT_IDS[9], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[9], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.PEDIATRIC_EXAM,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 13),
              end_time=_dt(TODAY, 13, 45), duration_minutes=45,
-             chief_complaint="Progressive myopia management — 11yo"),
+             chief_complaint="Progressive myopia management — 11yo",
+             intake_status="submitted"),
         dict(id=APPT_IDS[10], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 14),
              end_time=_dt(TODAY, 14, 20), duration_minutes=20,
-             chief_complaint="Glasses adjustment, vision check"),
+             chief_complaint="Glasses adjustment, vision check",
+             intake_status="pending"),
 
         # Next week
         dict(id=APPT_IDS[11], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[2], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(datetime.date(2026, 3, 10), 9),
              end_time=_dt(datetime.date(2026, 3, 10), 9, 30), duration_minutes=30,
-             chief_complaint="Glaucoma follow-up — IOP check"),
+             chief_complaint="Glaucoma follow-up — IOP check",
+             intake_status="pending"),
         dict(id=APPT_IDS[12], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[1], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
              status=AppointmentStatus.CONFIRMED, start_time=_dt(datetime.date(2026, 3, 11), 10),
              end_time=_dt(datetime.date(2026, 3, 11), 10, 20), duration_minutes=20,
-             chief_complaint="Multifocal CL trial follow-up"),
+             chief_complaint="Multifocal CL trial follow-up",
+             intake_status="pending"),
     ]
 
     for ad in appts:
@@ -727,7 +767,7 @@ def _seed_enc_hargrove(session: Session) -> None:
     session.add(VitalsAndPretest(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[0],
         iop_od=Decimal("15.0"), iop_os=Decimal("18.0"),
-        iop_time=_dt(enc_date, 9, 15), iop_method="iCare Rebound Tonometer",
+        iop_time=_dt(enc_date, 9, 15), iop_method="icare",
         ucva_od="20/200", ucva_os="20/150", bcva_od="20/40", bcva_os="20/30",
         near_va_od="20/25", near_va_os="20/20",
         blood_pressure="128/82", pulse=72,
@@ -777,7 +817,7 @@ def _seed_enc_hargrove(session: Session) -> None:
         ("H52.11", "Myopia, right eye", EyeAffected.OD, "moderate"),
         ("H52.12", "Myopia, left eye", EyeAffected.OS, "low-moderate"),
         ("H52.20", "Unspecified astigmatism", EyeAffected.OU, "mild"),
-        ("Z01.01", "Eye exam with abnormal findings — diabetic screening", None, None),
+        ("Z01.01", "Eye exam with abnormal findings — diabetic screening", EyeAffected.OU, None),
     ]:
         session.add(Diagnosis(
             id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[0],
@@ -813,7 +853,7 @@ def _seed_enc_vasquez(session: Session) -> None:
     session.add(VitalsAndPretest(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[1],
         iop_od=Decimal("14.0"), iop_os=Decimal("15.0"),
-        iop_time=_dt(enc_date, 8, 50), iop_method="iCare Rebound Tonometer",
+        iop_time=_dt(enc_date, 8, 50), iop_method="icare",
         ucva_od="20/30", ucva_os="20/40", bcva_od="20/20", bcva_os="20/20",
         near_va_od="20/50", near_va_os="20/50",
         blood_pressure="118/76", pulse=68,
@@ -860,7 +900,7 @@ def _seed_enc_vasquez(session: Session) -> None:
         ("H52.4", "Presbyopia", EyeAffected.OU, "moderate"),
         ("H04.123", "Dry eye syndrome, bilateral", EyeAffected.OU, "mild-moderate"),
         ("H00.019", "Meibomian gland dysfunction", EyeAffected.OU, "mild"),
-        ("Z46.0", "Fitting and adjustment of contact lenses", None, None),
+        ("Z46.0", "Fitting and adjustment of contact lenses", EyeAffected.OU, None),
     ]:
         session.add(Diagnosis(
             id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[1],
@@ -896,7 +936,7 @@ def _seed_enc_thornton_series(session: Session) -> None:
         session.add(VitalsAndPretest(
             id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[2],
             iop_od=Decimal("22.0"), iop_os=Decimal("24.0"),
-            iop_time=_dt(enc_date, 9), iop_method="Goldmann Applanation",
+            iop_time=_dt(enc_date, 9), iop_method="goldmann",
             ucva_od="20/40", ucva_os="20/30", bcva_od="20/20", bcva_os="20/20",
             near_va_od="20/25", near_va_os="20/25",
             blood_pressure="142/88", pulse=76,
@@ -923,7 +963,7 @@ def _seed_enc_thornton_series(session: Session) -> None:
             ("H40.001", "Preglaucoma, unspecified, right eye", EyeAffected.OD),
             ("H40.002", "Preglaucoma, unspecified, left eye", EyeAffected.OS),
             ("H25.10", "Age-related nuclear cataract, unspecified eye", EyeAffected.OU),
-            ("Z01.01", "Eye exam with abnormal findings", None),
+            ("Z01.01", "Eye exam with abnormal findings", EyeAffected.OU),
         ]:
             session.add(Diagnosis(
                 id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[2],
@@ -955,7 +995,7 @@ def _seed_enc_thornton_series(session: Session) -> None:
         session.add(VitalsAndPretest(
             id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[3],
             iop_od=Decimal("19.0"), iop_os=Decimal("21.0"),
-            iop_time=_dt(enc_date, 9, 30), iop_method="Goldmann Applanation",
+            iop_time=_dt(enc_date, 9, 30), iop_method="goldmann",
             ucva_od="20/40", ucva_os="20/30", bcva_od="20/20", bcva_os="20/20",
             near_va_od="20/25", near_va_os="20/25",
             blood_pressure="138/84", pulse=72,
@@ -1009,7 +1049,7 @@ def _seed_enc_thornton_series(session: Session) -> None:
         session.add(VitalsAndPretest(
             id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[4],
             iop_od=Decimal("17.0"), iop_os=Decimal("18.0"),
-            iop_time=_dt(enc_date, 9, 15), iop_method="Goldmann Applanation",
+            iop_time=_dt(enc_date, 9, 15), iop_method="goldmann",
             ucva_od="20/50", ucva_os="20/30", bcva_od="20/20", bcva_os="20/20",
             near_va_od="20/25", near_va_os="20/25",
             blood_pressure="134/80", pulse=74,
@@ -1076,7 +1116,7 @@ def _seed_enc_thompson(session: Session) -> None:
     session.add(VitalsAndPretest(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[5],
         iop_od=Decimal("14.0"), iop_os=Decimal("16.0"),
-        iop_time=_dt(enc_date, 9, 30), iop_method="iCare Rebound Tonometer",
+        iop_time=_dt(enc_date, 9, 30), iop_method="icare",
         ucva_od="20/20", ucva_os="20/80", bcva_od="20/20", bcva_os="20/50",
         near_va_od="20/25", near_va_os="20/60",
         blood_pressure="142/86", pulse=78,
@@ -1134,7 +1174,7 @@ def _seed_enc_donovan_today(session: Session) -> None:
     session.add(VitalsAndPretest(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[6],
         iop_od=Decimal("13.0"), iop_os=Decimal("14.0"),
-        iop_time=_dt(TODAY, 9, 5), iop_method="iCare Rebound Tonometer",
+        iop_time=_dt(TODAY, 9, 5), iop_method="icare",
         ucva_od="20/20", ucva_os="20/25", bcva_od="20/20", bcva_os="20/20",
         near_va_od="20/50", near_va_os="20/40",
         blood_pressure="122/78", pulse=66,
@@ -1293,16 +1333,34 @@ def main() -> None:
         conn.commit()
     ok("Public schema tables ready.")
 
+    # Schema patches — add columns that create_all(checkfirst=True) won't auto-add
+    step("Applying schema patches")
+    with engine.connect() as conn:
+        patches = [
+            "ALTER TABLE public.encounters ADD COLUMN IF NOT EXISTS optical_status VARCHAR(20)",
+        ]
+        for patch in patches:
+            conn.execute(text(patch))
+        conn.commit()
+    ok("Schema patches applied.")
+
+    # On RESEED: drop tenant schema first (FK deps), then clean public data
+    if RESEED:
+        with engine.connect() as conn:
+            warn(f"RESEED=true — dropping schema {TENANT_SCHEMA!r}")
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {TENANT_SCHEMA} CASCADE"))
+            conn.commit()
+        with engine.connect() as cleanup_conn:
+            warn("RESEED=true — clearing public seed data (CASCADE)")
+            cleanup_conn.execute(text("TRUNCATE public.tenant_addons, public.tenants, public.subscription_plans CASCADE"))
+            cleanup_conn.commit()
+
     with Session(engine) as pub_session:
         seed_public_schema(pub_session)
 
     # Phase 2: Tenant schema
     step(f"Creating tenant schema: {TENANT_SCHEMA!r}")
     with engine.connect() as conn:
-        if RESEED:
-            warn(f"RESEED=true — dropping schema {TENANT_SCHEMA!r}")
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {TENANT_SCHEMA} CASCADE"))
-            conn.commit()
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {TENANT_SCHEMA}"))
         conn.commit()
     ok(f"Schema '{TENANT_SCHEMA}' exists.")
