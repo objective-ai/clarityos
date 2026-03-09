@@ -72,6 +72,7 @@ class AppointmentStatus(str, enum.Enum):
     IN_PRETEST = "in_pretest" # Technician working
     IN_EXAM = "in_exam"       # Doctor in the room
     COMPLETED = "completed"
+    FINALIZED = "finalized"     # Note signed off by provider
     CANCELLED = "cancelled"
     NO_SHOW = "no_show"
 
@@ -416,6 +417,11 @@ class Encounter(TimestampMixin, SoftDeleteMixin, TenantBase):
     )
     signed_at: Mapped[DateTime | None] = mapped_column(  # type: ignore[assignment]
         DateTime(timezone=True), nullable=True
+    )
+
+    # Optical workflow status (set after finalization, tracked in optical queue)
+    optical_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default=None
     )
 
     # --- Relationships ---

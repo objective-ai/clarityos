@@ -29,6 +29,7 @@ from backend.api.resolvers import resolve_encounter_id
 from backend.core.audit import log_action
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
+from backend.db.models.public.saas import Tenant
 from backend.db.models.tenant.clinical import (
     AuditAction,
     Encounter,
@@ -225,7 +226,7 @@ async def get_optical_queue(
                 pd_od=final_rx.pd_od,
                 pd_os=final_rx.pd_os,
                 rx_change_alert=rx_change_alert,
-                status=OpticalStatus.WAITING,
+                status=OpticalStatus(enc.optical_status) if enc.optical_status else OpticalStatus.WAITING,
             )
         )
 
@@ -315,8 +316,14 @@ async def get_rx_pdf_data(
         ip_address=request.client.host if request.client else None,
     )
 
+    # Fetch clinic name from tenant
+    tenant = (
+        await db.execute(select(Tenant).where(Tenant.id == ctx.tenant_id))
+    ).scalar_one_or_none()
+    clinic_name = tenant.name if tenant else "Clinic"
+
     return RxPdfData(
-        clinic_name="ClarityOS Clinic",  # TODO: from tenant settings
+        clinic_name=clinic_name,
         clinic_address=None,
         clinic_phone=None,
         patient_first_name=patient.first_name,
@@ -371,6 +378,10 @@ async def update_optical_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finalized encounter not found",
         )
+
+    # Persist the status change
+    enc.optical_status = payload.status.value
+    await db.flush()
 
     # Audit log the status change
     staff = await resolve_staff(ctx, db)

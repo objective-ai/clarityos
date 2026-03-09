@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentTenant, useCurrentUser } from "@/store/sessionStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEncounterStore } from "@/store/encounterStore";
+import { useAppointmentStore, localDateISO } from "@/store/appointmentStore";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
-import { PatientChartModal } from "@/components/PatientChartModal";
 import {
   Card,
   CardHeader,
@@ -17,8 +17,7 @@ import {
 } from "@/components/ui/card";
 
 const INTAKE_ACTION = {
-  href: "/intake",
-  absolute: true,
+  href: "schedule",
   title: "Intake Form",
   description: "Patient-facing intake form — share via link or QR code",
   icon: (
@@ -93,10 +92,31 @@ export default function DashboardPage({
   const user = useCurrentUser();
   const isAdmin = requireRole("admin", "owner");
   const base = `/${params.tenant}`;
-  const [chartOpen, setChartOpen] = useState(false);
 
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
   const encounters = useEncounterStore((s) => s.encounters);
+  const appointments = useAppointmentStore((s) => s.appointments);
+  const fetchAppointments = useAppointmentStore((s) => s.fetchAppointments);
+
+  // Fetch today's appointments for "Next Patient" stat
+  useEffect(() => {
+    fetchAppointments(localDateISO());
+  }, [fetchAppointments]);
+
+  // Compute next upcoming patient
+  const nextPatient = useMemo(() => {
+    const now = new Date();
+    const upcoming = appointments
+      .filter((a) => {
+        const start = new Date(a.startTime);
+        return start > now && ["scheduled", "confirmed", "arrived"].includes(a.status);
+      })
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    if (upcoming.length === 0) return null;
+    const next = upcoming[0];
+    const time = new Date(next.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return { name: next.patientName ?? "Patient", time };
+  }, [appointments]);
 
   useEffect(() => {
     const firstName = (() => {
@@ -173,9 +193,8 @@ export default function DashboardPage({
         />
         <StatCard
           label="Next Patient"
-          value="—"
-          trend="No schedule yet"
-          onClick={() => setChartOpen(true)}
+          value={nextPatient?.name ?? "—"}
+          trend={nextPatient ? `at ${nextPatient.time}` : "No upcoming"}
         />
       </div>
 
@@ -250,13 +269,6 @@ export default function DashboardPage({
           </CardContent>
         </Card>
       </div>
-      {chartOpen && (
-        <PatientChartModal
-          patientId=""
-          open={chartOpen}
-          onOpenChange={setChartOpen}
-        />
-      )}
     </div>
   );
 }

@@ -43,14 +43,17 @@ interface PatientStoreState {
   // Encounters
   encounters: PatientEncounterSummary[];
   encountersLoading: boolean;
+  encountersError: string | null;
 
   // Flowsheet
   flowsheet: FlowsheetRow[];
   flowsheetLoading: boolean;
+  flowsheetError: string | null;
 
   // Prep Me
   prepMeSummary: string | null;
   prepMeLoading: boolean;
+  prepMeError: string | null;
 }
 
 interface PatientStoreActions {
@@ -100,12 +103,15 @@ export const usePatientStore = create<PatientStore>()(
 
       encounters: [],
       encountersLoading: false,
+      encountersError: null,
 
       flowsheet: [],
       flowsheetLoading: false,
+      flowsheetError: null,
 
       prepMeSummary: null,
       prepMeLoading: false,
+      prepMeError: null,
 
       // -- List --
       fetchPatients: async (search, limit = 20, offset = 0) => {
@@ -193,41 +199,44 @@ export const usePatientStore = create<PatientStore>()(
 
       // -- Encounters --
       fetchEncounters: async (patientId) => {
-        set({ encountersLoading: true }, false, "fetchEncounters/start");
+        set({ encountersLoading: true, encountersError: null }, false, "fetchEncounters/start");
         try {
           const data = await apiFetch<PatientEncounterSummary[]>(
             `/api/patients/${patientId}/encounters`
           );
           set({ encounters: data, encountersLoading: false }, false, "fetchEncounters/success");
-        } catch {
-          set({ encountersLoading: false }, false, "fetchEncounters/error");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to load encounters";
+          set({ encountersLoading: false, encountersError: msg }, false, "fetchEncounters/error");
         }
       },
 
       // -- Flowsheet --
       fetchFlowsheet: async (patientId) => {
-        set({ flowsheetLoading: true }, false, "fetchFlowsheet/start");
+        set({ flowsheetLoading: true, flowsheetError: null }, false, "fetchFlowsheet/start");
         try {
           const data = await apiFetch<FlowsheetRow[]>(
             `/api/patients/${patientId}/flowsheet`
           );
           set({ flowsheet: data, flowsheetLoading: false }, false, "fetchFlowsheet/success");
-        } catch {
-          set({ flowsheetLoading: false }, false, "fetchFlowsheet/error");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to load flowsheet";
+          set({ flowsheetLoading: false, flowsheetError: msg }, false, "fetchFlowsheet/error");
         }
       },
 
       // -- Prep Me --
       fetchPrepMe: async (patientId) => {
-        set({ prepMeLoading: true, prepMeSummary: null }, false, "fetchPrepMe/start");
+        set({ prepMeLoading: true, prepMeSummary: null, prepMeError: null }, false, "fetchPrepMe/start");
         try {
           const data = await apiFetch<PrepMeResponse>(
             `/api/patients/${patientId}/prep-me`,
             { method: "POST" }
           );
           set({ prepMeSummary: data.summary, prepMeLoading: false }, false, "fetchPrepMe/success");
-        } catch {
-          set({ prepMeLoading: false }, false, "fetchPrepMe/error");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Failed to generate summary";
+          set({ prepMeLoading: false, prepMeError: msg }, false, "fetchPrepMe/error");
         }
       },
 
