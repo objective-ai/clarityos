@@ -10,7 +10,7 @@ from datetime import date, datetime
 
 from pydantic import Field
 
-from backend.schemas.common import AppBaseModel
+from backend.schemas.common import AppBaseModel, CamelCaseModel
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ class IntakeTokenResponse(AppBaseModel):
 # ---------------------------------------------------------------------------
 
 
-class IntakeValidationResponse(AppBaseModel):
+class IntakeValidationResponse(CamelCaseModel):
     """Returned on GET /api/public/intake/{token}/ — minimal info, no PHI."""
 
     clinic_name: str
@@ -51,7 +51,7 @@ class DobVerifyRequest(AppBaseModel):
     dob: date
 
 
-class DobVerifyResponse(AppBaseModel):
+class DobVerifyResponse(CamelCaseModel):
     """Returned after successful DOB verification — includes patient info."""
 
     verified: bool
@@ -156,7 +156,7 @@ class IntakeFormSubmission(AppBaseModel):
     consent_digital_comm: bool = Field(default=False, description="Optional: digital communication consent")
 
 
-class IntakeSubmissionResponse(AppBaseModel):
+class IntakeSubmissionResponse(CamelCaseModel):
     """Returned after successful intake form submission."""
 
     success: bool = True

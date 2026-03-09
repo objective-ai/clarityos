@@ -54,5 +54,14 @@ tmp-*.js
 test-data.mjs
 test-login.mjs
 
+# MCP config (may contain API keys)
+.mcp.json
+
+# screenshots / local test artifacts
+prod-*.png
+vercel-*.png
+.playwright-cli/
+test-results/
+
 # claude code
 .claude/
