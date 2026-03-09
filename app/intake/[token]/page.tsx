@@ -10,7 +10,7 @@
  * 4. Submit → success screen
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
@@ -168,12 +168,6 @@ export default function IntakePage() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [successDate, setSuccessDate] = useState("");
 
-  // --- Address autocomplete state ---
-  const [addressSuggestions, setAddressSuggestions] = useState<{ placeRef: string; description: string }[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [addressLoading, setAddressLoading] = useState(false);
-  const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const addressContainerRef = useRef<HTMLDivElement>(null);
 
   // Validate token on mount
   useEffect(() => {
@@ -318,54 +312,6 @@ export default function IntakePage() {
   const set = (field: keyof FormData, value: string | boolean) =>
     setForm((f) => ({ ...f, [field]: value }));
 
-  // --- Address autocomplete ---
-  const handleAddressInput = useCallback((value: string) => {
-    set("addressLine1", value);
-    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
-    if (value.length < 3) { setAddressSuggestions([]); setShowSuggestions(false); return; }
-    addressDebounceRef.current = setTimeout(async () => {
-      setAddressLoading(true);
-      try {
-        const res = await fetch(`/api/address/autocomplete?input=${encodeURIComponent(value)}`);
-        const data = await res.json();
-        setAddressSuggestions(data.suggestions || []);
-        setShowSuggestions((data.suggestions || []).length > 0);
-      } catch { setAddressSuggestions([]); }
-      setAddressLoading(false);
-    }, 350);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const selectAddress = useCallback(async (placeRef: string, description: string) => {
-    setShowSuggestions(false);
-    setAddressSuggestions([]);
-    set("addressLine1", description.split(",")[0] || description);
-    try {
-      const res = await fetch(`/api/address/place-details?placeRef=${encodeURIComponent(placeRef)}`);
-      const data = await res.json();
-      if (data.address) {
-        setForm((f) => ({
-          ...f,
-          addressLine1: data.address.addressLine1 || f.addressLine1,
-          city: data.address.city || f.city,
-          state: data.address.state || f.state,
-          zipCode: data.address.zipCode || f.zipCode,
-        }));
-      }
-    } catch { /* keep what we have */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Close suggestions on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (addressContainerRef.current && !addressContainerRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -470,23 +416,23 @@ export default function IntakePage() {
     <Shell clinicName={tokenInfo?.clinicName} appointmentDate={tokenInfo?.appointmentDate}>
       {/* Progress bar */}
       <div className="mb-6">
-        <div className="flex justify-between mb-2">
-          {STEPS.map((s, i) => (
-            <span
-              key={s}
-              className={`text-xs font-medium ${
-                i === step ? "text-[var(--accent)]" : i < step ? "text-emerald-400" : "text-[var(--text-muted)]"
-              }`}
-            >
-              {s}
-            </span>
-          ))}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-[var(--accent)]">
+            {STEPS[step]}
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">
+            {step + 1} of {STEPS.length}
+          </span>
         </div>
-        <div className="h-1 rounded-full bg-white/5 overflow-hidden">
-          <div
-            className="h-full bg-[var(--accent)] transition-all duration-300"
-            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-          />
+        <div className="flex gap-1.5">
+          {STEPS.map((s, i) => (
+            <div
+              key={s}
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                i <= step ? "bg-[var(--accent)]" : "bg-white/5"
+              }`}
+            />
+          ))}
         </div>
       </div>
 
@@ -541,36 +487,9 @@ export default function IntakePage() {
               <input className={inputClass} value={form.email} onChange={(e) => set("email", e.target.value)} type="email" />
             </div>
           </div>
-          <div ref={addressContainerRef} className="relative">
+          <div>
             <label className="block text-xs text-[var(--text-secondary)] mb-1">Address</label>
-            <div className="relative">
-              <input
-                className={inputClass}
-                value={form.addressLine1}
-                onChange={(e) => handleAddressInput(e.target.value)}
-                onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
-                placeholder="Start typing an address..."
-                autoComplete="off"
-              />
-              {addressLoading && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="h-4 w-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-            </div>
-            {showSuggestions && addressSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full mt-1 rounded-lg border border-white/10 bg-[var(--glass-bg,rgba(15,15,15,0.95))] backdrop-blur-xl shadow-xl overflow-hidden">
-                {addressSuggestions.map((s) => (
-                  <li
-                    key={s.placeRef}
-                    className="px-3 py-2.5 text-sm text-[var(--text-primary)] hover:bg-white/10 cursor-pointer transition"
-                    onMouseDown={() => selectAddress(s.placeRef, s.description)}
-                  >
-                    {s.description}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <input className={inputClass} value={form.addressLine1} onChange={(e) => set("addressLine1", e.target.value)} placeholder="Street address" />
           </div>
           <input className={inputClass} value={form.addressLine2} onChange={(e) => set("addressLine2", e.target.value)} placeholder="Apt, suite, unit (optional)" />
           <div className="grid grid-cols-3 gap-3">
