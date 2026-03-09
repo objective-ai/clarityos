@@ -11,6 +11,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useEncounterStore } from "@/store/encounterStore";
+import { useBillingStore } from "@/store/billingStore";
+import SuperbillEditor from "@/components/billing/SuperbillEditor";
 import { useVitalsDraft } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
 import { useDiagnoses } from "@/store/diagnosisStore";
@@ -97,6 +99,7 @@ export function FinalizeModal({
   const [attested, setAttested] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [step, setStep] = useState<"clinical" | "billing">("clinical");
 
   // ── Store reads ─────────────────────────────────────────────────────────
   const chiefComplaint = useEncounterStore(
@@ -104,6 +107,7 @@ export function FinalizeModal({
   );
   const finalizeEncounter = useEncounterStore((s) => s.finalizeEncounter);
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
+  const updateBillingStatus = useBillingStore((s) => s.updateStatus);
 
   const vitalsDraft = useVitalsDraft(encounterId);
   const allDiagnoses = useDiagnoses(encounterId);
@@ -132,6 +136,7 @@ export function FinalizeModal({
       setAttested(false);
       setIsSubmitting(false);
       setErrorMessage(null);
+      setStep("clinical");
     }
   }, [open]);
 
@@ -157,7 +162,7 @@ export function FinalizeModal({
         response.signed_by_name ?? providerName,
         response.signed_at ?? new Date().toISOString()
       );
-      setFinalizeModalOpen(false);
+      setStep("billing");
     } catch (err) {
       // Dev fallback — finalize locally when backend is unreachable
       if (process.env.NODE_ENV === "development") {
@@ -166,12 +171,26 @@ export function FinalizeModal({
           providerName,
           new Date().toISOString()
         );
-        setFinalizeModalOpen(false);
+        setStep("billing");
         return;
       }
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to finalize encounter"
       );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // ── Post to billing handler ─────────────────────────────────────────────
+  async function handlePostToBilling() {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await updateBillingStatus(encounterId, "ready_to_bill");
+      setFinalizeModalOpen(false);
+    } catch {
+      setErrorMessage("Failed to post superbill to billing.");
     } finally {
       setIsSubmitting(false);
     }
@@ -194,8 +213,44 @@ export function FinalizeModal({
           <DialogDescription className="text-xs" style={{ color: "var(--text-muted)" }}>
             Review the clinical summary below. This action is irreversible &mdash; all fields will become read-only.
           </DialogDescription>
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                style={{
+                  background: step === "clinical" ? "var(--accent)" : "var(--accent-dim)",
+                  color: step === "clinical" ? "var(--text-inverse)" : "var(--accent)",
+                  border: "1px solid var(--accent)",
+                }}
+              >
+                {step === "billing" ? "\u2713" : "1"}
+              </div>
+              <span className="text-[11px] font-medium" style={{ color: step === "clinical" ? "var(--text-primary)" : "var(--text-muted)" }}>
+                Clinical
+              </span>
+            </div>
+            <div className="w-6 h-px" style={{ background: "var(--border-subtle)" }} />
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                style={{
+                  background: step === "billing" ? "var(--accent)" : "var(--bg-elevated)",
+                  color: step === "billing" ? "var(--text-inverse)" : "var(--text-muted)",
+                  border: `1px solid ${step === "billing" ? "var(--accent)" : "var(--border-subtle)"}`,
+                }}
+              >
+                2
+              </div>
+              <span className="text-[11px] font-medium" style={{ color: step === "billing" ? "var(--text-primary)" : "var(--text-muted)" }}>
+                Billing
+              </span>
+            </div>
+          </div>
         </DialogHeader>
 
+        {step === "clinical" && (
+        <>
         {/* Scrollable summary */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
           {/* 1. Chief Complaint */}
@@ -410,7 +465,7 @@ export function FinalizeModal({
               ) : (
                 <>
                   <Shield size={14} />
-                  Sign &amp; Seal Chart
+                  Sign &amp; Continue to Billing
                 </>
               )}
             </button>
@@ -428,6 +483,60 @@ export function FinalizeModal({
             </button>
           </div>
         </div>
+        </>
+        )}
+
+        {step === "billing" && (
+          <>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <SuperbillEditor encounterId={encounterId} />
+            </div>
+
+            <div
+              className="flex-shrink-0 px-6 pb-6 pt-4 space-y-3"
+              style={{ borderTop: "1px solid var(--border-subtle)" }}
+            >
+              {errorMessage && (
+                <p className="text-xs" style={{ color: "var(--state-critical)" }}>
+                  {errorMessage}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handlePostToBilling}
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{
+                    background: "var(--accent)",
+                    color: "var(--text-inverse)",
+                  }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
+                      Posting...
+                    </>
+                  ) : (
+                    "Post to Billing & Seal"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFinalizeModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium hover-btn"
+                  style={{
+                    background: "var(--bg-glass)",
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--glass-border)",
+                  }}
+                >
+                  Skip Billing
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
