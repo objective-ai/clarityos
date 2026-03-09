@@ -120,6 +120,20 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; icon: React.ReactN
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/svg+xml"];
 
+const TIMEZONE_OPTIONS = [
+  { value: "America/New_York", label: "Eastern (New York)" },
+  { value: "America/Chicago", label: "Central (Chicago)" },
+  { value: "America/Denver", label: "Mountain (Denver)" },
+  { value: "America/Los_Angeles", label: "Pacific (Los Angeles)" },
+  { value: "America/Phoenix", label: "Arizona (Phoenix)" },
+  { value: "Pacific/Honolulu", label: "Hawaii (Honolulu)" },
+  { value: "Asia/Ho_Chi_Minh", label: "Indochina (Ho Chi Minh)" },
+  { value: "Asia/Tokyo", label: "Japan (Tokyo)" },
+  { value: "Europe/London", label: "UK (London)" },
+  { value: "Europe/Paris", label: "Central Europe (Paris)" },
+  { value: "Australia/Sydney", label: "Australia (Sydney)" },
+];
+
 // ---------------------------------------------------------------------------
 // Staff section constants
 // ---------------------------------------------------------------------------
@@ -160,6 +174,40 @@ function GeneralSettingsSection() {
   const [dragOver, setDragOver] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Timezone settings
+  const [timezone, setTimezone] = useState("America/Los_Angeles");
+  const [tzLoading, setTzLoading] = useState(true);
+  const [tzSaving, setTzSaving] = useState(false);
+  const [tzMsg, setTzMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/tenant/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.timezone) setTimezone(d.timezone); })
+      .catch(() => {})
+      .finally(() => setTzLoading(false));
+  }, []);
+
+  const handleTimezoneChange = useCallback(async (tz: string) => {
+    setTimezone(tz);
+    setTzSaving(true);
+    setTzMsg(null);
+    try {
+      const res = await fetch("/api/tenant/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone: tz }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setTzMsg("Saved");
+      setTimeout(() => setTzMsg(null), 2000);
+    } catch {
+      setTzMsg("Error saving timezone");
+    } finally {
+      setTzSaving(false);
+    }
+  }, []);
 
   const handleFile = useCallback(
     (file: File) => {
@@ -297,6 +345,43 @@ function GeneralSettingsSection() {
               onChange={handleFileInput}
               className="hidden"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Clinic Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[16px]">Clinic Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <div className="text-overline mb-2">Timezone</div>
+            <p className="text-xs text-[var(--text-muted)] mb-3">
+              Controls how appointment times are displayed and stored.
+            </p>
+            <div className="flex items-center gap-3">
+              <select
+                value={timezone}
+                onChange={(e) => handleTimezoneChange(e.target.value)}
+                disabled={tzLoading || tzSaving}
+                className="glass-input rounded-lg px-3 py-2 text-sm min-w-[260px]"
+              >
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </option>
+                ))}
+              </select>
+              {tzSaving && (
+                <span className="text-xs text-[var(--text-muted)]">Saving...</span>
+              )}
+              {tzMsg && !tzSaving && (
+                <span className={`text-xs ${tzMsg === "Saved" ? "text-emerald-400" : "text-red-400"}`}>
+                  {tzMsg}
+                </span>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

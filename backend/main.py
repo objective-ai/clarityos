@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import ai_scribe, appointment, audit, billing, diagnosis, encounter, exam_findings, intake, optical, patient, patient_problem, promotion, public_booking, refraction, staff, vitals
+from backend.api.routes import ai_scribe, appointment, audit, billing, diagnosis, encounter, exam_findings, intake, optical, patient, patient_problem, promotion, public_booking, refraction, staff, tenant, vitals
 from backend.core.config import settings
 
 logger = logging.getLogger("clarityos")
@@ -117,6 +117,11 @@ app.include_router(
     intake.staff_router,
     prefix="/api/appointments",
     tags=["Intake (Staff)"],
+)
+app.include_router(
+    tenant.router,
+    prefix="/api/tenant",
+    tags=["Tenant"],
 )
 
 
