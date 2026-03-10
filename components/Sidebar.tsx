@@ -79,6 +79,12 @@ const Icon = {
       <path d="M6 7h4M6 9.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   ),
+  Billing: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="1.5" width="12" height="13" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5 5h6M5 8h4M5 11h5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  ),
   Lock: () => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
       <rect x="2" y="5" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
@@ -120,11 +126,11 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
 
   const navItems: NavItem[] = [
     { label: "Dashboard", href: `${base}/dashboard`, icon: Icon.Dashboard },
-    { label: "Intake Form", href: `${base}/schedule`, icon: Icon.Clipboard },
     { label: "Schedule", href: `${base}/schedule`, icon: Icon.Calendar, requiredEntitlement: Entitlement.SCHEDULING },
     { label: "Patients", href: `${base}/patients`, icon: Icon.Patients, requiredEntitlement: Entitlement.PATIENT_DEMOGRAPHICS },
     { label: "Analytics", href: `${base}/analytics`, icon: Icon.Analytics, requiredEntitlement: Entitlement.ADVANCED_ANALYTICS },
     { label: "Optical", href: `${base}/optical`, icon: Icon.Optical },
+    { label: "Billing", href: `${base}/billing`, icon: Icon.Billing, requiredRoles: ["doctor", "admin", "owner"] },
   ];
 
   const bottomItems: NavItem[] = [
