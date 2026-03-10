@@ -262,9 +262,9 @@ body {
   }
 
   .nav-item.active {
-    background: var(--accent-glow);
+    background: rgba(255, 255, 255, 0.06);
     color: var(--text-primary);
-    border-color: var(--border-glow);
+    border-color: transparent;
     box-shadow: inset 3px 0 0 var(--accent);
   }
 

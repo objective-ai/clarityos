@@ -29,6 +29,24 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Convert a clinic-local date + time string to a UTC ISO string. */
+function clinicLocalToUTC(dateStr: string, timeStr: string, clinicTz: string): string {
+  const probe = new Date(`${dateStr}T12:00:00Z`);
+  const fmt = new Intl.DateTimeFormat("en-US", { timeZone: clinicTz, timeZoneName: "shortOffset" });
+  const offsetPart = fmt.formatToParts(probe).find((p) => p.type === "timeZoneName")?.value || "";
+  let offsetMinutes = 0;
+  const m = offsetPart.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (m) {
+    const sign = m[1] === "+" ? 1 : -1;
+    offsetMinutes = sign * (parseInt(m[2]) * 60 + parseInt(m[3] || "0"));
+  }
+  const ms = Date.UTC(
+    parseInt(dateStr.slice(0, 4)), parseInt(dateStr.slice(5, 7)) - 1, parseInt(dateStr.slice(8, 10)),
+    parseInt(timeStr.slice(0, 2)), parseInt(timeStr.slice(3, 5)), 0
+  );
+  return new Date(ms - offsetMinutes * 60 * 1000).toISOString();
+}
+
 function formatTime(iso: string, tz?: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -374,6 +392,15 @@ function BookAppointmentModal({
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Inline new-patient quick-create
+  const [showNewPatient, setShowNewPatient] = useState(false);
+  const [newFirst, setNewFirst] = useState("");
+  const [newLast, setNewLast] = useState("");
+  const [newDob, setNewDob] = useState("");
+  const [newSex, setNewSex] = useState<"male" | "female" | "other">("male");
+  const [newPhone, setNewPhone] = useState("");
+  const [creatingPatient, setCreatingPatient] = useState(false);
+
   // Staff list for provider dropdown
   const [staffList, setStaffList] = useState<
     { id: string; firstName: string; lastName: string; role: string }[]
@@ -446,6 +473,12 @@ function BookAppointmentModal({
       setSelectedPatientName("");
       setPatientResults([]);
       setShowPatientDropdown(false);
+      setShowNewPatient(false);
+      setNewFirst("");
+      setNewLast("");
+      setNewDob("");
+      setNewSex("male");
+      setNewPhone("");
     }
   }, [open, defaults]);
 
@@ -478,7 +511,8 @@ function BookAppointmentModal({
     if (!patientId || !providerId) return;
     setSubmitting(true);
     try {
-      const startTime = new Date(`${date}T${time}:00`).toISOString();
+      const clinicTz = useAppointmentStore.getState().clinicTimezone || "America/Los_Angeles";
+      const startTime = clinicLocalToUTC(date, time, clinicTz);
       await onSubmit({
         patientId,
         providerId,
@@ -525,7 +559,7 @@ function BookAppointmentModal({
             </>
           ) : (
             <>
-              {/* Patient search */}
+              {/* Patient search / quick-create */}
               <div className="relative">
                 <label className="text-caption text-[var(--text-muted)] block mb-1">
                   Patient
@@ -540,27 +574,124 @@ function BookAppointmentModal({
                         setPatientId("");
                         setSelectedPatientName("");
                         setPatientSearch("");
+                        setShowNewPatient(false);
                       }}
                     >
                       Change
                     </button>
                   </div>
+                ) : showNewPatient ? (
+                  /* Inline new patient form */
+                  <div className="space-y-2 rounded-lg border border-[var(--glass-border)] p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={newFirst}
+                        onChange={(e) => setNewFirst(e.target.value)}
+                        placeholder="First name *"
+                        className="glass-input px-2 py-1.5 rounded-lg text-sm"
+                        required={!patientId}
+                      />
+                      <input
+                        type="text"
+                        value={newLast}
+                        onChange={(e) => setNewLast(e.target.value)}
+                        placeholder="Last name *"
+                        className="glass-input px-2 py-1.5 rounded-lg text-sm"
+                        required={!patientId}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        value={newDob}
+                        onChange={(e) => setNewDob(e.target.value)}
+                        className="glass-input px-2 py-1.5 rounded-lg text-sm"
+                        required={!patientId}
+                        title="Date of birth"
+                      />
+                      <select
+                        value={newSex}
+                        onChange={(e) => setNewSex(e.target.value as "male" | "female" | "other")}
+                        className="glass-input px-2 py-1.5 rounded-lg text-sm"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <input
+                      type="tel"
+                      value={newPhone}
+                      onChange={(e) => setNewPhone(e.target.value)}
+                      placeholder="Phone (optional)"
+                      className="glass-input w-full px-2 py-1.5 rounded-lg text-sm"
+                    />
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={creatingPatient || !newFirst || !newLast || !newDob}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--accent)]/20 text-[var(--accent)] hover:bg-[var(--accent)]/30 disabled:opacity-40"
+                        onClick={async () => {
+                          setCreatingPatient(true);
+                          try {
+                            const created = await apiFetch<{ id: string; firstName: string; lastName: string }>("/api/patients", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                firstName: newFirst.trim(),
+                                lastName: newLast.trim(),
+                                dob: newDob,
+                                sex: newSex,
+                                ...(newPhone.trim() ? { phone: newPhone.trim() } : {}),
+                              }),
+                            });
+                            setPatientId(created.id);
+                            setSelectedPatientName(`${created.lastName}, ${created.firstName}`);
+                            setShowNewPatient(false);
+                          } catch {
+                            // stay on the form so user can retry
+                          } finally {
+                            setCreatingPatient(false);
+                          }
+                        }}
+                      >
+                        {creatingPatient ? "Creating..." : "Create & Select"}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        onClick={() => setShowNewPatient(false)}
+                      >
+                        Back to search
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <input
-                    type="text"
-                    value={patientSearch}
-                    onChange={(e) => {
-                      setPatientSearch(e.target.value);
-                      setPatientId("");
-                    }}
-                    onFocus={() => patientResults.length > 0 && setShowPatientDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowPatientDropdown(false), 200)}
-                    placeholder="Search by name..."
-                    className="glass-input w-full px-3 py-2 rounded-lg text-sm"
-                    required={!patientId}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      value={patientSearch}
+                      onChange={(e) => {
+                        setPatientSearch(e.target.value);
+                        setPatientId("");
+                      }}
+                      onFocus={() => patientResults.length > 0 && setShowPatientDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowPatientDropdown(false), 200)}
+                      placeholder="Search by name..."
+                      className="glass-input w-full px-3 py-2 rounded-lg text-sm"
+                      required={!patientId}
+                    />
+                    <button
+                      type="button"
+                      className="text-xs text-[var(--accent)] hover:text-[var(--accent)]/80 mt-1"
+                      onClick={() => setShowNewPatient(true)}
+                    >
+                      + New Patient
+                    </button>
+                  </>
                 )}
-                {showPatientDropdown && (
+                {showPatientDropdown && !showNewPatient && (
                   <div className="absolute z-10 w-full mt-1 glass-card rounded-lg shadow-lg max-h-40 overflow-y-auto">
                     {patientResults.map((p) => (
                       <button
@@ -832,7 +963,8 @@ function RescheduleModal({
     if (!date || !time) return;
     setSubmitting(true);
     try {
-      const newStartTime = new Date(`${date}T${time}:00`).toISOString();
+      const clinicTz = useAppointmentStore.getState().clinicTimezone || "America/Los_Angeles";
+      const newStartTime = clinicLocalToUTC(date, time, clinicTz);
       await onConfirm(
         appointment.id,
         newStartTime,

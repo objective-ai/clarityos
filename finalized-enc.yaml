@@ -1,0 +1,63 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - img [ref=e6]
+        - generic [ref=e9]:
+          - generic [ref=e10]: Sunview Eye Care
+          - generic [ref=e11]: Premium Plan
+        - button "Collapse sidebar" [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+      - navigation [ref=e15]:
+        - link "Dashboard" [ref=e16] [cursor=pointer]:
+          - /url: /sunview/dashboard
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - link "Intake Form" [ref=e23] [cursor=pointer]:
+          - /url: /sunview/schedule
+          - img [ref=e24]
+          - generic [ref=e28]: Intake Form
+        - link "Schedule" [ref=e29] [cursor=pointer]:
+          - /url: /sunview/schedule
+          - img [ref=e30]
+          - generic [ref=e33]: Schedule
+        - link "Patients" [ref=e38] [cursor=pointer]:
+          - /url: /sunview/patients
+          - img [ref=e39]
+          - generic [ref=e42]: Patients
+        - link "Analytics" [ref=e47] [cursor=pointer]:
+          - /url: /sunview/analytics
+          - img [ref=e48]
+          - generic [ref=e50]: Analytics
+        - link "Optical" [ref=e55] [cursor=pointer]:
+          - /url: /sunview/optical
+          - img [ref=e56]
+          - generic [ref=e59]: Optical
+      - navigation [ref=e62]:
+        - link "Admin" [ref=e106] [cursor=pointer]:
+          - /url: /sunview/admin
+          - img [ref=e107]
+          - generic [ref=e112]: Admin
+      - generic [ref=e63]:
+        - generic [ref=e64]: DT
+        - generic [ref=e65]:
+          - generic [ref=e66]: Duy Tran
+          - generic [ref=e113]: Owner · doctor
+    - generic [ref=e67]:
+      - banner [ref=e68]:
+        - heading "Encounter" [level=1] [ref=e71]
+        - generic [ref=e72]:
+          - 'button "Dev mode · Premium · role: owner · ai_scribe: true" [ref=e114] [cursor=pointer]':
+            - generic [ref=e75]:
+              - text: "Dev mode · Premium · role: owner ·"
+              - generic [ref=e76]: "ai_scribe: true"
+          - button "Toggle theme" [ref=e77] [cursor=pointer]:
+            - img [ref=e78]
+          - button "Log out" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+      - main [ref=e83]:
+        - generic [ref=e84]:
+          - paragraph [ref=e116]: Could not load encounter
+          - paragraph [ref=e117]: Internal server error
+          - button "Retry" [ref=e118] [cursor=pointer]
+  - alert [ref=e115]
