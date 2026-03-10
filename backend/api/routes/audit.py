@@ -40,7 +40,7 @@ def _row_to_response(row: AuditLog, staff_name: str | None = None) -> AuditLogRe
         staff_name=staff_name,
         encounter_id=row.encounter_id,
         patient_id=row.patient_id,
-        action_type=row.action.value,
+        action_type=row.action,
         resource_type=row.resource_type,
         detail=row.detail,
         changes=row.changes,
@@ -229,7 +229,7 @@ async def export_audit_logs(
         writer.writerow([
             log.created_at.isoformat(),
             staff_name,
-            log.action.value,
+            log.action,
             log.resource_type,
             str(log.encounter_id) if log.encounter_id else "",
             str(log.patient_id) if log.patient_id else "",

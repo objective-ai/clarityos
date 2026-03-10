@@ -930,7 +930,7 @@ class AuditLog(TenantBase):
 
     def __repr__(self) -> str:
         return (
-            f"<AuditLog {self.action.value} {self.resource_type} "
+            f"<AuditLog {self.action} {self.resource_type} "
             f"{self.resource_id} by user={self.user_id}>"
         )
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
@@ -1059,6 +1059,14 @@ function RescheduleModal({
 // ---------------------------------------------------------------------------
 
 export default function SchedulePage() {
+  return (
+    <Suspense>
+      <SchedulePageInner />
+    </Suspense>
+  );
+}
+
+function SchedulePageInner() {
   const { has } = useEntitlements();
   const router = useRouter();
   const params = useParams();
