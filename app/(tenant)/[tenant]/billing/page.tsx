@@ -7,11 +7,8 @@ import { Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
-import {
-  useBillingDashboardStore,
-  type SuperbillListItem,
-} from "@/store/billingDashboardStore";
-import type { ClaimStatus } from "@/types/billing";
+import { useBillingDashboardStore } from "@/store/billingDashboardStore";
+import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
 // Status badge styling
@@ -157,7 +154,7 @@ export default function BillingPage() {
           }}
         >
           <Download size={12} />
-          Download CSV
+          Export Posted Claims (CSV)
         </button>
       </div>
 
