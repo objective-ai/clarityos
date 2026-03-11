@@ -53,6 +53,7 @@ export async function updateSession(request: NextRequest) {
   // Routes that should NOT be protected
   const isPublicRoute =
     pathname === "/login" ||
+    pathname === "/health" ||
     pathname.startsWith("/intake") ||
     pathname.startsWith("/book") ||
     pathname.startsWith("/api") ||

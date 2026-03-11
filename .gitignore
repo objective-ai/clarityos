@@ -68,3 +68,6 @@ test-results/
 
 # local docs / specs (not for repo)
 docs/
+
+# test artifacts
+finalized-enc.yaml

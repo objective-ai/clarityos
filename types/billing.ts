@@ -127,3 +127,19 @@ export const CPT_CATALOG: CptEntry[] = [
   { code: "92250", description: "Fundus photography", defaultFee: 65.00, category: "diagnostic" },
   { code: "92134", description: "OCT retina scan", defaultFee: 75.00, category: "diagnostic" },
 ];
+
+// ---------------------------------------------------------------------------
+// Superbill List (dashboard)
+// ---------------------------------------------------------------------------
+
+export interface SuperbillListItem {
+  id: string;
+  encounterId: string;
+  patientId: string;
+  patientName: string;
+  providerName: string;
+  claimStatus: ClaimStatus;
+  cptCodes: string[];
+  totalFee: number;
+  createdAt: string;
+}

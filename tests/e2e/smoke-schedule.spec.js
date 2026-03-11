@@ -9,7 +9,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-schedule.spec.js
  */
-const { launchBrowser, login, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 // ============================================================================
 // A) Core Schedule Tests
@@ -20,7 +20,7 @@ async function runCoreTests(page, slug, apiCalls, consoleErrors) {
   // 1. Schedule page loads
   apiCalls.length = 0;
   await page.goto(`${TARGET_URL}/${slug}/schedule`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   const scheduleLocked = await page.locator('text=Scheduling Locked').count();
   results.scheduleAccessible = scheduleLocked === 0 ? 'PASS' : 'FAIL (Locked)';
@@ -42,10 +42,10 @@ async function runCoreTests(page, slug, apiCalls, consoleErrors) {
   if (hasDateNav) {
     const originalDate = await dateInput.inputValue();
     await nextBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('networkidle');
     const nextDate = await dateInput.inputValue();
     await todayBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('networkidle');
     results.dateNavWorks = nextDate !== originalDate ? 'PASS (date advanced)' : 'FAIL (date did not change)';
   } else {
     results.dateNavWorks = 'SKIP';
@@ -86,7 +86,7 @@ async function runCoreTests(page, slug, apiCalls, consoleErrors) {
   if (hasBookBtn) {
     const btnToClick = (await bookBtn.count()) > 0 ? bookBtn : emptyBookBtn;
     await btnToClick.click();
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('h2:has-text("Book Appointment")', { state: 'visible', timeout: 5000 }).catch(() => {});
 
     const modalHeading = await page.locator('h2:has-text("Book Appointment")').count();
 
@@ -115,7 +115,7 @@ async function runCoreTests(page, slug, apiCalls, consoleErrors) {
       const cancelBtn = page.locator('button:has-text("Cancel")');
       if ((await cancelBtn.count()) > 0) {
         await cancelBtn.click();
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('domcontentloaded');
       }
     } else {
       results.bookingModal = 'FAIL (modal did not open)';
@@ -130,7 +130,6 @@ async function runCoreTests(page, slug, apiCalls, consoleErrors) {
   const checkInBtn = page.locator('button:has-text("Check In")').first();
   if (await checkInBtn.count() > 0) {
     await checkInBtn.click();
-    await page.waitForTimeout(2000);
     await page.waitForLoadState('networkidle');
 
     const checkedInBadge = await page.locator('text=Checked In').count();
@@ -147,7 +146,6 @@ async function runCoreTests(page, slug, apiCalls, consoleErrors) {
   const startExamBtn = page.locator('button:has-text("Start Exam")').first();
   if (await startExamBtn.count() > 0) {
     await startExamBtn.click();
-    await page.waitForTimeout(3000);
     await page.waitForLoadState('networkidle');
 
     results.startExam = page.url().includes('/encounter/')
@@ -174,7 +172,7 @@ async function runViewAndWarningTests(page, slug) {
 
   // Navigate to schedule page (may already be on encounter from core tests)
   await page.goto(`${TARGET_URL}/${slug}/schedule`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   // -----------------------------------------------------------------------
   // 1. View toggle — List / Timeline / Clinic buttons
@@ -194,7 +192,7 @@ async function runViewAndWarningTests(page, slug) {
   // Switch to Timeline view
   if (hasTimelineBtn > 0) {
     await timelineBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('domcontentloaded');
 
     // Timeline should render (either appointment blocks or empty state)
     const timelineVisible = page.url().includes('/schedule'); // didn't navigate away
@@ -207,7 +205,7 @@ async function runViewAndWarningTests(page, slug) {
   // Switch to Clinic view
   if (hasClinicBtn > 0) {
     await clinicBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('domcontentloaded');
 
     results.clinicView = page.url().includes('/schedule') ? 'PASS (Clinic view active)' : 'FAIL';
     await page.screenshot({ path: '/tmp/pw-e2e-schedule-clinic.png', fullPage: true });
@@ -218,7 +216,7 @@ async function runViewAndWarningTests(page, slug) {
   // Switch back to List view
   if (hasListBtn > 0) {
     await listBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('domcontentloaded');
   }
 
   // -----------------------------------------------------------------------
@@ -281,7 +279,7 @@ async function runViewAndWarningTests(page, slug) {
   const bookBtn = page.locator('button:has-text("+ Book")');
   if (await bookBtn.count() > 0) {
     await bookBtn.click();
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('h2:has-text("Book Appointment")', { state: 'visible', timeout: 5000 }).catch(() => {});
 
     const modalOpen = await page.locator('h2:has-text("Book Appointment")').count();
     if (modalOpen > 0) {
@@ -318,7 +316,7 @@ async function runViewAndWarningTests(page, slug) {
             const timeInput = page.locator('input[type="time"]');
             if (await timeInput.count() > 0) {
               await timeInput.fill(time24);
-              await page.waitForTimeout(1000);
+              await page.waitForLoadState('domcontentloaded');
             }
           }
         }
@@ -351,7 +349,7 @@ async function runViewAndWarningTests(page, slug) {
       const cancelBtn = page.locator('button:has-text("Cancel")');
       if (await cancelBtn.count() > 0) {
         await cancelBtn.click();
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('domcontentloaded');
       }
     } else {
       results.doubleBookWarning = 'FAIL (modal did not open)';
@@ -369,10 +367,10 @@ async function runViewAndWarningTests(page, slug) {
 // Main
 // ============================================================================
 (async () => {
-  const { browser, page } = await launchBrowser();
+  const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();

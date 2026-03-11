@@ -199,7 +199,7 @@ async function runUiTests() {
   try {
     // Navigate to public booking page (no auth required)
     await page.goto(`${TARGET_URL}/book/${SLUG}`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Page should load with clinic name and step 1 visible
     const clinicName = await page.locator('h1').first().textContent().catch(() => '');
@@ -230,7 +230,7 @@ async function runUiTests() {
     // Click Continue
     const continueBtn = page.locator('button:has-text("Continue")');
     await continueBtn.click();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
 
     // -----------------------------------------------------------------------
     // Step 2: Pick Date + Time
@@ -238,14 +238,14 @@ async function runUiTests() {
     const dateInput = page.locator('input[type="date"]');
     if (await dateInput.count() > 0) {
       await dateInput.fill(futureDate);
-      await page.waitForTimeout(2000); // wait for availability fetch
+      await page.waitForLoadState('networkidle'); // wait for availability fetch
       results.ui_date_input = 'PASS';
     } else {
       results.ui_date_input = 'FAIL (no date input)';
     }
 
     // Wait for time slots to appear (Morning/Afternoon sections)
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('button:has-text(/\\d+:\\d+ [AP]M/)', { timeout: 5000 }).catch(() => {});
 
     // Click first available time slot button (they render as plain buttons with time text)
     const timeSlots = page.locator('button:has-text(/\\d+:\\d+ [AP]M/)');
@@ -261,7 +261,7 @@ async function runUiTests() {
     const continueBtn2 = page.locator('button:has-text("Continue")');
     if (await continueBtn2.count() > 0) {
       await continueBtn2.click();
-      await page.waitForTimeout(1000);
+      await page.waitForLoadState('domcontentloaded');
     }
 
     // -----------------------------------------------------------------------
@@ -272,7 +272,7 @@ async function runUiTests() {
     const bookBtn = page.locator('button:has-text("Book Appointment")');
     if (await bookBtn.count() > 0) {
       await bookBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('domcontentloaded');
 
       // Check for "Required" validation messages
       const requiredErrors = await page.locator('text=Required').count();
@@ -308,7 +308,7 @@ async function runUiTests() {
     // Submit
     if (await bookBtn.count() > 0) {
       await bookBtn.click();
-      await page.waitForTimeout(5000); // wait for API response
+      await page.waitForSelector('text=Appointment Booked!', { timeout: 10000 }).catch(() => {});
     }
 
     // -----------------------------------------------------------------------

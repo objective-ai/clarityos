@@ -5,7 +5,7 @@
  * logout clears ePHI from localStorage/stores, no UUIDs in URLs.
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-auth.spec.js
  */
-const { launchBrowser, login, setupTracking, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, setupTracking, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 (async () => {
   const { browser, context, page } = await launchBrowser();
@@ -16,20 +16,20 @@ const { launchBrowser, login, setupTracking, printResults, TARGET_URL } = requir
   // 1. Unauthenticated redirect — visit tenant page without login
   // =========================================================================
   await page.goto(`${TARGET_URL}/sunview/dashboard`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForURL('**/login**', { timeout: 10000 }).catch(() => {});
 
   results.unauthRedirect = page.url().includes('/login')
     ? 'PASS (redirected to /login)'
     : `FAIL (stayed on: ${page.url()})`;
 
   await page.goto(`${TARGET_URL}/sunview/patients`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForURL('**/login**', { timeout: 10000 }).catch(() => {});
   results.unauthRedirect2 = page.url().includes('/login')
     ? 'PASS (patients → /login)'
     : `FAIL (stayed on: ${page.url()})`;
 
   await page.goto(`${TARGET_URL}/sunview/encounter/e0000000-0000-0000-0000-000000000003`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForURL('**/login**', { timeout: 10000 }).catch(() => {});
   results.unauthRedirect3 = page.url().includes('/login')
     ? 'PASS (encounter → /login)'
     : `FAIL (stayed on: ${page.url()})`;
@@ -39,7 +39,7 @@ const { launchBrowser, login, setupTracking, printResults, TARGET_URL } = requir
   // =========================================================================
   // 2. Login — slug-based redirect, no UUIDs
   // =========================================================================
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   const loginUrl = page.url();
   const hasUuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.test(loginUrl);
 
@@ -56,7 +56,7 @@ const { launchBrowser, login, setupTracking, printResults, TARGET_URL } = requir
   // 3. Browse to encounter to populate localStorage with clinical data
   // =========================================================================
   await page.goto(`${TARGET_URL}/${slug}/encounter/e0000000-0000-0000-0000-000000000003`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   const lsKeysBefore = await page.evaluate(() => {
     const keys = [];
@@ -85,7 +85,7 @@ const { launchBrowser, login, setupTracking, printResults, TARGET_URL } = requir
   if (hasLogoutBtn > 0 || hasLogoutIcon > 0) {
     const btnToClick = hasLogoutBtn > 0 ? logoutBtn : logoutIcon;
     await btnToClick.click();
-    await page.waitForTimeout(3000);
+    await page.waitForURL('**/login**', { timeout: 10000 }).catch(() => {});
     await page.waitForLoadState('networkidle').catch(() => {});
 
     results.logoutRedirect = page.url().includes('/login')
@@ -118,7 +118,7 @@ const { launchBrowser, login, setupTracking, printResults, TARGET_URL } = requir
   // 5. After logout — tenant routes should redirect to /login again
   // =========================================================================
   await page.goto(`${TARGET_URL}/sunview/schedule`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForURL('**/login**', { timeout: 10000 }).catch(() => {});
 
   results.postLogoutProtection = page.url().includes('/login')
     ? 'PASS (redirected to /login after logout)'

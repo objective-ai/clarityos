@@ -8,23 +8,11 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { apiFetch } from "@/lib/api-client";
-import type { ClaimStatus } from "@/types/billing";
+import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface SuperbillListItem {
-  id: string;
-  encounterId: string;
-  patientId: string;
-  patientName: string;
-  providerName: string;
-  claimStatus: ClaimStatus;
-  cptCodes: string[];
-  totalFee: number;
-  createdAt: string;
-}
 
 interface BillingDashboardState {
   superbills: SuperbillListItem[];

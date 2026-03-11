@@ -8,7 +8,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-encounter.spec.js
  */
-const { launchBrowser, login, extractJwt, setupTracking, getFailedApiCalls, printResults, TARGET_URL, API_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, extractJwt, setupTracking, getFailedApiCalls, printResults, TARGET_URL, API_URL } = require('./helpers/test-utils');
 
 // Known finalized encounter from seed data (Suite A — read-only checks)
 const FINALIZED_ENCOUNTER_ID = 'e0000000-0000-0000-0000-000000000003';
@@ -25,7 +25,7 @@ async function runApiTests(page, slug, apiCalls) {
 
   apiCalls.length = 0;
   await page.goto(`${TARGET_URL}/${slug}/encounter/${FINALIZED_ENCOUNTER_ID}`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(4000);
+  await page.waitForLoadState('networkidle');
 
   results.encounterLoads = page.url().includes(`/encounter/${FINALIZED_ENCOUNTER_ID}`)
     ? 'PASS'
@@ -111,7 +111,7 @@ async function runUiTests(page, context, slug) {
   // Try the known seed encounter first; fall back to schedule-based discovery
   let encounterId = EDITABLE_ENCOUNTER_ID;
   await page.goto(`${TARGET_URL}/${slug}/encounter/${encounterId}`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   // If the encounter didn't load (404 or error state), try to find one via schedule
   const errorState = await page.locator('text=Could not load encounter').count();
@@ -137,7 +137,7 @@ async function runUiTests(page, context, slug) {
             encounterId = inProgress.encounter_id;
             console.log(`  Found non-finalized encounter: ${encounterId}`);
             await page.goto(`${TARGET_URL}/${slug}/encounter/${encounterId}`, { waitUntil: 'networkidle' });
-            await page.waitForTimeout(3000);
+            await page.waitForLoadState('networkidle');
             break;
           }
         }
@@ -159,7 +159,7 @@ async function runUiTests(page, context, slug) {
     const devUnlock = page.locator('button:has-text("Dev: Unlock")');
     if (await devUnlock.count() > 0) {
       await devUnlock.click();
-      await page.waitForTimeout(1500);
+      await page.waitForLoadState('networkidle');
       console.log('  Unlocked finalized encounter for testing');
     } else {
       results.suiteB = 'SKIP (encounter is finalized, no Dev: Unlock available)';
@@ -177,7 +177,7 @@ async function runUiTests(page, context, slug) {
     const tab = page.locator(`nav button:has-text("${tabLabel}")`);
     if (await tab.count() > 0) {
       await tab.click();
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('domcontentloaded');
       tabsWorking++;
     }
   }
@@ -196,7 +196,7 @@ async function runUiTests(page, context, slug) {
 
     await ccTextarea.fill(testText);
     await ccTextarea.blur();
-    await page.waitForTimeout(2000); // Wait for 1.5s debounce + save
+    await page.waitForLoadState('networkidle'); // Wait for 1.5s debounce + save
 
     const newValue = await ccTextarea.inputValue();
     results.chiefComplaintEdit = newValue.includes('E2E test')
@@ -206,7 +206,7 @@ async function runUiTests(page, context, slug) {
     // Restore original
     await ccTextarea.fill(originalValue);
     await ccTextarea.blur();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
   } else {
     results.chiefComplaintEdit = (await ccTextarea.count()) > 0
       ? 'SKIP (chief complaint is read-only)'
@@ -230,7 +230,7 @@ async function runUiTests(page, context, slug) {
     // Enter elevated IOP to test warning
     await iopOdInput.fill('25');
     await iopOdInput.blur();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
 
     // Check for elevated warning (IOP > 21)
     const elevatedBadge = await page.locator('text=/Elevated|elevated/').count();
@@ -241,7 +241,7 @@ async function runUiTests(page, context, slug) {
     // Restore original
     await iopOdInput.fill(origIop || '');
     await iopOdInput.blur();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
 
     // Check save status indicator
     const saveStatus = await page.locator('text=/Saved|Saving/').count();
@@ -261,13 +261,13 @@ async function runUiTests(page, context, slug) {
   const addDxBtn = page.locator('button:has-text("+ Add Diagnosis")');
   if (await addDxBtn.count() > 0) {
     await addDxBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForSelector('input[placeholder*="Search ICD-10"]', { state: 'visible', timeout: 3000 }).catch(() => {});
 
     // Search for a code
     const searchInput = page.locator('input[placeholder*="Search ICD-10"]');
     if (await searchInput.count() > 0) {
       await searchInput.fill('dry eye');
-      await page.waitForTimeout(500);
+      await page.waitForSelector('text=H04.123', { timeout: 3000 }).catch(() => {});
 
       // Check filtered results appear
       const dryEyeCode = await page.locator('text=H04.123').count();
@@ -279,7 +279,7 @@ async function runUiTests(page, context, slug) {
       const ouBtn = page.locator('button:has-text("OU")').first();
       if (await ouBtn.count() > 0) {
         await ouBtn.click();
-        await page.waitForTimeout(1500); // Wait for API save
+        await page.waitForLoadState('networkidle'); // Wait for API save
 
         // Verify it was added to the list
         const addedCode = await page.locator('text=H04.123').count();
@@ -291,7 +291,7 @@ async function runUiTests(page, context, slug) {
         const removeBtn = page.locator('button[aria-label="Remove diagnosis"]').last();
         if (await removeBtn.count() > 0) {
           await removeBtn.click();
-          await page.waitForTimeout(1500);
+          await page.waitForLoadState('networkidle');
           results.diagnosisRemove = 'PASS (diagnosis removed)';
         } else {
           results.diagnosisRemove = 'INFO (no remove button found — may have been cleaned up)';
@@ -319,7 +319,7 @@ async function runUiTests(page, context, slug) {
   const startExamBtn = page.locator('button:has-text("Start Exam")');
   if (await startExamBtn.count() > 0) {
     await startExamBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // After advancing, "Start Exam" should disappear and "Finalize" should appear
     const finalizeBtn = await page.locator('button:has-text("Finalize")').count();
@@ -339,7 +339,7 @@ async function runUiTests(page, context, slug) {
   const finalizeNavBtn = page.locator('nav button:has-text("Finalize")');
   if (await finalizeNavBtn.count() > 0) {
     await finalizeNavBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForSelector('text=Sign & Finalize Encounter', { timeout: 5000 }).catch(() => {});
 
     // Modal should appear
     const modalTitle = await page.locator('text=Sign & Finalize Encounter').count();
@@ -374,7 +374,7 @@ async function runUiTests(page, context, slug) {
         const attestCheckbox = page.locator('input[type="checkbox"]');
         if (await attestCheckbox.count() > 0) {
           await attestCheckbox.check();
-          await page.waitForTimeout(300);
+          await page.waitForLoadState('domcontentloaded');
 
           // Still disabled — assessment too short and possibly no diagnoses
           const stillDisabled = await sealBtn.isDisabled().catch(() => true);
@@ -384,7 +384,7 @@ async function runUiTests(page, context, slug) {
 
           // Fill valid assessment (≥ 10 chars)
           await assessmentField.fill('Patient examined. Follow up in 3 months for routine monitoring.');
-          await page.waitForTimeout(300);
+          await page.waitForLoadState('domcontentloaded');
 
           // Check char count indicator
           const charCount = await page.locator('text=/\\d+\/10 min/').count();
@@ -407,7 +407,7 @@ async function runUiTests(page, context, slug) {
       const cancelBtn = page.locator('button:has-text("Cancel")');
       if (await cancelBtn.count() > 0) {
         await cancelBtn.click();
-        await page.waitForTimeout(500);
+        await page.waitForSelector('text=Sign & Finalize Encounter', { state: 'hidden', timeout: 3000 }).catch(() => {});
       }
 
       // Verify modal closed
@@ -464,7 +464,7 @@ async function runUiTests(page, context, slug) {
   const fullChartBtn = page.locator('button:has-text("Full Chart")');
   if (await fullChartBtn.count() > 0) {
     await fullChartBtn.click();
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('[role="dialog"]', { state: 'visible', timeout: 5000 }).catch(() => {});
 
     // Check if patient chart modal opened (shadcn Dialog)
     const chartModal = await page.locator('[role="dialog"]').count();
@@ -478,7 +478,7 @@ async function runUiTests(page, context, slug) {
     if (await dialogClose.count() > 0) await dialogClose.click();
     else if (await dialogX.count() > 0) await dialogX.click();
     else await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 3000 }).catch(() => {});
   } else {
     results.fullChartModal = 'FAIL (no Full Chart button in bottom bar)';
   }
@@ -496,7 +496,7 @@ async function runUiTests(page, context, slug) {
   const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();

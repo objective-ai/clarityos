@@ -11,7 +11,7 @@
  * Hybrid test: browser login for JWT, then API + UI tests.
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-intake.spec.js
  */
-const { launchBrowser, login, extractJwt, printResults, API_URL, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, extractJwt, printResults, API_URL, TARGET_URL } = require('./helpers/test-utils');
 
 // =========================================================================
 // Helpers — find/create appointment + generate token
@@ -257,7 +257,7 @@ async function runUiTests(page, jwt) {
 
   // Navigate to the intake page
   await page.goto(`${TARGET_URL}/intake/${token}`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
   // ── 1. Token Validation — Page Loads ──────────────────────────────────
   const verifyTitle = await page.locator('text=Verify Your Identity').count();
@@ -279,7 +279,7 @@ async function runUiTests(page, jwt) {
   if (await dobInput.count() > 0 && await verifyBtn.count() > 0) {
     await dobInput.fill('1900-01-01');
     await verifyBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForSelector('text=/Incorrect|attempt/', { state: 'visible', timeout: 5000 }).catch(() => {});
 
     const errorText = await page.locator('text=/Incorrect|attempt/').count();
     results.dobWrongAttempt = errorText > 0
@@ -289,7 +289,7 @@ async function runUiTests(page, jwt) {
     // ── 3. DOB Gate — Correct DOB ─────────────────────────────────────────
     await dobInput.fill(patientDob);
     await verifyBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('text=Patient Info', { state: 'visible', timeout: 10000 }).catch(() => {});
 
     // Should now show the form (Step 1: Patient Info)
     const patientInfoStep = await page.locator('text=Patient Info').count();
@@ -361,7 +361,7 @@ async function runUiTests(page, jwt) {
 
     // Click Next → Step 2
     await nextBtn.click();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
 
     const step2Visible = await page.locator('text=Contact & Insurance').count();
     const backBtn = await page.locator('button:has-text("Back")').count();
@@ -377,7 +377,7 @@ async function runUiTests(page, jwt) {
   if (await backBtn.count() > 0) {
     // Verify Back returns to Step 1
     await backBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
 
     const backToStep1 = await page.locator('input').first().count() > 0;
     results.step2Back = backToStep1
@@ -388,7 +388,7 @@ async function runUiTests(page, jwt) {
     const nextBtn2 = page.locator('button:has-text("Next")');
     if (await nextBtn2.count() > 0) {
       await nextBtn2.click();
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('domcontentloaded');
     }
   } else {
     results.step2Back = 'SKIP (no Back button)';
@@ -398,7 +398,7 @@ async function runUiTests(page, jwt) {
   const nextBtn3 = page.locator('button:has-text("Next")');
   if (await nextBtn3.count() > 0) {
     await nextBtn3.click();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
 
     const medHistoryVisible = await page.locator('text=Medical History').count();
     results.step2ToStep3 = medHistoryVisible > 0
@@ -420,7 +420,6 @@ async function runUiTests(page, jwt) {
   // Toggle a few checkboxes
   if (checkboxCount > 0) {
     await checkboxes.first().check();
-    await page.waitForTimeout(200);
     const isChecked = await checkboxes.first().isChecked();
     results.step3CheckboxToggle = isChecked
       ? 'PASS (checkbox toggles on click)'
@@ -433,7 +432,7 @@ async function runUiTests(page, jwt) {
   const nextBtn4 = page.locator('button:has-text("Next")');
   if (await nextBtn4.count() > 0) {
     await nextBtn4.click();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
 
     const chiefComplaintVisible = await page.locator('text=Chief Complaint').count();
     results.step3ToStep4 = chiefComplaintVisible > 0
@@ -457,7 +456,6 @@ async function runUiTests(page, jwt) {
     // Fill chief complaint
     if (await chiefTextarea.count() > 0) {
       await chiefTextarea.fill('E2E test — flashing lights and floaters for 2 days');
-      await page.waitForTimeout(300);
     }
 
     // Check consent checkboxes
@@ -469,7 +467,6 @@ async function runUiTests(page, jwt) {
         await cb.check();
       }
     }
-    await page.waitForTimeout(300);
 
     // Now Submit should be enabled
     const nowEnabled = !(await submitBtn.isDisabled().catch(() => true));
@@ -488,7 +485,7 @@ async function runUiTests(page, jwt) {
 
   // ── 9. Invalid Token — Error Page ─────────────────────────────────────
   await page.goto(`${TARGET_URL}/intake/fake_invalid_token_xyz`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
   const errorPage = await page.locator('text=/not found|invalid|expired|error/i').count();
   results.invalidTokenPage = errorPage > 0
@@ -507,7 +504,7 @@ async function runUiTests(page, jwt) {
 (async () => {
   const { browser, context, page } = await launchBrowser();
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();

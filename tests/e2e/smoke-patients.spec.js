@@ -8,7 +8,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-patients.spec.js
  */
-const { launchBrowser, login, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 // =========================================================================
 // Suite A — Core Functionality (existing tests)
@@ -19,7 +19,7 @@ async function runCoreTests(page, slug, apiCalls) {
 
   apiCalls.length = 0;
   await page.goto(`${TARGET_URL}/${slug}/patients`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   const patientsLocked = await page.locator('text=Patient Records Locked').count();
   results.patientsAccessible = patientsLocked === 0 ? 'PASS' : 'FAIL (Locked)';
@@ -37,9 +37,7 @@ async function runCoreTests(page, slug, apiCalls) {
 
     if (searchTerm) {
       await searchInput.fill(searchTerm);
-      await page.waitForTimeout(500);
       await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(1000);
 
       const filteredRows = await page.locator('tbody tr').count();
       results.patientSearch = filteredRows > 0 ? `PASS (${filteredRows} results for "${searchTerm}")` : `FAIL (0 results for "${searchTerm}")`;
@@ -48,20 +46,19 @@ async function runCoreTests(page, slug, apiCalls) {
     }
 
     await searchInput.fill('');
-    await page.waitForTimeout(500);
     await page.waitForLoadState('networkidle');
   } else {
     results.patientSearch = 'FAIL (no search input)';
   }
 
   // Navigate to patient detail
-  await page.waitForTimeout(1000);
+  await page.waitForLoadState('networkidle');
   const firstLink = page.locator('tbody tr').first().locator('a').first();
 
   if (await firstLink.count() > 0) {
     await firstLink.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('h1.text-display', { state: 'visible' });
 
     const detailUrl = page.url();
     results.patientDetailNav = detailUrl.includes('/patients/') && detailUrl !== `${TARGET_URL}/${slug}/patients`
@@ -82,7 +79,6 @@ async function runCoreTests(page, slug, apiCalls) {
   const encountersTab = page.locator('button:has-text("Encounters")');
   if (await encountersTab.count() > 0) {
     await encountersTab.click();
-    await page.waitForTimeout(2000);
     await page.waitForLoadState('networkidle');
 
     const timelineEntries = await page.locator('div.relative.pl-8.pb-6').count();
@@ -110,7 +106,6 @@ async function runCoreTests(page, slug, apiCalls) {
   const flowsheetsTab = page.locator('button:has-text("Flowsheets")');
   if (await flowsheetsTab.count() > 0) {
     await flowsheetsTab.click();
-    await page.waitForTimeout(2000);
     await page.waitForLoadState('networkidle');
 
     const hasIopOd = await page.locator('th:has-text("IOP OD")').count();
@@ -134,7 +129,7 @@ async function runCoreTests(page, slug, apiCalls) {
   const prepMeBtn = page.locator('button:has-text("Prep Me")');
   if (await prepMeBtn.count() > 0) {
     await prepMeBtn.click();
-    await page.waitForTimeout(3000);
+    await page.waitForSelector('text=AI Pre-Visit Summary', { state: 'visible', timeout: 10000 }).catch(() => {});
 
     const summaryCard = await page.locator('text=AI Pre-Visit Summary').count();
     const loadingText = await page.locator('text=Reading clinical history...').count();
@@ -161,7 +156,7 @@ async function runUiTests(page, slug) {
 
   // Navigate to patient list, then into first patient
   await page.goto(`${TARGET_URL}/${slug}/patients`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
   const firstLink = page.locator('tbody tr').first().locator('a').first();
   if (await firstLink.count() === 0) {
@@ -171,7 +166,7 @@ async function runUiTests(page, slug) {
 
   await firstLink.click();
   await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await page.waitForSelector('h1.text-display', { state: 'visible' });
 
   // ── 1. Tab Switching ──────────────────────────────────────────────────
   const tabs = ['Patient Info', 'Encounters', 'Flowsheets', 'Rx History'];
@@ -181,7 +176,7 @@ async function runUiTests(page, slug) {
     const tab = page.locator(`button:has-text("${tabLabel}")`);
     if (await tab.count() > 0) {
       await tab.click();
-      await page.waitForTimeout(1000);
+      await page.waitForLoadState('domcontentloaded');
       tabsWorking++;
     }
   }
@@ -196,7 +191,7 @@ async function runUiTests(page, slug) {
   const patientInfoTab = page.locator('button:has-text("Patient Info")');
   if (await patientInfoTab.count() > 0) {
     await patientInfoTab.click();
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
   }
 
   // ── 2. Edit Patient Header (Name, DOB, Sex) ──────────────────────────
@@ -207,7 +202,7 @@ async function runUiTests(page, slug) {
     const origName = await page.locator('h1.text-display').first().textContent().catch(() => '');
 
     await headerEditBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
 
     // Check edit mode fields appeared
     const firstNameInput = page.locator('input').filter({ has: page.locator('text=First Name') }).locator('..').locator('input');
@@ -227,7 +222,7 @@ async function runUiTests(page, slug) {
     const cancelBtn = page.locator('button[title="Cancel"]').first();
     if (await cancelBtn.count() > 0) {
       await cancelBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('domcontentloaded');
 
       // Verify name restored
       const nameAfterCancel = await page.locator('h1.text-display').first().textContent().catch(() => '');
@@ -248,7 +243,7 @@ async function runUiTests(page, slug) {
 
   if (await contactEditBtn.count() > 0) {
     await contactEditBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
 
     // Check for contact edit fields
     const phoneInput = page.locator('input[type="tel"]').first();
@@ -264,13 +259,12 @@ async function runUiTests(page, slug) {
     if (hasPhone > 0) {
       const origPhone = await phoneInput.inputValue();
       await phoneInput.fill('555-999-0000');
-      await page.waitForTimeout(300);
 
       // Cancel to revert
       const cancelBtn = contactSection.locator('button[title="Cancel"]');
       if (await cancelBtn.count() > 0) {
         await cancelBtn.click();
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('domcontentloaded');
         results.contactEditCancel = 'PASS (contact edit cancelled)';
       } else {
         results.contactEditCancel = 'INFO (no cancel button — may have auto-saved)';
@@ -289,7 +283,7 @@ async function runUiTests(page, slug) {
 
   if (await insuranceEditBtn.count() > 0) {
     await insuranceEditBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
 
     // Check for insurance fields (Provider, Member ID, Group)
     const insuranceInputs = insuranceSection.locator('input[type="text"]');
@@ -305,7 +299,7 @@ async function runUiTests(page, slug) {
     const cancelBtn = insuranceSection.locator('button[title="Cancel"]');
     if (await cancelBtn.count() > 0) {
       await cancelBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('domcontentloaded');
     }
   } else {
     results.insuranceEditMode = 'SKIP (no edit button on Insurance section)';
@@ -317,7 +311,7 @@ async function runUiTests(page, slug) {
 
   if (await emergencyEditBtn.count() > 0) {
     await emergencyEditBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
 
     const emergencyInputs = emergencySection.locator('input');
     const inputCount = await emergencyInputs.count();
@@ -330,7 +324,7 @@ async function runUiTests(page, slug) {
     const cancelBtn = emergencySection.locator('button[title="Cancel"]');
     if (await cancelBtn.count() > 0) {
       await cancelBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('domcontentloaded');
     }
   } else {
     results.emergencyEditMode = 'SKIP (no edit button on Emergency Contact)';
@@ -341,7 +335,7 @@ async function runUiTests(page, slug) {
   const contactEditBtn2 = page.locator('text=Contact Information').locator('..').locator('button[title="Edit"]');
   if (await contactEditBtn2.count() > 0) {
     await contactEditBtn2.click();
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('domcontentloaded');
 
     const emailInput = page.locator('input[type="email"]').first();
     if (await emailInput.count() > 0) {
@@ -349,13 +343,12 @@ async function runUiTests(page, slug) {
       const testEmail = 'e2e-test@clarityos.dev';
 
       await emailInput.fill(testEmail);
-      await page.waitForTimeout(300);
 
       // Click Save
       const saveBtn = page.locator('text=Contact Information').locator('..').locator('button[title="Save"]');
       if (await saveBtn.count() > 0) {
         await saveBtn.click();
-        await page.waitForTimeout(2000);
+        await page.waitForLoadState('networkidle');
 
         // Check if edit mode closed (save button gone)
         const saveGone = (await saveBtn.count()) === 0;
@@ -367,14 +360,14 @@ async function runUiTests(page, slug) {
         const editAgain = page.locator('text=Contact Information').locator('..').locator('button[title="Edit"]');
         if (await editAgain.count() > 0) {
           await editAgain.click();
-          await page.waitForTimeout(500);
+          await page.waitForLoadState('domcontentloaded');
           const emailAgain = page.locator('input[type="email"]').first();
           if (await emailAgain.count() > 0 && origEmail) {
             await emailAgain.fill(origEmail);
             const saveAgain = page.locator('text=Contact Information').locator('..').locator('button[title="Save"]');
             if (await saveAgain.count() > 0) {
               await saveAgain.click();
-              await page.waitForTimeout(1500);
+              await page.waitForLoadState('networkidle');
             }
           }
         }
@@ -392,7 +385,7 @@ async function runUiTests(page, slug) {
   const encountersTab = page.locator('button:has-text("Encounters")');
   if (await encountersTab.count() > 0) {
     await encountersTab.click();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Check for clickable encounter cards
     const encounterCards = page.locator('div.relative.pl-8.pb-6');
@@ -414,7 +407,7 @@ async function runUiTests(page, slug) {
 
   // ── 8. Search Filter + Clear ──────────────────────────────────────────
   await page.goto(`${TARGET_URL}/${slug}/patients`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
   const searchInput = page.locator('input[placeholder="Search patients..."]');
   if (await searchInput.count() > 0) {
@@ -422,7 +415,7 @@ async function runUiTests(page, slug) {
 
     // Search for a nonexistent patient
     await searchInput.fill('zzzznonexistent12345');
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('networkidle');
 
     const noResultsText = await page.locator('text=/No patients found|No patients on file/').count();
     const filteredRows = await page.locator('tbody tr').count();
@@ -433,7 +426,7 @@ async function runUiTests(page, slug) {
 
     // Clear search → full list returns
     await searchInput.fill('');
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('networkidle');
 
     const totalAfter = await page.locator('tbody tr').count();
     results.searchClear = totalAfter > 0
@@ -454,10 +447,10 @@ async function runUiTests(page, slug) {
 // =========================================================================
 
 (async () => {
-  const { browser, page } = await launchBrowser();
+  const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();
