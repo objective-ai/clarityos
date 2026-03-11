@@ -40,7 +40,7 @@ const { launchBrowser, TARGET_URL, EMAIL } = require('./helpers/test-utils');
   await page.fill('#email', EMAIL);
   await page.fill('#password', require('./helpers/test-utils').PASSWORD);
   await page.click('button[type="submit"]');
-  await page.waitForTimeout(8000);
+  await page.waitForLoadState('networkidle');
 
   console.log('Final URL:', page.url());
 

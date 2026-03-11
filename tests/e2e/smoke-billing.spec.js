@@ -1,30 +1,35 @@
 /**
- * smoke-billing.spec.js — Phase 4: Billing & Coding E2E verification
+ * smoke-billing.spec.js — Sprint 6.1: Billing UI & Finalization Stepper E2E
  *
- * Suite A (Core): encounter loads, finalize modal or locked state,
- *                 superbill modal content (CPT, MDM, CMS-1500).
+ * Suite A (Core): encounter loads, 2-step finalize modal (clinical→billing),
+ *                 superbill modal on finalized encounters.
  * Suite B (UI):   CPT code add/remove, MDM badge, Dx pointers,
  *                 Export CMS-1500, Mark Ready to Bill, validation warnings.
+ * Suite C (Dashboard): billing dashboard page — filters, table, CSV export.
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-billing.spec.js
  */
-const { launchBrowser, login, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
-// Known encounter from seed data (James Rodriguez comprehensive exam)
-const TEST_ENCOUNTER_ID = 'e0000000-0000-0000-0000-000000000003';
+// Known encounters from seed data (see memory/seed-data.md)
+// Non-finalized encounter (William Donovan) — for testing Finalize modal
+const TEST_ENCOUNTER_OPEN = 'e0000000-0007-0000-0000-000000000007';
+// First encounter (may be finalized) — for testing Superbill modal
+const TEST_ENCOUNTER_ANY = 'e0000000-0007-0000-0000-000000000001';
 
 // =========================================================================
-// Suite A — Core Functionality (existing tests)
+// Suite A — Core: Finalize Modal (2-step stepper) + Superbill Modal
 // =========================================================================
 
 async function runCoreTests(page, slug, apiCalls) {
   const results = {};
 
   apiCalls.length = 0;
-  await page.goto(`${TARGET_URL}/${slug}/encounter/${TEST_ENCOUNTER_ID}`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.goto(`${TARGET_URL}/${slug}/encounter/${TEST_ENCOUNTER_OPEN}`, { waitUntil: 'networkidle' });
+  // Wait for encounter content to actually render (React hydration + API calls)
+  await page.waitForLoadState('networkidle');
 
-  results.encounterLoads = page.url().includes(`/encounter/${TEST_ENCOUNTER_ID}`)
+  results.encounterLoads = page.url().includes(`/encounter/${TEST_ENCOUNTER_OPEN}`)
     ? 'PASS'
     : 'FAIL (redirected away from encounter)';
   await page.screenshot({ path: '/tmp/pw-e2e-billing-encounter.png', fullPage: true });
@@ -34,6 +39,13 @@ async function runCoreTests(page, slug, apiCalls) {
   const lockedBadge = page.locator('text=Locked');
   const superbillBtnInBanner = page.locator('button:has-text("Superbill")');
 
+  // Wait for either button to appear (encounter data loaded)
+  await Promise.race([
+    finalizeBtn.waitFor({ state: 'visible', timeout: 10000 }),
+    lockedBadge.waitFor({ state: 'visible', timeout: 10000 }),
+    page.waitForLoadState('networkidle'),
+  ]).catch(() => {});
+
   const hasFinalizeBtn = await finalizeBtn.count();
   const isLocked = await lockedBadge.count();
   const hasSuperbillInBanner = await superbillBtnInBanner.count();
@@ -42,18 +54,27 @@ async function runCoreTests(page, slug, apiCalls) {
     results.finalizeButton = 'PASS (Finalize button visible — encounter not yet finalized)';
 
     await finalizeBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForSelector('[role="dialog"]', { state: 'visible', timeout: 5000 }).catch(() => {});
 
-    const hasDialog = await page.locator('[role="dialog"]').count();
+    const dialog = page.locator('[role="dialog"]');
+    const hasDialog = await dialog.count();
 
     if (hasDialog > 0) {
       results.finalizeModal = 'PASS (modal opened)';
 
-      const signTitle = await page.locator('text=Sign & Finalize Encounter').count();
-      const attestation = await page.locator('input[type="checkbox"]').count();
-      const assessmentField = await page.locator('textarea').count();
-      const signBtn = await page.locator('button:has-text("Sign & Seal Chart")').count();
-      const cancelBtn = await page.locator('[role="dialog"] button:has-text("Cancel")').count();
+      // ── Step indicator (2-step stepper) ──
+      const clinicalLabel = await dialog.locator('text=Clinical').count();
+      const billingLabel = await dialog.locator('text=Billing').count();
+      results.stepIndicator = (clinicalLabel > 0 && billingLabel > 0)
+        ? 'PASS (Clinical + Billing step labels)'
+        : `FAIL (Clinical=${clinicalLabel}, Billing=${billingLabel})`;
+
+      // ── Step 1: Clinical content ──
+      const signTitle = await dialog.locator('text=Sign & Finalize Encounter').count();
+      const attestation = await dialog.locator('input[type="checkbox"]').count();
+      const assessmentField = await dialog.locator('textarea').count();
+      const signBtn = await dialog.locator('button:has-text("Sign & Continue to Billing")').count();
+      const cancelBtn = await dialog.locator('button:has-text("Cancel")').count();
 
       const parts = [];
       if (signTitle > 0) parts.push('title');
@@ -62,23 +83,39 @@ async function runCoreTests(page, slug, apiCalls) {
       if (signBtn > 0) parts.push('sign-btn');
       if (cancelBtn > 0) parts.push('cancel-btn');
 
-      results.finalizeModalContent = parts.length >= 4
+      results.step1Content = parts.length >= 4
         ? `PASS (${parts.join(', ')})`
         : `FAIL (only: ${parts.join(', ')})`;
 
-      const dxSection = await page.locator('text=Diagnoses').count();
-      results.finalizeModalDiagnoses = dxSection > 0 ? 'PASS' : 'FAIL (no diagnoses section)';
+      // Clinical summary sections
+      const chiefComplaint = await dialog.locator('text=Chief Complaint').count();
+      const vitals = await dialog.locator('text=Vitals').count();
+      const dxSection = await dialog.locator('text=Diagnoses').count();
+      const rxSection = await dialog.locator('text=Final Refraction').count();
+      const apSection = await dialog.locator('text=Assessment & Plan').count();
 
-      await page.screenshot({ path: '/tmp/pw-e2e-billing-finalize-modal.png', fullPage: true });
+      const sections = [];
+      if (chiefComplaint > 0) sections.push('CC');
+      if (vitals > 0) sections.push('Vitals');
+      if (dxSection > 0) sections.push('Dx');
+      if (rxSection > 0) sections.push('Rx');
+      if (apSection > 0) sections.push('A&P');
+
+      results.step1Sections = sections.length >= 4
+        ? `PASS (${sections.join(', ')})`
+        : `FAIL (only: ${sections.join(', ')})`;
+
+      await page.screenshot({ path: '/tmp/pw-e2e-billing-finalize-step1.png', fullPage: true });
 
       if (cancelBtn > 0) {
-        await page.locator('[role="dialog"] button:has-text("Cancel")').click();
-        await page.waitForTimeout(500);
+        await dialog.locator('button:has-text("Cancel")').click();
+        await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 3000 }).catch(() => {});
       }
     } else {
       results.finalizeModal = 'FAIL (dialog did not open)';
-      results.finalizeModalContent = 'SKIP';
-      results.finalizeModalDiagnoses = 'SKIP';
+      results.stepIndicator = 'SKIP';
+      results.step1Content = 'SKIP';
+      results.step1Sections = 'SKIP';
     }
 
     results.superbillPreFinalize = 'INFO (superbill requires finalization first — tested via modal)';
@@ -86,24 +123,26 @@ async function runCoreTests(page, slug, apiCalls) {
   } else if (isLocked > 0) {
     results.finalizeButton = 'PASS (encounter already finalized — Locked badge visible)';
     results.finalizeModal = 'SKIP (already finalized)';
-    results.finalizeModalContent = 'SKIP (already finalized)';
-    results.finalizeModalDiagnoses = 'SKIP (already finalized)';
+    results.stepIndicator = 'SKIP (already finalized)';
+    results.step1Content = 'SKIP (already finalized)';
+    results.step1Sections = 'SKIP (already finalized)';
 
     // Superbill on finalized encounter
     if (hasSuperbillInBanner > 0) {
       await superbillBtnInBanner.click();
-      await page.waitForTimeout(2000);
+      await page.waitForSelector('[role="dialog"]', { state: 'visible', timeout: 5000 }).catch(() => {});
 
       if (await page.locator('[role="dialog"]').count() > 0) {
         results.superbillModal = 'PASS (Superbill modal opened)';
 
-        const cptHeader = await page.locator('th:has-text("CPT")').count();
-        const mdmSection = await page.locator('text=Medical Decision Making').count();
-        const exportBtn = await page.locator('button:has-text("Export CMS-1500")').count();
-        const closeBtn = await page.locator('[role="dialog"] button:has-text("Close")').count();
+        const dialog = page.locator('[role="dialog"]');
+        const cptHeader = await dialog.locator('th:has-text("CPT")').count();
+        const mdmSection = await dialog.locator('text=Medical Decision Making').count();
+        const exportBtn = await dialog.locator('button:has-text("Export CMS-1500")').count();
+        const closeBtn = await dialog.locator('button:has-text("Close")').count();
 
         const sbParts = [];
-        if (await page.locator('text=Superbill').count() > 0) sbParts.push('title');
+        if (await dialog.locator('text=Superbill').count() > 0) sbParts.push('title');
         if (cptHeader > 0) sbParts.push('CPT-table');
         if (mdmSection > 0) sbParts.push('MDM');
         if (exportBtn > 0) sbParts.push('CMS-1500-export');
@@ -113,24 +152,24 @@ async function runCoreTests(page, slug, apiCalls) {
           ? `PASS (${sbParts.join(', ')})`
           : `FAIL (only: ${sbParts.join(', ')})`;
 
-        const cptRows = await page.locator('span.font-mono.font-semibold').count();
+        const cptRows = await dialog.locator('span.font-mono.font-semibold').count();
         results.superbillCptCodes = cptRows > 0
           ? `PASS (${cptRows} CPT codes)`
           : 'INFO (no CPT codes — may need to add)';
 
-        results.superbillDxPointers = (await page.locator('th:has-text("Dx Pointers")').count()) > 0
+        results.superbillDxPointers = (await dialog.locator('th:has-text("Dx Pointers")').count()) > 0
           ? 'PASS (Dx Pointers column present)'
           : 'INFO (no Dx Pointers column header)';
 
-        results.superbillWarnings = (await page.locator('text=Validation Warnings').count()) > 0
+        results.superbillWarnings = (await dialog.locator('text=Validation Warnings').count()) > 0
           ? 'INFO (validation warnings present)'
           : 'PASS (no validation warnings)';
 
         await page.screenshot({ path: '/tmp/pw-e2e-billing-superbill.png', fullPage: true });
 
         if (closeBtn > 0) {
-          await page.locator('[role="dialog"] button:has-text("Close")').first().click();
-          await page.waitForTimeout(500);
+          await dialog.locator('button:has-text("Close")').first().click();
+          await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 3000 }).catch(() => {});
         }
       } else {
         results.superbillModal = 'FAIL (dialog did not open)';
@@ -149,8 +188,9 @@ async function runCoreTests(page, slug, apiCalls) {
   } else {
     results.finalizeButton = 'FAIL (no Finalize button and no Locked badge)';
     results.finalizeModal = 'SKIP';
-    results.finalizeModalContent = 'SKIP';
-    results.finalizeModalDiagnoses = 'SKIP';
+    results.stepIndicator = 'SKIP';
+    results.step1Content = 'SKIP';
+    results.step1Sections = 'SKIP';
   }
 
   const failedApis = getFailedApiCalls(apiCalls);
@@ -166,18 +206,20 @@ async function runCoreTests(page, slug, apiCalls) {
 async function runUiTests(page, slug) {
   const results = {};
 
-  // Navigate to finalized encounter and open Superbill
-  await page.goto(`${TARGET_URL}/${slug}/encounter/${TEST_ENCOUNTER_ID}`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  // Navigate to a potentially-finalized encounter and open Superbill
+  await page.goto(`${TARGET_URL}/${slug}/encounter/${TEST_ENCOUNTER_ANY}`, { waitUntil: 'networkidle' });
+  await page.waitForLoadState('networkidle');
 
   const superbillBtn = page.locator('button:has-text("Superbill")');
+  // Wait for Superbill button to appear (encounter must be finalized)
+  await superbillBtn.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
   if (await superbillBtn.count() === 0) {
     results.suiteB = 'SKIP (no Superbill button — encounter may not be finalized)';
     return results;
   }
 
   await superbillBtn.click();
-  await page.waitForTimeout(2500);
+  await page.waitForSelector('[role="dialog"]', { state: 'visible', timeout: 5000 }).catch(() => {});
 
   const dialog = page.locator('[role="dialog"]');
   if (await dialog.count() === 0) {
@@ -187,8 +229,8 @@ async function runUiTests(page, slug) {
 
   // ── 1. MDM Section & Badge ────────────────────────────────────────────
   const mdmSection = await dialog.locator('text=Medical Decision Making').count();
-  const mdmBadge = await dialog.locator('text=/straightforward|low|moderate|high/ >> text=/MDM/').count();
-  const emCodeBadge = await dialog.locator('span.font-mono:has-text(/992/)').count();
+  const mdmBadge = await dialog.locator('text=/straightforward|low|moderate|high/').count();
+  const emCodeBadge = await dialog.locator('span.font-mono').filter({ hasText: /99\d/ }).count();
 
   results.mdmSection = mdmSection > 0
     ? `PASS (MDM section visible, badge=${mdmBadge > 0}, E/M code=${emCodeBadge > 0})`
@@ -219,7 +261,7 @@ async function runUiTests(page, slug) {
   const addCptBtn = dialog.locator('button:has-text("Add CPT Code")');
   if (await addCptBtn.count() > 0) {
     await addCptBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForSelector('div.absolute.z-50.w-80', { state: 'visible', timeout: 3000 }).catch(() => {});
 
     // Check dropdown appeared with CPT options
     const dropdown = page.locator('div.absolute.z-50.w-80');
@@ -236,7 +278,7 @@ async function runUiTests(page, slug) {
 
       // Click to add it
       await dropdownItems.first().click();
-      await page.waitForTimeout(1500);
+      await page.waitForLoadState('domcontentloaded');
 
       // Verify it was added to the table
       const newCptCount = await cptCodeCells.count();
@@ -248,7 +290,7 @@ async function runUiTests(page, slug) {
       const removeBtn = dialog.locator('button[title="Remove line item"]').last();
       if (await removeBtn.count() > 0) {
         await removeBtn.click();
-        await page.waitForTimeout(1500);
+        await page.waitForLoadState('domcontentloaded');
 
         const afterRemoveCount = await cptCodeCells.count();
         results.removeCptCode = afterRemoveCount < newCptCount
@@ -275,7 +317,7 @@ async function runUiTests(page, slug) {
     : 'INFO (no total row — may have 0 items)';
 
   // ── 7. Dx Pointers on Line Items ─────────────────────────────────────
-  const dxPointerBadges = await dialog.locator('td span.font-mono:has-text(/[A-Z]\\d{2}/)').count();
+  const dxPointerBadges = await dialog.locator('td span.font-mono').filter({ hasText: /[A-Z]\d{2}/ }).count();
   results.dxPointers = dxPointerBadges > 0
     ? `PASS (${dxPointerBadges} diagnosis pointer badge(s) on line items)`
     : 'INFO (no dx pointer badges — codes may lack pointers)';
@@ -329,10 +371,10 @@ async function runUiTests(page, slug) {
   await page.screenshot({ path: '/tmp/pw-e2e-billing-superbill-ui.png', fullPage: true });
 
   // Close modal
-  const closeBtn = dialog.locator('button:has-text("Close")');
+  const closeBtn = dialog.locator('button:has-text("Close")').first();
   if (await closeBtn.count() > 0) {
     await closeBtn.click();
-    await page.waitForTimeout(500);
+    await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 3000 }).catch(() => {});
 
     const dialogGone = (await page.locator('[role="dialog"]').count()) === 0;
     results.closeModal = dialogGone
@@ -346,30 +388,164 @@ async function runUiTests(page, slug) {
 }
 
 // =========================================================================
+// Suite C — Billing Dashboard (new in Sprint 6.1)
+// =========================================================================
+
+async function runDashboardTests(page, slug, apiCalls) {
+  const results = {};
+
+  apiCalls.length = 0;
+  await page.goto(`${TARGET_URL}/${slug}/billing`, { waitUntil: 'networkidle' });
+  // Wait for page to hydrate and role gate / content to render
+  await page.waitForLoadState('networkidle');
+
+  // Page loads (not redirected to login or access denied)
+  const url = page.url();
+  results.pageLoads = url.includes('/billing')
+    ? 'PASS'
+    : `FAIL (redirected to ${url})`;
+
+  // Check for access denied (role gate) — wait briefly for either content or restriction
+  const filterOrRestricted = await Promise.race([
+    page.locator('button:has-text("All")').waitFor({ state: 'visible', timeout: 8000 }).then(() => 'content'),
+    page.locator('text=Access Restricted').waitFor({ state: 'visible', timeout: 8000 }).then(() => 'restricted'),
+    page.waitForLoadState('networkidle').then(() => 'timeout'),
+  ]).catch(() => 'timeout');
+
+  if (filterOrRestricted === 'restricted') {
+    results.roleGate = 'FAIL (Access Restricted — logged in user lacks doctor/admin/owner role)';
+    return results;
+  }
+  results.roleGate = 'PASS (billing page accessible)';
+
+  await page.screenshot({ path: '/tmp/pw-e2e-billing-dashboard.png', fullPage: true });
+
+  // ── Filter tabs ─────────────────────────────────────────────────────────
+  const allTab = page.locator('button:has-text("All")');
+  const draftTab = page.locator('button:has-text("Draft")');
+  const postedTab = page.locator('button:has-text("Posted")');
+
+  const tabCount = (await allTab.count()) + (await draftTab.count()) + (await postedTab.count());
+  results.filterTabs = tabCount >= 3
+    ? 'PASS (All + Draft + Posted tabs)'
+    : `FAIL (only ${tabCount}/3 tabs found)`;
+
+  // ── Export button ───────────────────────────────────────────────────────
+  const exportBtn = page.locator('button:has-text("Export Posted Claims")');
+  results.exportButton = (await exportBtn.count()) > 0
+    ? 'PASS (Export Posted Claims button present)'
+    : 'FAIL (no export button)';
+
+  // ── Table or empty state ────────────────────────────────────────────────
+  const table = page.locator('table');
+  const emptyState = page.locator('text=No superbills yet');
+  const hasTable = await table.count();
+  const hasEmpty = await emptyState.count();
+
+  if (hasTable > 0) {
+    results.tableVisible = 'PASS (superbill table rendered)';
+
+    // Check column headers
+    const dateHeader = await page.locator('th:has-text("Date")').count();
+    const patientHeader = await page.locator('th:has-text("Patient")').count();
+    const providerHeader = await page.locator('th:has-text("Provider")').count();
+    const cptHeader = await page.locator('th:has-text("CPT Codes")').count();
+    const totalHeader = await page.locator('th:has-text("Total")').count();
+    const statusHeader = await page.locator('th:has-text("Status")').count();
+
+    const headerCount = [dateHeader, patientHeader, providerHeader, cptHeader, totalHeader, statusHeader]
+      .filter(h => h > 0).length;
+    results.tableHeaders = headerCount >= 5
+      ? `PASS (${headerCount}/6 column headers)`
+      : `FAIL (only ${headerCount}/6 headers)`;
+
+    // Count data rows
+    const rows = await page.locator('tbody tr').count();
+    results.tableRows = rows > 0
+      ? `PASS (${rows} superbill row(s))`
+      : 'INFO (table visible but 0 rows)';
+
+    // Check first row has expected content
+    if (rows > 0) {
+      const firstRow = page.locator('tbody tr').first();
+      const hasPatientLink = await firstRow.locator('a[href*="/patients/"]').count();
+      const hasFeeAmount = await firstRow.locator('td.font-mono').count();
+
+      results.rowContent = (hasPatientLink > 0 || hasFeeAmount > 0)
+        ? `PASS (patient link=${hasPatientLink > 0}, fee=${hasFeeAmount > 0})`
+        : 'INFO (row content could not be verified)';
+    } else {
+      results.rowContent = 'SKIP (no rows)';
+    }
+
+    // ── Filter interaction ────────────────────────────────────────────────
+    if (await draftTab.count() > 0) {
+      await draftTab.click();
+      await page.waitForLoadState('networkidle');
+      const draftRows = await page.locator('tbody tr').count();
+      results.draftFilter = `PASS (Draft filter clicked, ${draftRows} row(s))`;
+
+      // Switch back to All
+      if (await allTab.count() > 0) {
+        await allTab.click();
+        await page.waitForLoadState('networkidle');
+      }
+    } else {
+      results.draftFilter = 'SKIP (no Draft tab)';
+    }
+
+    await page.screenshot({ path: '/tmp/pw-e2e-billing-dashboard-table.png', fullPage: true });
+
+  } else if (hasEmpty > 0) {
+    results.tableVisible = 'INFO (empty state — no superbills yet)';
+    results.tableHeaders = 'SKIP (no table)';
+    results.tableRows = 'SKIP (no table)';
+    results.rowContent = 'SKIP (no table)';
+    results.draftFilter = 'SKIP (no table)';
+  } else {
+    results.tableVisible = 'FAIL (neither table nor empty state found)';
+    results.tableHeaders = 'SKIP';
+    results.tableRows = 'SKIP';
+    results.rowContent = 'SKIP';
+    results.draftFilter = 'SKIP';
+  }
+
+  const failedApis = getFailedApiCalls(apiCalls);
+  results.apiCalls = failedApis.length === 0 ? 'PASS' : `FAIL (${failedApis.length} errors)`;
+
+  return results;
+}
+
+// =========================================================================
 // Main
 // =========================================================================
 
 (async () => {
-  const { browser, page } = await launchBrowser();
+  const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();
     return;
   }
 
-  // Suite A — Core
-  console.log('\n--- Suite A: Core ---');
+  // Suite A — Core (Finalize Modal + Superbill)
+  console.log('\n--- Suite A: Core (Finalize Modal + Superbill) ---');
   const coreResults = await runCoreTests(page, slug, apiCalls);
   printResults('Smoke Billing — Suite A (Core)', coreResults);
 
-  // Suite B — UI Interaction
+  // Suite B — UI Interaction (Superbill CPT management)
   console.log('\n--- Suite B: UI Interaction ---');
   const uiResults = await runUiTests(page, slug);
   uiResults.consoleErrors = consoleErrors.length === 0 ? 'PASS' : `FAIL (${consoleErrors.length} errors)`;
   printResults('Smoke Billing — Suite B (UI)', uiResults);
+
+  // Suite C — Billing Dashboard
+  console.log('\n--- Suite C: Billing Dashboard ---');
+  const dashResults = await runDashboardTests(page, slug, apiCalls);
+  printResults('Smoke Billing — Suite C (Dashboard)', dashResults);
 
   await browser.close();
 })();

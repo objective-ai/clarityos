@@ -9,7 +9,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-optical.spec.js
  */
-const { launchBrowser, login, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 // =========================================================================
 // Suite A — Core Functionality (existing tests)
@@ -20,7 +20,7 @@ async function runCoreTests(page, slug, apiCalls) {
 
   apiCalls.length = 0;
   await page.goto(`${TARGET_URL}/${slug}/optical`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   const pageTitle = await page.locator('h1, h2').first().textContent().catch(() => '');
   results.opticalPageLoads = pageTitle ? `PASS ("${pageTitle.trim()}")` : 'FAIL (no page title)';
@@ -88,7 +88,7 @@ async function runCoreTests(page, slug, apiCalls) {
     // Print preview modal
     if (hasPrintBtn > 0) {
       await printBtn.click();
-      await page.waitForTimeout(2000);
+      await page.waitForSelector('#rx-print-area', { state: 'visible', timeout: 5000 }).catch(() => {});
 
       const printArea = page.locator('#rx-print-area');
       if (await printArea.count() > 0) {
@@ -100,7 +100,7 @@ async function runCoreTests(page, slug, apiCalls) {
         const closeBtn = page.locator('button:has-text("Close")');
         if (await closeBtn.count() > 0) {
           await closeBtn.click();
-          await page.waitForTimeout(500);
+          await page.waitForLoadState('domcontentloaded');
         }
       } else {
         results.printPreview = 'FAIL (print area not found after click)';
@@ -117,7 +117,7 @@ async function runCoreTests(page, slug, apiCalls) {
     const statusBtnAfter = queueCards.first().locator('button:has-text("Start Processing")');
     if (await statusBtnAfter.count() > 0) {
       await statusBtnAfter.click();
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState('networkidle');
 
       const inProgressBadge = await queueCards.first().locator('text=In Progress').count();
       const markDispensedBtn = await queueCards.first().locator('button:has-text("Mark Dispensed")').count();
@@ -158,7 +158,7 @@ async function runUiTests(page, slug) {
   const results = {};
 
   await page.goto(`${TARGET_URL}/${slug}/optical`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  await page.waitForLoadState('networkidle');
 
   // ── 1. Date Navigation — Next Day ─────────────────────────────────────
   const dateInput = page.locator('input[type="date"]');
@@ -169,7 +169,7 @@ async function runUiTests(page, slug) {
     const nextBtn = page.locator('button[title="Next day"]');
     if (await nextBtn.count() > 0) {
       await nextBtn.click();
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState('networkidle');
 
       const newDate = await dateInput.inputValue();
       results.dateNavNext = newDate !== origDate
@@ -180,7 +180,7 @@ async function runUiTests(page, slug) {
       const prevBtn = page.locator('button[title="Previous day"]');
       if (await prevBtn.count() > 0) {
         await prevBtn.click();
-        await page.waitForTimeout(2000);
+        await page.waitForLoadState('networkidle');
 
         const backDate = await dateInput.inputValue();
         results.dateNavPrev = backDate === origDate
@@ -201,11 +201,11 @@ async function runUiTests(page, slug) {
       const nextBtn2 = page.locator('button[title="Next day"]');
       if (await nextBtn2.count() > 0) {
         await nextBtn2.click();
-        await page.waitForTimeout(1500);
+        await page.waitForLoadState('networkidle');
       }
 
       await todayBtn.click();
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState('networkidle');
 
       const today = new Date().toISOString().split('T')[0];
       const currentDate = await dateInput.inputValue();
@@ -242,7 +242,7 @@ async function runUiTests(page, slug) {
       const startBtn = targetCard.locator('button:has-text("Start Processing")');
       if (await startBtn.count() > 0) {
         await startBtn.click();
-        await page.waitForTimeout(2000);
+        await page.waitForLoadState('networkidle');
 
         const inProgress = await targetCard.locator('text=In Progress').count();
         results.statusWaitingToInProgress = inProgress > 0
@@ -253,7 +253,7 @@ async function runUiTests(page, slug) {
         const dispensedBtn = targetCard.locator('button:has-text("Mark Dispensed")');
         if (await dispensedBtn.count() > 0) {
           await dispensedBtn.click();
-          await page.waitForTimeout(2000);
+          await page.waitForLoadState('networkidle');
 
           const dispensed = await targetCard.locator('text=Dispensed').count();
           results.statusInProgressToDispensed = dispensed > 0
@@ -292,7 +292,7 @@ async function runUiTests(page, slug) {
         const dispensedBtn = inProgressCard.locator('button:has-text("Mark Dispensed")');
         if (await dispensedBtn.count() > 0) {
           await dispensedBtn.click();
-          await page.waitForTimeout(2000);
+          await page.waitForLoadState('networkidle');
 
           const dispensed = await inProgressCard.locator('text=Dispensed').count();
           results.statusInProgressToDispensed = dispensed > 0
@@ -314,7 +314,7 @@ async function runUiTests(page, slug) {
     const anyPrintBtn = queueCards.first().locator('button:has-text("Print Rx")');
     if (await anyPrintBtn.count() > 0) {
       await anyPrintBtn.click();
-      await page.waitForTimeout(1500);
+      await page.waitForSelector('#rx-print-area', { state: 'visible', timeout: 5000 }).catch(() => {});
 
       const printArea = page.locator('#rx-print-area');
       if (await printArea.count() > 0) {
@@ -331,7 +331,7 @@ async function runUiTests(page, slug) {
         const closeBtn = page.locator('button:has-text("Close")');
         if (await closeBtn.count() > 0) {
           await closeBtn.click();
-          await page.waitForTimeout(500);
+          await page.waitForLoadState('domcontentloaded');
 
           const printGone = (await printArea.count()) === 0;
           results.printModalClose = printGone
@@ -384,10 +384,10 @@ async function runUiTests(page, slug) {
 // =========================================================================
 
 (async () => {
-  const { browser, page } = await launchBrowser();
+  const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();

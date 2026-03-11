@@ -8,7 +8,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-patient-rx.spec.js
  */
-const { launchBrowser, login, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 // =========================================================================
 // Suite A — Core: Rx History Tab + New Sprint 5.1 Features
@@ -21,7 +21,7 @@ async function runCoreTests(page, slug, apiCalls) {
 
   // Navigate to patient list and into first patient
   await page.goto(`${TARGET_URL}/${slug}/patients`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
   const firstLink = page.locator('tbody tr').first().locator('a').first();
   if (await firstLink.count() === 0) {
@@ -31,7 +31,7 @@ async function runCoreTests(page, slug, apiCalls) {
 
   await firstLink.click();
   await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await page.waitForSelector('h1.text-display', { state: 'visible' });
 
   // ── 1. Chart Number in Header ─────────────────────────────────────────
   const headerBadges = page.locator('h1.text-display').locator('..').locator('..').locator('span:has-text("#")');
@@ -45,7 +45,7 @@ async function runCoreTests(page, slug, apiCalls) {
   const patientInfoTab = page.locator('button:has-text("Patient Info")');
   if (await patientInfoTab.count() > 0) {
     await patientInfoTab.click();
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('domcontentloaded');
   }
 
   const problemListHeading = page.locator('text=Problem List');
@@ -65,7 +65,6 @@ async function runCoreTests(page, slug, apiCalls) {
   const rxTab = page.locator('button:has-text("Rx History")');
   if (await rxTab.count() > 0) {
     await rxTab.click();
-    await page.waitForTimeout(2000);
     await page.waitForLoadState('networkidle');
 
     results.rxHistoryTabExists = 'PASS';
@@ -116,7 +115,6 @@ async function runCoreTests(page, slug, apiCalls) {
   const encountersTab = page.locator('button:has-text("Encounters")');
   if (await encountersTab.count() > 0) {
     await encountersTab.click();
-    await page.waitForTimeout(2000);
     await page.waitForLoadState('networkidle');
 
     const timelineEntries = await page.locator('div.relative.pl-8.pb-6').count();
@@ -150,7 +148,7 @@ async function runUiTests(page, slug) {
 
   // Navigate to patient detail
   await page.goto(`${TARGET_URL}/${slug}/patients`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle');
 
   const firstLink = page.locator('tbody tr').first().locator('a').first();
   if (await firstLink.count() === 0) {
@@ -160,7 +158,7 @@ async function runUiTests(page, slug) {
 
   await firstLink.click();
   await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await page.waitForSelector('h1.text-display', { state: 'visible' });
 
   // ── 1. Full 4-Tab Cycle ────────────────────────────────────────────────
   const allTabs = ['Patient Info', 'Encounters', 'Flowsheets', 'Rx History'];
@@ -170,7 +168,7 @@ async function runUiTests(page, slug) {
     const tab = page.locator(`button:has-text("${tabLabel}")`);
     if (await tab.count() > 0) {
       await tab.click();
-      await page.waitForTimeout(800);
+      await page.waitForLoadState('domcontentloaded');
       tabsCycled++;
     }
   }
@@ -184,14 +182,12 @@ async function runUiTests(page, slug) {
   const rxTab = page.locator('button:has-text("Rx History")');
   if (await rxTab.count() > 0) {
     await rxTab.click();
-    await page.waitForTimeout(1500);
     await page.waitForLoadState('networkidle');
 
     // Click "Glasses" filter
     const glassesBtn = page.locator('button:has-text("Glasses")');
     if (await glassesBtn.count() > 0) {
       await glassesBtn.click();
-      await page.waitForTimeout(1500);
       await page.waitForLoadState('networkidle');
 
       // Check the filter button is active (has accent bg)
@@ -210,7 +206,6 @@ async function runUiTests(page, slug) {
     const clBtn = page.locator('button:has-text("Contact Lens")');
     if (await clBtn.count() > 0) {
       await clBtn.click();
-      await page.waitForTimeout(1500);
       await page.waitForLoadState('networkidle');
 
       // Verify table or empty state shows
@@ -227,7 +222,6 @@ async function runUiTests(page, slug) {
     const allBtn = page.locator('button:has-text("All")');
     if (await allBtn.count() > 0) {
       await allBtn.click();
-      await page.waitForTimeout(1500);
       await page.waitForLoadState('networkidle');
 
       const allClasses = await allBtn.getAttribute('class') || '';
@@ -247,12 +241,12 @@ async function runUiTests(page, slug) {
   const patientInfoTab = page.locator('button:has-text("Patient Info")');
   if (await patientInfoTab.count() > 0) {
     await patientInfoTab.click();
-    await page.waitForTimeout(1500);
+    await page.waitForLoadState('domcontentloaded');
 
     const addBtn = page.locator('button:has-text("+ Add Problem")');
     if (await addBtn.count() > 0) {
       await addBtn.click();
-      await page.waitForTimeout(800);
+      await page.waitForSelector('input[placeholder="Search ICD-10 codes..."]', { state: 'visible', timeout: 5000 }).catch(() => {});
 
       // Check for ICD-10 search input
       const icdSearch = page.locator('input[placeholder="Search ICD-10 codes..."]');
@@ -264,7 +258,7 @@ async function runUiTests(page, slug) {
       const closeBtn = page.locator('button:has-text("Close")');
       if (await closeBtn.count() > 0) {
         await closeBtn.click();
-        await page.waitForTimeout(500);
+        await page.waitForLoadState('domcontentloaded');
       }
     } else {
       results.problemAddPanel = 'SKIP (no + Add Problem button)';
@@ -277,14 +271,14 @@ async function runUiTests(page, slug) {
   const encTab = page.locator('button:has-text("Encounters")');
   if (await encTab.count() > 0) {
     await encTab.click();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('domcontentloaded');
 
     const firstEncLink = page.locator('a[href*="/encounter/"]').first();
     if (await firstEncLink.count() > 0) {
       const href = await firstEncLink.getAttribute('href');
       await firstEncLink.click();
       await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(2000);
+      await page.waitForURL('**/encounter/**', { timeout: 10000 }).catch(() => {});
 
       const currentUrl = page.url();
       results.encounterNavigation = currentUrl.includes('/encounter/')
@@ -296,7 +290,6 @@ async function runUiTests(page, slug) {
       // Navigate back
       await page.goBack();
       await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(1500);
     } else {
       results.encounterNavigation = 'SKIP (no encounter links)';
     }
@@ -314,10 +307,10 @@ async function runUiTests(page, slug) {
 // =========================================================================
 
 (async () => {
-  const { browser, page } = await launchBrowser();
+  const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 
-  const slug = await login(page);
+  const slug = await loginOrRestore(context, page);
   if (!slug) {
     console.log('Login failed');
     await browser.close();

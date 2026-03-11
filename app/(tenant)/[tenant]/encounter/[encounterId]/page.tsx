@@ -14,21 +14,56 @@ import { useVitalsStore } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
 import { useRefractionStore } from "@/store/refractionStore";
+import dynamic from "next/dynamic";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { useSidebarCollapsed } from "@/contexts/SidebarContext";
 import { EncounterBottomTabs } from "@/components/encounter/EncounterBottomTabs";
-import { AuditTrailSidebar } from "@/components/encounter/AuditTrailSidebar";
-import { FinalizeModal } from "@/components/encounter/FinalizeModal";
-import { SuperbillModal } from "@/components/encounter/SuperbillModal";
-import { VitalsForm } from "@/components/encounter/VitalsForm";
-import { VitalsCard } from "@/components/encounter/VitalsCard";
-import { RefractionGrid } from "@/components/encounter/RefractionGrid";
-import { ExamFindings } from "@/components/encounter/ExamFindings";
-import { ExamFindingsCard } from "@/components/encounter/ExamFindingsCard";
-import { DiagnosisPicker } from "@/components/encounter/DiagnosisPicker";
-import { ContinuitySidebar } from "@/components/encounter/ContinuitySidebar";
-import { AddendumSection } from "@/components/encounter/AddendumSection";
 import { GlassCardSkeleton } from "@/components/ui/skeleton";
+
+const AuditTrailSidebar = dynamic(
+  () => import("@/components/encounter/AuditTrailSidebar").then((m) => ({ default: m.AuditTrailSidebar })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const FinalizeModal = dynamic(
+  () => import("@/components/encounter/FinalizeModal").then((m) => ({ default: m.FinalizeModal })),
+  { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
+);
+const SuperbillModal = dynamic(
+  () => import("@/components/encounter/SuperbillModal").then((m) => ({ default: m.SuperbillModal })),
+  { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
+);
+const VitalsForm = dynamic(
+  () => import("@/components/encounter/VitalsForm").then((m) => ({ default: m.VitalsForm })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const VitalsCard = dynamic(
+  () => import("@/components/encounter/VitalsCard").then((m) => ({ default: m.VitalsCard })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const RefractionGrid = dynamic(
+  () => import("@/components/encounter/RefractionGrid").then((m) => ({ default: m.RefractionGrid })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const ExamFindings = dynamic(
+  () => import("@/components/encounter/ExamFindings").then((m) => ({ default: m.ExamFindings })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const ExamFindingsCard = dynamic(
+  () => import("@/components/encounter/ExamFindingsCard").then((m) => ({ default: m.ExamFindingsCard })),
+  { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
+);
+const DiagnosisPicker = dynamic(
+  () => import("@/components/encounter/DiagnosisPicker").then((m) => ({ default: m.DiagnosisPicker })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const ContinuitySidebar = dynamic(
+  () => import("@/components/encounter/ContinuitySidebar").then((m) => ({ default: m.ContinuitySidebar })),
+  { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
+);
+const AddendumSection = dynamic(
+  () => import("@/components/encounter/AddendumSection").then((m) => ({ default: m.AddendumSection })),
+  { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
+);
 import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,

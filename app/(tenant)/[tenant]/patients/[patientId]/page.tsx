@@ -9,13 +9,30 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
+import dynamic from "next/dynamic";
 import { usePatientStore } from "@/store/patientStore";
-import { EncounterTimeline } from "@/components/patient/EncounterTimeline";
-import { ClinicalFlowsheet } from "@/components/patient/ClinicalFlowsheet";
-import { RxHistoryTable } from "@/components/patient/RxHistoryTable";
-import { ProblemListCard } from "@/components/patient/ProblemListCard";
-import { PrepMeButton } from "@/components/patient/PrepMeButton";
 import type { PatientDetail, PatientUpdatePayload } from "@/types/patient";
+
+const EncounterTimeline = dynamic(
+  () => import("@/components/patient/EncounterTimeline").then((m) => ({ default: m.EncounterTimeline })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const ClinicalFlowsheet = dynamic(
+  () => import("@/components/patient/ClinicalFlowsheet").then((m) => ({ default: m.ClinicalFlowsheet })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const RxHistoryTable = dynamic(
+  () => import("@/components/patient/RxHistoryTable").then((m) => ({ default: m.RxHistoryTable })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const ProblemListCard = dynamic(
+  () => import("@/components/patient/ProblemListCard").then((m) => ({ default: m.ProblemListCard })),
+  { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
+);
+const PrepMeButton = dynamic(
+  () => import("@/components/patient/PrepMeButton").then((m) => ({ default: m.PrepMeButton })),
+  { loading: () => <div className="animate-pulse h-10 w-24 bg-white/5 rounded-xl" />, ssr: false },
+);
 
 // ---------------------------------------------------------------------------
 // Tabs

@@ -61,7 +61,7 @@ async function login(page, opts = {}) {
   await page.waitForURL('**/sunview/**', { timeout: 15000 }).catch(() => {});
 
   const finalUrl = page.url();
-  const match = finalUrl.match(/localhost:3000\/([^/]+)/);
+  const match = finalUrl.match(/localhost:\d+\/([^/]+)/);
   const slug = match ? match[1] : null;
 
   if (!slug || slug === 'login') return null;

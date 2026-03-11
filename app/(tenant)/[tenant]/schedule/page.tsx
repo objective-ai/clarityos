@@ -8,11 +8,32 @@ import { useAppointmentStore, localDateISO } from "@/store/appointmentStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api-client";
 import type { PatientSummary, PatientListResponse } from "@/types/patient";
-import IntakeLinkModal from "@/components/schedule/IntakeLinkModal";
-import TimelineView from "@/components/schedule/TimelineView";
-import ClinicView from "@/components/schedule/ClinicView";
+
+const IntakeLinkModal = dynamic(
+  () => import("@/components/schedule/IntakeLinkModal"),
+  {
+    loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />,
+    ssr: false,
+  },
+);
+const TimelineView = dynamic(
+  () => import("@/components/schedule/TimelineView"),
+  {
+    loading: () => <div className="animate-pulse h-64 bg-white/5 rounded-xl" />,
+    ssr: false,
+  },
+);
+const ClinicView = dynamic(
+  () => import("@/components/schedule/ClinicView"),
+  {
+    loading: () => <div className="animate-pulse h-64 bg-white/5 rounded-xl" />,
+    ssr: false,
+  },
+);
+
 import type {
   Appointment,
   AppointmentStatus,
