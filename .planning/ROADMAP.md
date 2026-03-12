@@ -157,12 +157,18 @@ Build order: Phase 8 → 9 → 10 → 11 → 12
 ### Phase 8: Analytics Dashboard
 **Goal**: Replace placeholder analytics charts with 7 real data visualizations covering clinical and financial metrics
 **Depends on**: Phase 2 (requires real encounter, billing, patient, appointment data)
-**Requirements**: Analytics page already scaffolded with placeholder cards. Entitlement gate (ADVANCED_ANALYTICS) exists.
+**Requirements**: ANAL-V2-01, ANAL-V2-02
 **Success Criteria** (what must be TRUE):
   1. Analytics page displays 7 real charts with data from the database (no "Chart coming soon" placeholders)
   2. Date range picker (7d/30d/90d/6mo) filters all chart data
   3. Charts show encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, and Rx/optical metrics
   4. Page remains gated behind ADVANCED_ANALYTICS entitlement
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08-00-PLAN.md — Scaffold: recharts install, Pydantic schemas, Zustand store stub, VIEW_ANALYTICS permission, E2E test stub (ANAL-V2-01, ANAL-V2-02)
+- [ ] 08-01-PLAN.md — Backend: FastAPI analytics aggregate endpoint (7 queries + 4 KPIs), router registration, BFF proxy (ANAL-V2-01, ANAL-V2-02)
+- [ ] 08-02-PLAN.md — Frontend: analytics page rewrite with 7 Recharts charts, KPI cards, date range picker, loading/error/empty states (ANAL-V2-01, ANAL-V2-02)
 
 ### Phase 9: Claims Basics
 **Goal**: Enable real insurance billing with payer management, patient insurance records, fee schedules, and CMS-1500 PDF generation
@@ -208,7 +214,7 @@ Build order: Phase 8 → 9 → 10 → 11 → 12
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 8. Analytics Dashboard | 0/? | Not started | — |
+| 8. Analytics Dashboard | 0/3 | Not started | — |
 | 9. Claims Basics | 0/? | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
