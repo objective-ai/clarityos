@@ -148,7 +148,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 
 Build order: Phase 8 → 9 → 10 → 11 → 12
 
-- [ ] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics
+- [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
 - [ ] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
@@ -163,7 +163,7 @@ Build order: Phase 8 → 9 → 10 → 11 → 12
   2. Date range picker (7d/30d/90d/6mo) filters all chart data
   3. Charts show encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, and Rx/optical metrics
   4. Page remains gated behind ADVANCED_ANALYTICS entitlement
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 08-00-PLAN.md — Scaffold: recharts install, Pydantic schemas, Zustand store stub, VIEW_ANALYTICS permission, E2E test stub (ANAL-V2-01, ANAL-V2-02)
@@ -214,7 +214,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 8. Analytics Dashboard | 1/3 | In Progress|  |
+| 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
 | 9. Claims Basics | 0/? | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
