@@ -9,7 +9,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-schedule.spec.js
  */
-const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 // ============================================================================
 // A) Core Schedule Tests
@@ -367,6 +367,7 @@ async function runViewAndWarningTests(page, slug) {
 // Main
 // ============================================================================
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 

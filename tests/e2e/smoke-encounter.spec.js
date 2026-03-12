@@ -8,7 +8,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-encounter.spec.js
  */
-const { launchBrowser, loginOrRestore, extractJwt, setupTracking, getFailedApiCalls, printResults, TARGET_URL, API_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, extractJwt, setupTracking, getFailedApiCalls, printResults, TARGET_URL, API_URL } = require('./helpers/test-utils');
 
 // Known finalized encounter from seed data (Suite A — read-only checks)
 const FINALIZED_ENCOUNTER_ID = 'e0000000-0000-0000-0000-000000000003';
@@ -493,6 +493,7 @@ async function runUiTests(page, context, slug) {
 // =========================================================================
 
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 

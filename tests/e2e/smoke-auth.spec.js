@@ -5,9 +5,10 @@
  * logout clears ePHI from localStorage/stores, no UUIDs in URLs.
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-auth.spec.js
  */
-const { launchBrowser, loginOrRestore, setupTracking, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, setupTracking, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
   const { consoleErrors } = setupTracking(page);
   const results = {};

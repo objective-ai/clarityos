@@ -11,7 +11,7 @@
  * Hybrid test: browser login for JWT, then API + UI tests.
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-intake.spec.js
  */
-const { launchBrowser, loginOrRestore, extractJwt, printResults, API_URL, TARGET_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, extractJwt, printResults, API_URL, TARGET_URL } = require('./helpers/test-utils');
 
 // =========================================================================
 // Helpers — find/create appointment + generate token
@@ -502,6 +502,7 @@ async function runUiTests(page, jwt) {
 // =========================================================================
 
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
 
   const slug = await loginOrRestore(context, page);

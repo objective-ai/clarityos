@@ -9,9 +9,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
+const http = require('http');
 
-const TARGET_URL = process.env.TARGET_URL || 'http://localhost:3000';
+const TARGET_URL = process.env.TARGET_URL || 'http://localhost:3001';
 const API_URL = process.env.API_URL || 'http://localhost:8000';
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 const EMAIL = process.env.E2E_EMAIL || 'duytran@yahoo.com';
 const PASSWORD = process.env.E2E_PASSWORD || '123456';
 
@@ -25,6 +28,53 @@ const IGNORED_CONSOLE_PATTERNS = [
   'Extra attributes from the server',
   'Failed to load resource',
 ];
+
+/**
+ * Check if FastAPI is responding. Returns true/false.
+ */
+function isApiUp() {
+  return new Promise((resolve) => {
+    const req = http.get(`${API_URL}/docs`, (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(2000, () => { req.destroy(); resolve(false); });
+  });
+}
+
+/**
+ * Ensure FastAPI is running. Starts it if not, waits up to 15s.
+ * Call at the top of every test file main() before launchBrowser().
+ */
+async function ensureApi() {
+  if (await isApiUp()) {
+    console.log('[api] FastAPI already up.');
+    return;
+  }
+
+  console.log('[api] FastAPI not running — starting uvicorn...');
+  const proc = spawn(
+    'uvicorn',
+    ['backend.main:app', '--reload', '--port', '8000'],
+    {
+      cwd: PROJECT_ROOT,
+      env: { ...process.env, PYTHONPATH: PROJECT_ROOT },
+      detached: true,
+      stdio: 'ignore',
+    }
+  );
+  proc.unref();
+
+  // Poll up to 15s
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    if (await isApiUp()) {
+      console.log(`[api] FastAPI ready (${i + 1}s).`);
+      return;
+    }
+  }
+  console.warn('[api] FastAPI did not start in 15s — tests may fail.');
+}
 
 /**
  * Launch Chromium with consistent viewport settings.
@@ -203,6 +253,7 @@ module.exports = {
   API_URL,
   EMAIL,
   PASSWORD,
+  ensureApi,
   launchBrowser,
   login,
   loginOrRestore,

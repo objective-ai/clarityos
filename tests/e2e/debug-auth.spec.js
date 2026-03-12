@@ -5,9 +5,10 @@
  * responses for debugging login/JWT/hook issues.
  * Run: bash scripts/dev.sh verify tests/e2e/debug-auth.spec.js
  */
-const { launchBrowser, TARGET_URL, EMAIL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, TARGET_URL, EMAIL } = require('./helpers/test-utils');
 
 (async () => {
+  await ensureApi();
   const { browser, page } = await launchBrowser();
 
   const responses = [];
