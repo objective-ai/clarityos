@@ -3,13 +3,16 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import { useAiScribe, type ScribeStructuredData } from "@/hooks/useAiScribe";
+import { useAiScribe, v2ToV1, type ScribeStructuredData } from "@/hooks/useAiScribe";
+import type { ScribeStructuredDataV2 } from "@/types/scribe";
+import { ValidationStationModal } from "@/components/encounter/ValidationStationModal";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import type { EntitlementKey } from "@/types/session";
 import type { RowKey } from "@/types/refraction";
 import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/exam-findings";
 import type { EyeLaterality } from "@/types/diagnosis";
 import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
+import { apiFetch } from "@/lib/api-client";
 import { useVitalsStore } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
@@ -189,6 +192,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
   const [transcript, setTranscript] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [validationStationOpen, setValidationStationOpen] = useState(false);
 
   const isFinalized = useEncounterStore(
     (s) => s.encounters[encounterId]?.isFinalized ?? false
@@ -221,7 +225,7 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
     }
   }, [transcript, storageKey]);
 
-  const { generate, soapText, structuredData, isStreaming, isDone, error, reset } =
+  const { generate, soapText, structuredData, structuredDataV2, isStreaming, isDone, error, reset } =
     useAiScribe(encounterId);
 
   // Store actions for Accept dispatch
@@ -383,6 +387,117 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
     setAcceptError(null);
   }, [reset, encounterId, setAiSummary]);
 
+  // Accept from ValidationStation — converts V2 to V1 and dispatches
+  const handleAcceptV2 = useCallback((v2Data: ScribeStructuredDataV2) => {
+    try {
+      const data = v2ToV1(v2Data);
+      setAcceptError(null);
+      const diff: Record<string, { old: unknown; new: unknown }> = {};
+
+      if (data.chief_complaint) {
+        const existing = useEncounterStore.getState().encounters[encounterId]?.chiefComplaint ?? "";
+        diff["chief_complaint"] = { old: existing, new: data.chief_complaint };
+        const updated = existing.trim() ? `${existing} | ${data.chief_complaint}` : data.chief_complaint;
+        setChiefComplaint(encounterId, updated);
+      }
+
+      if (data.vitals) {
+        const vitalsDraft = useVitalsStore.getState().encounters[encounterId]?.draft;
+        for (const [field, value] of Object.entries(data.vitals)) {
+          if (value != null) {
+            const oldVal = vitalsDraft?.[field as keyof typeof vitalsDraft] ?? null;
+            diff[`vitals.${field}`] = { old: oldVal, new: value };
+            setVitalsField(encounterId, field as keyof ScribeStructuredData["vitals"] & string, value);
+          }
+        }
+      }
+
+      if (data.exam_findings) {
+        for (const [section, eyes] of Object.entries(data.exam_findings)) {
+          if (!eyes) continue;
+          for (const [eye, structures] of Object.entries(eyes)) {
+            if (!structures) continue;
+            const eyeLower = eye.toLowerCase() as "od" | "os";
+            const findingsKey = `${encounterId}:${section}` as FindingsStoreKey;
+            const sectionState = useExamFindingsStore.getState().findings[findingsKey];
+            const eyeFindings = eyeLower === "od" ? sectionState?.draft.findings_od : sectionState?.draft.findings_os;
+            for (const [structure, fields] of Object.entries(structures)) {
+              if (!fields) continue;
+              const aiFields = fields as Record<string, string | null>;
+              const existing = eyeFindings?.[structure];
+              if (aiFields.status != null) {
+                diff[`exam.${section}.${eyeLower}.${structure}.status`] = { old: existing?.status ?? null, new: aiFields.status };
+                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "status", aiFields.status);
+              }
+              if (aiFields.notes != null) {
+                diff[`exam.${section}.${eyeLower}.${structure}.finding`] = { old: existing?.finding ?? null, new: aiFields.notes };
+                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "finding", aiFields.notes);
+              }
+            }
+          }
+        }
+      }
+
+      if (data.diagnoses) {
+        for (let i = 0; i < data.diagnoses.length; i++) {
+          const dx = data.diagnoses[i];
+          diff[`diagnoses.${i}`] = { old: null, new: { icdCode: dx.icdCode, description: dx.description, laterality: dx.laterality } };
+          addDiagnosis(encounterId, {
+            icd10Code: dx.icdCode,
+            description: dx.description,
+            eyeAffected: (dx.laterality as EyeLaterality) ?? null,
+          });
+        }
+      }
+
+      if (data.refraction) {
+        const rxDraft = useRefractionStore.getState().columns[FINAL_RX_COL]?.draft;
+        for (const [eye, rx] of Object.entries(data.refraction)) {
+          if (!rx) continue;
+          for (const [field, value] of Object.entries(rx as Record<string, string>)) {
+            const mapping = RX_FIELD_TO_ROW[field];
+            if (!mapping || value == null) continue;
+            const rowKey = eye === "OD" ? mapping.od : mapping.os;
+            const eyeKey = eye.toLowerCase() as "od" | "os";
+            const oldVal = rxDraft?.[eyeKey]?.[field as keyof (typeof rxDraft)["od"]] ?? null;
+            diff[`refraction.${eye}.${field}`] = { old: oldVal, new: value };
+            setCellValue(FINAL_RX_COL, rowKey, value);
+          }
+        }
+      }
+
+      // Save A&P from V2 data if present
+      if (v2Data.assessment_and_plan?.value) {
+        diff["assessment_and_plan"] = { old: null, new: v2Data.assessment_and_plan.value };
+      }
+
+      if (soapText) {
+        setAiSummary(encounterId, soapText);
+      }
+
+      setAccepted(true);
+      setValidationStationOpen(false);
+
+      fetch(`/api/encounters/${encounterId}/ai-scribe/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes: diff }),
+      }).catch((e) => console.error("Audit log failed:", e));
+    } catch (err) {
+      console.error("AI Accept Error (V2):", err);
+      if (soapText) setAiSummary(encounterId, soapText);
+      setAcceptError("Failed to auto-fill grids. The SOAP note has been saved for manual review.");
+    }
+  }, [
+    soapText, encounterId, setChiefComplaint, setAiSummary, setVitalsField,
+    setStructureField, addDiagnosis, setCellValue,
+  ]);
+
+  const handleDiscardScribe = useCallback(() => {
+    reset();
+    setValidationStationOpen(false);
+  }, [reset]);
+
   // Show saved summary if already accepted in a previous session
   const savedSummary = !soapText && !isStreaming && aiSummaryText;
 
@@ -473,12 +588,20 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
               {isDone && !accepted && (
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2">
+                    {structuredDataV2 && (
+                      <button
+                        onClick={() => setValidationStationOpen(true)}
+                        className="text-xs px-4 py-2 rounded-xl font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)] transition-all"
+                      >
+                        Review AI Note
+                      </button>
+                    )}
                     <button
                       onClick={handleAccept}
                       disabled={!structuredData}
-                      className="text-xs px-4 py-2 rounded-xl font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-xs px-4 py-2 rounded-xl font-medium text-[var(--text-secondary)] border border-[var(--glass-border)] hover-btn transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {"\u2713"} Accept &amp; Auto-Fill
+                      {"\u2713"} Quick Accept
                     </button>
                     <button
                       onClick={handleClearAndEdit}
@@ -522,6 +645,18 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
           )}
         </CardContent>
       </Card>
+
+      {structuredDataV2 && (
+        <ValidationStationModal
+          open={validationStationOpen}
+          onClose={() => setValidationStationOpen(false)}
+          soapText={soapText}
+          structuredData={structuredDataV2}
+          generatedAt={new Date().toISOString()}
+          onAccept={handleAcceptV2}
+          onDiscard={handleDiscardScribe}
+        />
+      )}
 
       {showUpsell && (
         <UpsellModal
@@ -598,7 +733,6 @@ export default function EncounterPage({
   const { requireRole, has } = useEntitlements();
   const hasAiScribe = has(Entitlement.AI_SCRIBE);
   const sidebarCollapsed = useSidebarCollapsed();
-  const advanceStatus = useEncounterStore((s) => s.advanceStatus);
   const unlockEncounter = useEncounterStore((s) => s.unlockEncounter);
   const loadEncounter = useEncounterStore((s) => s.loadEncounter);
   const loadVitals = useVitalsStore((s) => s.loadVitals);
@@ -623,6 +757,7 @@ export default function EncounterPage({
   const finalizeModalOpen = useEncounterStore((s) => s.finalizeModalOpen);
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
   const [superbillOpen, setSuperbillOpen] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   // Store setters for revert functionality
   const revertChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
@@ -821,7 +956,7 @@ export default function EncounterPage({
       )}
 
       <div id="section-vitals">
-        {encounterState?.status === "pre_test" && canEditClinical ? (
+        {canEditClinical && !isFinalized ? (
           <VitalsForm encounterId={params.encounterId} />
         ) : (
           <VitalsCard encounterId={params.encounterId} isReadOnly={clinicalReadOnly} />
@@ -922,17 +1057,58 @@ export default function EncounterPage({
       {/* Spacer so fixed bottom bar doesn't overlap content */}
       <div className="h-16" />
 
+      {/* Status action error (shown above bottom bar) */}
+      {statusError && (
+        <div
+          className="fixed z-40 px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-2"
+          style={{
+            bottom: 56,
+            left: sidebarCollapsed ? 68 : 228,
+            right: 16,
+            background: "rgba(239,68,68,0.12)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            color: "var(--state-critical)",
+          }}
+        >
+          <span>{statusError}</span>
+          <button type="button" onClick={() => setStatusError(null)} className="ml-auto opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
       {/* Bottom tab navigation */}
       <EncounterBottomTabs
         status={encounterState?.status ?? "pre_test"}
         isFinalized={isFinalized}
         sidebarCollapsed={sidebarCollapsed}
         patientId={patientId ?? ""}
-        onAdvanceStatus={() => {
+        onAdvanceStatus={async () => {
+          setStatusError(null);
           if (encounterState?.status === "in_exam") {
             setFinalizeModalOpen(true);
-          } else {
-            advanceStatus(params.encounterId);
+          } else if (encounterState?.status === "pre_test") {
+            if (!encounterState?.appointmentId) {
+              setStatusError("Cannot advance status: this encounter has no linked appointment.");
+              return;
+            }
+            try {
+              await apiFetch(`/api/appointments/${encounterState.appointmentId}/start-exam-phase`, { method: "POST" });
+              await loadEncounter(params.encounterId);
+            } catch (e) {
+              setStatusError(e instanceof Error ? e.message : "Failed to start exam phase.");
+            }
+          }
+        }}
+        onRevertToPretest={async () => {
+          setStatusError(null);
+          if (!encounterState?.appointmentId) {
+            setStatusError("Cannot revert: this encounter has no linked appointment.");
+            return;
+          }
+          try {
+            await apiFetch(`/api/appointments/${encounterState.appointmentId}/revert-to-pretest`, { method: "POST" });
+            await loadEncounter(params.encounterId);
+          } catch (e) {
+            setStatusError(e instanceof Error ? e.message : "Failed to revert to pre-test.");
           }
         }}
       />
