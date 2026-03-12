@@ -9,6 +9,7 @@ import {
   useTenantCustomizationStore,
 } from "@/store/tenantCustomizationStore";
 import { contrastRatio, meetsAALarge } from "@/lib/color-utils";
+import { SCRIBE_SCENARIOS, type ScribeScenario } from "@/lib/scribe-scenarios";
 import type { ThemePreference } from "@/store/themeStore";
 import type { StaffRole } from "@/types/session";
 
@@ -43,7 +44,7 @@ import {
 // Section definitions
 // ---------------------------------------------------------------------------
 
-type SectionKey = "general" | "staff" | "compliance";
+type SectionKey = "general" | "staff" | "compliance" | "demo";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -75,6 +76,16 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
         <path d="M8 1.5L2.5 4v4c0 3.314 2.343 5.431 5.5 6.5 3.157-1.069 5.5-3.186 5.5-6.5V4L8 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M5.5 8l2 2 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    key: "demo",
+    label: "Demo Data",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M6.5 6.5l3 1.5-3 1.5V6.5z" fill="currentColor" />
       </svg>
     ),
   },
@@ -134,6 +145,13 @@ const TIMEZONE_OPTIONS = [
   { value: "Australia/Sydney", label: "Australia (Sydney)" },
 ];
 
+const AI_MODEL_OPTIONS = [
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (recommended)" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (faster, cheaper)" },
+  { value: "claude-opus-4-6", label: "Claude Opus 4.6 (most capable)" },
+  { value: "custom", label: "Custom model..." },
+];
+
 // ---------------------------------------------------------------------------
 // Staff section constants
 // ---------------------------------------------------------------------------
@@ -181,10 +199,27 @@ function GeneralSettingsSection() {
   const [tzSaving, setTzSaving] = useState(false);
   const [tzMsg, setTzMsg] = useState<string | null>(null);
 
+  // AI model settings
+  const [aiModel, setAiModel] = useState("claude-sonnet-4-6");
+  const [customModel, setCustomModel] = useState("");
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/tenant/settings")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d?.timezone) setTimezone(d.timezone); })
+      .then((d) => {
+        if (d?.timezone) setTimezone(d.timezone);
+        if (d?.ai_model) {
+          const known = AI_MODEL_OPTIONS.find((o) => o.value === d.ai_model);
+          if (known) {
+            setAiModel(d.ai_model);
+          } else {
+            setAiModel("custom");
+            setCustomModel(d.ai_model);
+          }
+        }
+      })
       .catch(() => {})
       .finally(() => setTzLoading(false));
   }, []);
@@ -206,6 +241,26 @@ function GeneralSettingsSection() {
       setTzMsg("Error saving timezone");
     } finally {
       setTzSaving(false);
+    }
+  }, []);
+
+  const handleAiModelSave = useCallback(async (modelId: string) => {
+    if (!modelId.trim()) return;
+    setAiSaving(true);
+    setAiMsg(null);
+    try {
+      const res = await fetch("/api/tenant/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ai_model: modelId.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setAiMsg("Saved");
+      setTimeout(() => setAiMsg(null), 2000);
+    } catch {
+      setAiMsg("Error saving AI model");
+    } finally {
+      setAiSaving(false);
     }
   }, []);
 
@@ -382,6 +437,68 @@ function GeneralSettingsSection() {
                 </span>
               )}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[16px]">AI Configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <div className="text-overline mb-2">AI Model</div>
+            <p className="text-xs text-[var(--text-muted)] mb-3">
+              Model used by AI Scribe, Prep Me, and Triage features.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <select
+                value={aiModel}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAiModel(v);
+                  if (v !== "custom") {
+                    setCustomModel("");
+                    handleAiModelSave(v);
+                  }
+                }}
+                disabled={aiSaving}
+                className="glass-input rounded-lg px-3 py-2 text-sm min-w-[300px]"
+              >
+                {AI_MODEL_OPTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              {aiSaving && (
+                <span className="text-xs text-[var(--text-muted)]">Saving...</span>
+              )}
+              {aiMsg && !aiSaving && (
+                <span className={`text-xs ${aiMsg === "Saved" ? "text-emerald-400" : "text-red-400"}`}>
+                  {aiMsg}
+                </span>
+              )}
+            </div>
+            {aiModel === "custom" && (
+              <div className="flex items-center gap-3 mt-3">
+                <input
+                  type="text"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                  placeholder="e.g. claude-sonnet-4-6"
+                  className="glass-input rounded-lg px-3 py-2 text-sm min-w-[300px]"
+                />
+                <button
+                  onClick={() => handleAiModelSave(customModel)}
+                  disabled={aiSaving || !customModel.trim()}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--accent)] text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1294,6 +1411,452 @@ function ComplianceSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Demo Data Section
+// ---------------------------------------------------------------------------
+
+interface SeedResult {
+  status: string;
+  message: string;
+  replaced: number;
+  appointment_id: string;
+  encounter_id: string;
+  encounter_short_id: string;
+  patient_name: string;
+}
+
+interface PatientOption {
+  id: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string | null;
+}
+
+interface ScheduleSeedResult {
+  status: string;
+  message: string;
+  replaced: number;
+  created: number;
+}
+
+function DemoDataSection() {
+  const tenant = useCurrentTenant();
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<SeedResult | null>(null);
+  const [seedError, setSeedError] = useState<string | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<ScribeScenario | null>(null);
+  const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [patientsLoading, setPatientsLoading] = useState(true);
+  const [seedingSchedule, setSeedingSchedule] = useState(false);
+  const [scheduleResult, setScheduleResult] = useState<ScheduleSeedResult | null>(null);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+  // Fetch patients on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/patients");
+        if (res.ok) {
+          const data = await res.json();
+          const items = data.items || data.patients || data || [];
+          const list: PatientOption[] = items.map(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (p: any) => ({
+              id: p.id,
+              first_name: p.firstName || p.first_name,
+              last_name: p.lastName || p.last_name,
+              date_of_birth: p.dob || p.dateOfBirth || p.date_of_birth || null,
+            })
+          );
+          setPatients(list);
+          if (list.length > 0) setSelectedPatientId(list[0].id);
+        }
+      } catch {
+        // ignore — dropdown will be empty
+      } finally {
+        setPatientsLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleSeed = async () => {
+    if (!selectedPatientId) return;
+    setSeeding(true);
+    setSeedError(null);
+    setSeedResult(null);
+    try {
+      const res = await fetch(
+        `/api/admin/seed-demo?patient_id=${selectedPatientId}`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        console.error("seed-demo error:", res.status, data);
+        throw new Error(data?.detail || data?.error || JSON.stringify(data) || `HTTP ${res.status}`);
+      }
+      const data: SeedResult = await res.json();
+      setSeedResult(data);
+    } catch (e) {
+      setSeedError((e as Error).message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleSeedSchedule = async () => {
+    setSeedingSchedule(true);
+    setScheduleError(null);
+    setScheduleResult(null);
+    try {
+      const res = await fetch("/api/admin/seed-schedule", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
+      }
+      const data: ScheduleSeedResult = await res.json();
+      setScheduleResult(data);
+    } catch (e) {
+      setScheduleError((e as Error).message);
+    } finally {
+      setSeedingSchedule(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Seed Schedule */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-subhead">Seed Today&apos;s Schedule</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-caption text-[var(--text-secondary)]">
+            Creates <strong>12 appointments</strong> for today across multiple patients and
+            providers with varied statuses (completed, arrived, in-exam, scheduled).
+            Populates the Schedule view with a realistic clinic day.
+          </p>
+          <div className="flex items-center gap-3 text-caption text-[var(--text-muted)]">
+            <Badge variant="outline">12 appointments</Badge>
+            <Badge variant="outline">Replaces previous schedule seed</Badge>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button onClick={handleSeedSchedule} disabled={seedingSchedule}>
+              {seedingSchedule ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                    <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                  </svg>
+                  Seeding...
+                </>
+              ) : (
+                "Seed Schedule"
+              )}
+            </Button>
+          </div>
+
+          {scheduleError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+              {scheduleError}
+            </div>
+          )}
+
+          {scheduleResult && (
+            <div className="p-4 rounded-lg bg-[var(--accent-dim)] border border-[var(--accent)]/20 space-y-2">
+              <p className="text-sm font-medium text-[var(--accent)]">
+                {scheduleResult.message}
+                {scheduleResult.replaced > 0 && (
+                  <span className="text-[var(--text-muted)] font-normal ml-2">
+                    (replaced {scheduleResult.replaced} previous)
+                  </span>
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <a
+                  href={`/${tenant?.tenantSlug}/schedule`}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--bg-glass)] hover:bg-[var(--bg-elevated)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  View Schedule
+                </a>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Seed Demo Appointment */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-subhead">Seed Demo Appointment</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-caption text-[var(--text-secondary)]">
+            Creates a fully populated appointment for <strong>today</strong> with a
+            finalized encounter, vitals, refraction, exam findings, diagnoses, AI
+            Scribe summary, optical Rx, and billing superbill.
+          </p>
+          <div className="flex items-center gap-3 text-caption text-[var(--text-muted)]">
+            <Badge variant="outline">Replaces previous demo</Badge>
+          </div>
+
+          {/* Patient selector */}
+          <div className="space-y-1">
+            <label className="text-caption text-[var(--text-secondary)]">Select Patient</label>
+            {patientsLoading ? (
+              <p className="text-caption text-[var(--text-muted)]">Loading patients...</p>
+            ) : patients.length === 0 ? (
+              <p className="text-caption text-red-400">No patients found. Create a patient first.</p>
+            ) : (
+              <select
+                value={selectedPatientId}
+                onChange={(e) => setSelectedPatientId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)] text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+              >
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.last_name}, {p.first_name}
+                    {p.date_of_birth ? ` (DOB: ${p.date_of_birth})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button onClick={handleSeed} disabled={seeding || !selectedPatientId}>
+              {seeding ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                    <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                  </svg>
+                  Seeding...
+                </>
+              ) : (
+                "Seed Demo Appointment"
+              )}
+            </Button>
+          </div>
+
+          {seedError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+              {seedError}
+            </div>
+          )}
+
+          {seedResult && (
+            <div className="p-4 rounded-lg bg-[var(--accent-dim)] border border-[var(--accent)]/20 space-y-2">
+              <p className="text-sm font-medium text-[var(--accent)]">
+                Demo seeded successfully!
+                {seedResult.replaced > 0 && (
+                  <span className="text-[var(--text-muted)] font-normal ml-2">
+                    (replaced {seedResult.replaced} previous)
+                  </span>
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <a
+                  href={`/${tenant?.tenantSlug}/encounter/${seedResult.encounter_id}`}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--bg-glass)] hover:bg-[var(--bg-elevated)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  View Encounter
+                </a>
+                <a
+                  href={`/${tenant?.tenantSlug}/schedule`}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--bg-glass)] hover:bg-[var(--bg-elevated)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  View Schedule
+                </a>
+                <a
+                  href={`/${tenant?.tenantSlug}/optical`}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--bg-glass)] hover:bg-[var(--bg-elevated)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  View Optical Queue
+                </a>
+                <a
+                  href={`/${tenant?.tenantSlug}/billing`}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--bg-glass)] hover:bg-[var(--bg-elevated)] transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  View Billing
+                </a>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Scribe Scenarios */}
+      <Card className="glass-card">
+        <CardHeader>
+          <CardTitle className="text-subhead">AI Scribe Test Scenarios</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-caption text-[var(--text-secondary)]">
+            Select a scenario to preview the transcript and expected AI output.
+            Copy the transcript into the AI Scribe to test each scenario.
+          </p>
+
+          {/* Scenario selector */}
+          <select
+            value={selectedScenario?.id || ""}
+            onChange={(e) => {
+              const s = SCRIBE_SCENARIOS.find((sc) => sc.id === e.target.value) || null;
+              setSelectedScenario(s);
+            }}
+            className="w-full px-3 py-2 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)] text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+          >
+            <option value="">Select a scenario...</option>
+            {SCRIBE_SCENARIOS.map((sc) => (
+              <option key={sc.id} value={sc.id}>
+                {sc.name}
+              </option>
+            ))}
+          </select>
+
+          {selectedScenario && (
+            <div className="space-y-4">
+              <p className="text-xs text-[var(--text-muted)] italic">
+                {selectedScenario.description}
+              </p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Transcript */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      Transcript
+                    </h4>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(selectedScenario.transcript)}
+                      className="text-xs text-[var(--accent)] hover:underline"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="p-3 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)] text-sm text-[var(--text-secondary)] leading-relaxed max-h-64 overflow-y-auto">
+                    &ldquo;{selectedScenario.transcript}&rdquo;
+                  </div>
+                </div>
+
+                {/* Expected Output */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    Expected Output
+                  </h4>
+                  <div className="p-3 rounded-lg bg-[var(--bg-glass)] border border-[var(--border-subtle)] text-sm space-y-3 max-h-64 overflow-y-auto">
+                    {/* Chief Complaint */}
+                    <div>
+                      <span className="text-xs font-medium text-[var(--text-muted)]">Chief Complaint</span>
+                      <p className="text-[var(--text-primary)]">{selectedScenario.expected.chiefComplaint}</p>
+                    </div>
+
+                    {/* Vitals */}
+                    {selectedScenario.expected.vitals && (
+                      <div>
+                        <span className="text-xs font-medium text-[var(--text-muted)]">Vitals</span>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[var(--text-secondary)]">
+                          {selectedScenario.expected.vitals.iopOd != null && (
+                            <span>IOP: OD {selectedScenario.expected.vitals.iopOd} / OS {selectedScenario.expected.vitals.iopOs}</span>
+                          )}
+                          {selectedScenario.expected.vitals.vaOdDistance && (
+                            <span>VA: OD {selectedScenario.expected.vitals.vaOdDistance} / OS {selectedScenario.expected.vitals.vaOsDistance}</span>
+                          )}
+                          {selectedScenario.expected.vitals.bpSystolic != null && (
+                            <span>BP: {selectedScenario.expected.vitals.bpSystolic}/{selectedScenario.expected.vitals.bpDiastolic}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Refraction */}
+                    {selectedScenario.expected.refraction && (
+                      <div>
+                        <span className="text-xs font-medium text-[var(--text-muted)]">Refraction</span>
+                        <div className="text-[var(--text-secondary)] space-y-0.5">
+                          {selectedScenario.expected.refraction.od && (
+                            <p>
+                              OD: {selectedScenario.expected.refraction.od.sphere}
+                              {selectedScenario.expected.refraction.od.cylinder && ` ${selectedScenario.expected.refraction.od.cylinder}`}
+                              {selectedScenario.expected.refraction.od.axis != null && `\u00d7${selectedScenario.expected.refraction.od.axis}`}
+                              {selectedScenario.expected.refraction.od.add && `, Add ${selectedScenario.expected.refraction.od.add}`}
+                            </p>
+                          )}
+                          {selectedScenario.expected.refraction.os && (
+                            <p>
+                              OS: {selectedScenario.expected.refraction.os.sphere}
+                              {selectedScenario.expected.refraction.os.cylinder && ` ${selectedScenario.expected.refraction.os.cylinder}`}
+                              {selectedScenario.expected.refraction.os.axis != null && `\u00d7${selectedScenario.expected.refraction.os.axis}`}
+                              {selectedScenario.expected.refraction.os.add && `, Add ${selectedScenario.expected.refraction.os.add}`}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Findings */}
+                    {selectedScenario.expected.anteriorFindings && (
+                      <div>
+                        <span className="text-xs font-medium text-[var(--text-muted)]">Anterior Segment</span>
+                        <div className="text-[var(--text-secondary)] space-y-0.5">
+                          <p>OD: {selectedScenario.expected.anteriorFindings.od}</p>
+                          <p>OS: {selectedScenario.expected.anteriorFindings.os}</p>
+                        </div>
+                      </div>
+                    )}
+                    {selectedScenario.expected.posteriorFindings && (
+                      <div>
+                        <span className="text-xs font-medium text-[var(--text-muted)]">Posterior Segment</span>
+                        <div className="text-[var(--text-secondary)] space-y-0.5">
+                          <p>OD: {selectedScenario.expected.posteriorFindings.od}</p>
+                          <p>OS: {selectedScenario.expected.posteriorFindings.os}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Diagnoses */}
+                    <div>
+                      <span className="text-xs font-medium text-[var(--text-muted)]">Diagnoses</span>
+                      <div className="space-y-1">
+                        {selectedScenario.expected.diagnoses.map((dx, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[var(--text-secondary)]">
+                            <Badge variant="outline" className="text-xs font-mono shrink-0">
+                              {dx.icdCode}
+                            </Badge>
+                            <span>{dx.description}</span>
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {dx.laterality}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Plan */}
+                    <div>
+                      <span className="text-xs font-medium text-[var(--text-muted)]">Plan</span>
+                      <p className="text-[var(--text-secondary)]">{selectedScenario.expected.plan}</p>
+                    </div>
+
+                    {/* Additional Notes */}
+                    {selectedScenario.expected.additionalNotes && (
+                      <div>
+                        <span className="text-xs font-medium text-[var(--text-muted)]">Additional Notes</span>
+                        <p className="text-[var(--text-secondary)]">{selectedScenario.expected.additionalNotes}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Admin Page
 // ---------------------------------------------------------------------------
 
@@ -1356,6 +1919,7 @@ export default function AdminPage() {
           {activeSection === "general" && <GeneralSettingsSection />}
           {activeSection === "staff" && <StaffManagementSection />}
           {activeSection === "compliance" && <ComplianceSection />}
+          {activeSection === "demo" && <DemoDataSection />}
         </div>
       </div>
     </div>

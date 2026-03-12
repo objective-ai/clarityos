@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import ai_scribe, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, optical, patient, patient_problem, promotion, public_booking, refraction, staff, tenant, vitals
+from backend.api.routes import admin_seed, ai_scribe, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, optical, patient, patient_problem, promotion, public_booking, refraction, staff, tenant, vitals
 from backend.core.config import settings
 
 logger = logging.getLogger("clarityos")
@@ -21,7 +21,7 @@ app = FastAPI(
 async def _global_exception_handler(request: Request, exc: Exception):
     tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
     logger.error("Unhandled exception on %s %s:\n%s", request.method, request.url.path, "".join(tb))
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 # ── CORS ──────────────────────────────────────────────────────────────────
 app.add_middleware(
@@ -127,6 +127,11 @@ app.include_router(
     tenant.router,
     prefix="/api/tenant",
     tags=["Tenant"],
+)
+app.include_router(
+    admin_seed.router,
+    prefix="/api/admin",
+    tags=["Admin"],
 )
 
 
