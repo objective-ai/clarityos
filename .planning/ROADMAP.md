@@ -166,9 +166,9 @@ Build order: Phase 8 → 9 → 10 → 11 → 12
 **Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 08-00-PLAN.md — Scaffold: recharts install, Pydantic schemas, Zustand store stub, VIEW_ANALYTICS permission, E2E test stub (ANAL-V2-01, ANAL-V2-02)
-- [ ] 08-01-PLAN.md — Backend: FastAPI analytics aggregate endpoint (7 queries + 4 KPIs), router registration, BFF proxy (ANAL-V2-01, ANAL-V2-02)
-- [ ] 08-02-PLAN.md — Frontend: analytics page rewrite with 7 Recharts charts, KPI cards, date range picker, loading/error/empty states (ANAL-V2-01, ANAL-V2-02)
+- [x] 08-00-SUMMARY.md — Scaffold: recharts install, Pydantic schemas, Zustand store stub, VIEW_ANALYTICS permission, E2E test stub (ANAL-V2-01, ANAL-V2-02)
+- [x] 08-01-SUMMARY.md — Backend: FastAPI analytics aggregate endpoint (7 queries + 4 KPIs), router registration, BFF proxy (ANAL-V2-01, ANAL-V2-02)
+- [x] 08-02-SUMMARY.md — Frontend: analytics page rewrite with 7 Recharts charts, KPI cards, date range picker, loading/error/empty states (ANAL-V2-01, ANAL-V2-02)
 
 ### Phase 9: Claims Basics
 **Goal**: Enable real insurance billing with payer management, patient insurance records, fee schedules, and CMS-1500 PDF generation

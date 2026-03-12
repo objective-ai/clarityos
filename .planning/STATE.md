@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Phase 9 context gathered
+milestone: v2.0
+milestone_name: Post-MVP (Analytics, Claims, Reporting, AI Scribe Audio, Mobile)
+status: in_progress
+stopped_at: Phase 8 complete, Phase 9 context gathered
 last_updated: "2026-03-12T19:50:25.410Z"
-last_activity: 2026-03-07 — Phase 7 (Patient Intake) complete
+last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 progress:
   total_phases: 12
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 14
+  completed_phases: 8
+  total_plans: 17
+  completed_plans: 17
 ---
 
 ---
@@ -40,11 +40,11 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 7 of 7 COMPLETE
-Next: V2 roadmap features
-Last activity: 2026-03-07 — Phase 7 (Patient Intake) complete
+Phase: 8 of 12 COMPLETE (V2 Milestone)
+Next: Phase 9 (Claims Basics) planning and execution
+Last activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 
-Progress: [==========] 100%
+Progress: [======    ] 67%
 
 ## Performance Metrics
 
@@ -116,6 +116,11 @@ Recent decisions affecting current work:
 - [Phase 08-analytics-dashboard]: Single aggregate /api/analytics endpoint returns all 7 charts + 4 KPIs in one request
 - [Phase 08-analytics-dashboard]: All 7 Recharts chart components defined inline in analytics/page.tsx for SSR safety
 - [Phase 08-analytics-dashboard]: GlassCardSkeleton used for KPI loading (shadcn Skeleton not available in project)
+- [Phase 08-analytics-dashboard]: Date range picker filters all 7 charts dynamically (7d/30d/90d/6m)
+- [AI Scribe V2]: ValidationStationModal provides full-screen SOAP review with field-level confidence scores (HIGH/MEDIUM/LOW)
+- [AI Scribe V2]: ConfidenceBadge color-codes suspect fields; FieldReviewer allows field-by-field approval/edit
+- [AI Scribe V2]: RefractionMiniGrid shows OD/OS sphere/cylinder/axis with confidence coloring
+- [AI Scribe V2]: PATCH `/encounters/{id}/ai-findings` endpoint finalizes validated AI-populated fields
 
 ### Pending Todos
 
@@ -128,5 +133,14 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-12T19:50:25.407Z
-Stopped at: Phase 9 context gathered
+Stopped at: Phase 9 context gathered (ready for planning)
 Resume file: .planning/phases/09-claims-basics/09-CONTEXT.md
+
+**Phase 9 Overview:**
+- Extends Phase 4 (Superbill) with insurance infrastructure: payer CRUD, patient insurance records, per-payer fee schedules
+- New admin tab for payer management + fee schedule editing
+- New Insurance tab on patient detail page (primary/secondary capture)
+- CMS-1500 PDF generation via reportlab (server-side, clean professional layout)
+- Pre-seed ~10 California payers (VSP, EyeMed, Davis Vision, Medicare, Medi-Cal, etc.)
+- Manual status transitions (draft → ready_to_bill → submitted → accepted/rejected)
+- Electronic clearinghouse integration deferred to V3-01
