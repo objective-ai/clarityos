@@ -60,15 +60,20 @@ function useEditableSection<T extends Record<string, unknown>>(
   const [saving, setSaving] = useState(false);
   const updatePatient = usePatientStore((s) => s.updatePatient);
 
+  // Stable serialized key so useEffect doesn't loop on object identity
+  const valuesKey = JSON.stringify(initialValues);
+
   // Sync draft when patient data changes externally
   useEffect(() => {
     if (!editing) setDraft(initialValues);
-  }, [initialValues, editing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valuesKey, editing]);
 
   const startEdit = useCallback(() => {
     setDraft(initialValues);
     setEditing(true);
-  }, [initialValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valuesKey]);
 
   const cancel = useCallback(() => setEditing(false), []);
 

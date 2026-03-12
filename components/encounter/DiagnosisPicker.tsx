@@ -138,27 +138,39 @@ export function DiagnosisPicker({
 
       {/* Current diagnoses */}
       {diagnoses.length > 0 && (
-        <div className={columns === 2
-          ? "grid grid-cols-1 md:grid-cols-2 gap-3"
-          : "rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]"
-        }>
-          {diagnoses.map((dx, i) => (
+        <div className="flex flex-wrap gap-2">
+          {diagnoses.map((dx) => {
+            const isOD = dx.eyeAffected === "OD";
+            const isOS = dx.eyeAffected === "OS";
+            return (
             <div
               key={dx.id}
-              className={`flex items-center gap-3 px-5 py-3 ${
-                columns === 2
-                  ? "rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)]"
-                  : i > 0 ? "border-t border-[var(--border-subtle)]" : ""
-              }`}
+              title={dx.description}
+              className="group inline-flex items-center gap-0 rounded-full overflow-hidden cursor-default"
+              style={{
+                border: isOD
+                  ? "1px solid #93C5FD"
+                  : isOS
+                  ? "1px solid #C4B5FD"
+                  : "1px solid #5EEAD4",
+              }}
             >
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)]">
+              <span
+                className="text-xs font-mono font-bold px-3 py-1.5"
+                style={{
+                  background: isOD ? "#DBEAFE" : isOS ? "#EDE9FE" : "#CCFBF1",
+                  color: isOD ? "#1E40AF" : isOS ? "#5B21B6" : "#115E59",
+                }}
+              >
                 {dx.icd10Code}
               </span>
-              <span className="flex-1 text-xs text-[var(--text-primary)]">
-                {dx.description}
-              </span>
               {dx.eyeAffected && (
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
+                <span
+                  className="text-[11px] font-mono font-semibold px-2.5 py-1.5"
+                  style={{
+                    color: isOD ? "#1E40AF" : isOS ? "#5B21B6" : "#115E59",
+                  }}
+                >
                   {dx.eyeAffected}
                 </span>
               )}
@@ -166,14 +178,15 @@ export function DiagnosisPicker({
                 <button
                   type="button"
                   onClick={() => removeDiagnosis(dx.id)}
-                  className="text-xs hover-danger text-[var(--text-muted)] w-8 h-8 flex items-center justify-center flex-shrink-0"
-                  aria-label="Remove diagnosis"
+                  className="text-xs hover-danger text-[var(--text-muted)] px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={`Remove ${dx.icd10Code}`}
                 >
                   &times;
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

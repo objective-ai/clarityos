@@ -149,6 +149,7 @@ export interface RxHistoryRow {
 export interface PrepMeResponse {
   summary: string;
   encounterCount: number;
+  lastEncounterDate: string | null;
 }
 
 // ---------------------------------------------------------------------------

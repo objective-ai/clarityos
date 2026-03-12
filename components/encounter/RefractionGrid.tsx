@@ -508,12 +508,8 @@ export function RefractionGrid({
     init(encounterId, initialRefractions, isReadOnly);
   }, [encounterId]);
 
-  useEffect(() => {
-    const firstId = cellId(0, "od_sphere");
-    const el = document.getElementById(firstId) as HTMLInputElement | null;
-    const timer = setTimeout(() => el?.focus(), 120);
-    return () => clearTimeout(timer);
-  }, []);
+  // No auto-focus — let the user click into the field they want.
+  // Auto-focusing Habitual/SPH was hiding the loaded value on first render.
 
   const colCount = REFRACTION_COLUMNS.length;
 

@@ -6,7 +6,7 @@ export async function POST(
   { params }: { params: Promise<{ patientId: string }> }
 ) {
   const { patientId } = await params;
-  return proxyToFastAPI(request, `/api/patients/${patientId}/prep-me`, {
+  return proxyToFastAPI(request, `/api/patients/${patientId}/prep-me/`, {
     timeout: 30_000,
   });
 }

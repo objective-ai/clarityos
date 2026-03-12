@@ -64,6 +64,10 @@ const AddendumSection = dynamic(
   () => import("@/components/encounter/AddendumSection").then((m) => ({ default: m.AddendumSection })),
   { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
 );
+const PrepMeCard = dynamic(
+  () => import("@/components/encounter/PrepMeCard").then((m) => ({ default: m.PrepMeCard })),
+  { loading: () => <div className="animate-pulse h-12 bg-white/5 rounded-xl" />, ssr: false },
+);
 import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,
@@ -150,6 +154,23 @@ function UpsellModal({ feature, onClose }: UpsellModalProps) {
 // AI Scribe Widget — Ambient Data-Entry Scribe
 // ---------------------------------------------------------------------------
 
+// Demo transcript pre-loaded into the textarea so a demo can start without typing.
+// Cleared from localStorage after the user generates or edits their own transcript.
+const DEMO_TRANSCRIPT =
+  "Okay so today I'm seeing Sarah Chen, 34 year old female coming in for her annual comprehensive exam. " +
+  "Chief complaint is blurry vision at near, she says it's been getting worse over the past six months, " +
+  "especially with reading and computer work. Her current glasses are about two years old. " +
+  "She also mentions some dryness and irritation, worse in the afternoon, no flashes or floaters. " +
+  "Uncorrected distance is 20/80 OD, 20/60 OS. With current glasses 20/40 OD, 20/30 OS. " +
+  "Near VA with current glasses J3 OD, J2 OS. IOP by iCare: 16 OD, 15 OS at 10:05 AM. " +
+  "Manifest refraction: OD -2.25 -0.75 axis 180, OS -2.00 -0.50 axis 175, add plus 1.50 OU. " +
+  "BCVA with new Rx 20/20 OD, 20/20 OS, J1 near OU. " +
+  "Anterior: trace punctate staining OU on NaFl, grade 1 nuclear sclerosis lens OU. " +
+  "Posterior: CDR 0.35 OU, healthy rim tissue, macula flat, vessels normal, periphery intact 360. " +
+  "Assessment: myopia with astigmatism OU, dry eye syndrome OU, early cataract OU — just monitoring for now. " +
+  "Plan: new glasses Rx dispensed, start preservative-free artificial tears four times a day, " +
+  "discuss blue light filters given screen time, follow up in 12 months.";
+
 // Refraction field mapping: AI JSON key -> RowKey (includes eye prefix)
 const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
   sphere:   { od: "od_sphere",   os: "os_sphere" },
@@ -174,7 +195,8 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
   );
 
   // --- Dirty State Guard ---------------------------------------------------
-  const isDirty = transcript.trim().length > 0 && !isFinalized;
+  // Don't flag the pre-populated demo transcript as unsaved work
+  const isDirty = transcript.trim().length > 0 && transcript !== DEMO_TRANSCRIPT && !isFinalized;
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -190,23 +212,14 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
   // --- localStorage Auto-Save ----------------------------------------------
   const storageKey = `draft-transcript-${encounterId}`;
 
-  // Save or clear draft as they type
+  // Save or clear draft as they type (don't persist the pre-populated demo transcript)
   useEffect(() => {
-    if (transcript.trim().length > 0) {
+    if (transcript.trim().length > 0 && transcript !== DEMO_TRANSCRIPT) {
       localStorage.setItem(storageKey, transcript);
     } else {
       localStorage.removeItem(storageKey);
     }
   }, [transcript, storageKey]);
-
-  // Recover draft on mount
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved && !transcript) {
-      setTranscript(saved);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const { generate, soapText, structuredData, isStreaming, isDone, error, reset } =
     useAiScribe(encounterId);
@@ -215,6 +228,17 @@ function AiScribeWidget({ encounterId }: { encounterId: string }) {
   const setChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
   const setAiSummary = useEncounterStore((s) => s.setAiSummary);
   const aiSummaryText = useEncounterStore((s) => s.encounters[encounterId]?.aiSummaryText);
+
+  // Recover draft on mount; fall back to demo transcript if no draft and no existing summary
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      setTranscript(saved);
+    } else if (!aiSummaryText) {
+      setTranscript(DEMO_TRANSCRIPT);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const setVitalsField = useVitalsStore((s) => s.setField);
   const setStructureField = useExamFindingsStore((s) => s.setStructureField);
   const addDiagnosis = useDiagnosisStore((s) => s.addDiagnosis);
@@ -571,7 +595,8 @@ export default function EncounterPage({
 }: {
   params: { tenant: string; encounterId: string };
 }) {
-  const { requireRole } = useEntitlements();
+  const { requireRole, has } = useEntitlements();
+  const hasAiScribe = has(Entitlement.AI_SCRIBE);
   const sidebarCollapsed = useSidebarCollapsed();
   const advanceStatus = useEncounterStore((s) => s.advanceStatus);
   const unlockEncounter = useEncounterStore((s) => s.unlockEncounter);
@@ -702,6 +727,11 @@ export default function EncounterPage({
 
   return (
     <div className="flex flex-col gap-6 stagger">
+      {/* Prep Me — AI pre-visit summary (returning patients only) */}
+      {patientId && !isFinalized && hasAiScribe && (
+        <PrepMeCard patientId={patientId} />
+      )}
+
       {/* Workflow header -- chief complaint + audit trail toggle */}
       <div id="section-complaint" className="flex flex-col gap-2">
         <EncounterWorkflowHeader

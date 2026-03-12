@@ -123,6 +123,13 @@ const DEBOUNCE_MS = 1500;
  * Maps a camelCase API refraction response to the snake_case RefractionDraft shape.
  * apiFetch() returns camelCase keys; the store/components use snake_case internally.
  */
+/** Parse a value that may be a string (from Decimal serialization) into a number or null. */
+function toNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
 function refractionSummaryToDraft(data: Record<string, unknown>): RefractionDraft {
   const od = (data.od ?? {}) as Record<string, unknown>;
   const os = (data.os ?? {}) as Record<string, unknown>;
@@ -130,27 +137,27 @@ function refractionSummaryToDraft(data: Record<string, unknown>): RefractionDraf
     id: (data.id as string) ?? null,
     refraction_type: (data.refractionType as RefractionType) ?? "habitual",
     od: {
-      sphere: (od.sphere as number) ?? null,
-      cylinder: (od.cylinder as number) ?? null,
-      axis: (od.axis as number) ?? null,
-      add: (od.add as number) ?? null,
-      prism: (od.prism as number) ?? null,
+      sphere: toNum(od.sphere),
+      cylinder: toNum(od.cylinder),
+      axis: toNum(od.axis),
+      add: toNum(od.add),
+      prism: toNum(od.prism),
       prism_base: (od.prismBase as EyeRxDraft["prism_base"]) ?? null,
       visual_acuity: (od.visualAcuity as string) ?? null,
     },
     os: {
-      sphere: (os.sphere as number) ?? null,
-      cylinder: (os.cylinder as number) ?? null,
-      axis: (os.axis as number) ?? null,
-      add: (os.add as number) ?? null,
-      prism: (os.prism as number) ?? null,
+      sphere: toNum(os.sphere),
+      cylinder: toNum(os.cylinder),
+      axis: toNum(os.axis),
+      add: toNum(os.add),
+      prism: toNum(os.prism),
       prism_base: (os.prismBase as EyeRxDraft["prism_base"]) ?? null,
       visual_acuity: (os.visualAcuity as string) ?? null,
     },
-    pd_distance: (data.pdDistance as number) ?? null,
-    pd_near: (data.pdNear as number) ?? null,
-    pd_od: (data.pdOd as number) ?? null,
-    pd_os: (data.pdOs as number) ?? null,
+    pd_distance: toNum(data.pdDistance),
+    pd_near: toNum(data.pdNear),
+    pd_od: toNum(data.pdOd),
+    pd_os: toNum(data.pdOs),
     is_final_rx: (data.isFinalRx as boolean) ?? false,
     notes: (data.notes as string) ?? null,
   };
