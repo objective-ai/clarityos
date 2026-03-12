@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.core.ai_models import get_tenant_ai_model
 from backend.core.audit import log_action
 from backend.core.intake_auth import MAX_DOB_ATTEMPTS, IntakeContext, get_intake_context
 from backend.core.permissions import ClinicalAction, require_permission
@@ -247,7 +248,8 @@ async def submit_intake_form(
 
     # --- AI Triage ---
     ros_dict = payload.review_of_systems.model_dump() if payload.review_of_systems else None
-    triage_result = await triage_chief_complaint(payload.chief_complaint, ros_dict)
+    ai_model = await get_tenant_ai_model(ictx.tenant_id, db)
+    triage_result = await triage_chief_complaint(payload.chief_complaint, ros_dict, ai_model=ai_model)
 
     # --- Store on IntakeToken ---
     intake_token.intake_data_jsonb = payload.model_dump(mode="json")

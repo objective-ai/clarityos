@@ -63,14 +63,14 @@ case "${1:-help}" in
 
   verify)
     SCRIPT="${2:?Usage: dev.sh verify /tmp/script.js}"
-    cd ~/.claude/skills/playwright-skill
-    node run.js "$SCRIPT"
+    cd "$PROJECT_DIR"
+    node "$SCRIPT"
     ;;
 
   smoke)
     echo "--- Smoke test: login + schedule + patients ---"
-    cd ~/.claude/skills/playwright-skill
-    node run.js "$PROJECT_DIR/tests/e2e/smoke-pages.spec.js"
+    cd "$PROJECT_DIR"
+    node tests/e2e/smoke-pages.spec.js
     ;;
 
   help)

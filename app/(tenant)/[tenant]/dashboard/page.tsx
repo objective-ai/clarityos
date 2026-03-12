@@ -206,7 +206,7 @@ export default function DashboardPage({
           <div className="flex flex-col gap-3">
             {[...BASE_ACTIONS, isAdmin ? ADMIN_ACTION : INTAKE_ACTION].map((action) => (
               <Link
-                key={action.href}
+                key={action.title}
                 href={"absolute" in action && action.absolute ? action.href : `${base}/${action.href}`}
                 className="glass-card glass-card-hover p-4 flex items-center gap-4 no-underline"
               >

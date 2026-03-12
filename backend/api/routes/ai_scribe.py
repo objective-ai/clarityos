@@ -164,6 +164,11 @@ async def generate_ai_scribe(
     # ── Resolve staff ──────────────────────────────────────────────────
     staff = await resolve_staff(ctx, db)
 
+    # ── Resolve AI model from tenant settings ─────────────────────────
+    from backend.core.ai_models import get_tenant_ai_model
+
+    ai_model = await get_tenant_ai_model(ctx.tenant_id, db)
+
     # ── Stream from Claude ─────────────────────────────────────────────
     from anthropic import Anthropic
 
@@ -173,7 +178,7 @@ async def generate_ai_scribe(
         full_text = ""
         try:
             with client.messages.stream(
-                model="claude-sonnet-4-6-20250514",
+                model=ai_model,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": payload.transcript}],
                 max_tokens=4096,
@@ -243,6 +248,10 @@ async def accept_ai_scribe(
 
     staff = await resolve_staff(ctx, db)
 
+    from backend.core.ai_models import get_tenant_ai_model
+
+    ai_model = await get_tenant_ai_model(ctx.tenant_id, db)
+
     await log_action(
         db, ctx, AuditAction.AI_SCRIBE_AUTOFILL, "encounter", enc.id,
         staff_id=staff.id if staff else None,
@@ -250,7 +259,7 @@ async def accept_ai_scribe(
         patient_id=enc.patient_id,
         detail="AI Scribe auto-fill accepted by provider",
         changes=payload.changes,
-        metadata={"ai_model": "claude-sonnet-4-6-20250514"},
+        metadata={"ai_model": ai_model},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()

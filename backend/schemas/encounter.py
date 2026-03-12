@@ -34,7 +34,7 @@ from pydantic import Field, field_validator
 
 from backend.db.models.tenant.clinical import AppointmentStatus, EyeAffected
 from backend.schemas.common import AppBaseModel
-from backend.schemas.refraction import RefractionSummary
+from backend.schemas.refraction import RefractionResponse, RefractionSummary
 
 # ---------------------------------------------------------------------------
 # ICD-10 code validation
@@ -519,7 +519,7 @@ class EncounterResponse(AppBaseModel):
 
     # Sub-resources embedded for the exam room single-page fetch
     vitals: VitalsResponse | None = None
-    refractions: list[RefractionSummary] = Field(default_factory=list)
+    refractions: list[RefractionResponse] = Field(default_factory=list)
     diagnoses: list[DiagnosisResponse] = Field(default_factory=list)
     exam_findings: list[ExamFindingsResponse] = Field(default_factory=list)
     addenda: list[AddendumResponse] = Field(default_factory=list)

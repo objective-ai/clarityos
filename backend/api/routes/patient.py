@@ -723,12 +723,14 @@ async def prep_me(
 
     # Call Claude
     from anthropic import Anthropic
+    from backend.core.ai_models import get_tenant_ai_model
 
+    ai_model = await get_tenant_ai_model(ctx.tenant_id, db)
     client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     try:
         message = client.messages.create(
-            model="claude-sonnet-4-6-20250514",
+            model=ai_model,
             max_tokens=300,
             system=(
                 "You are a clinical decision support assistant for optometry. "
@@ -753,12 +755,17 @@ async def prep_me(
     # Audit log
     staff = await resolve_staff(ctx, db)
     await log_action(
-        db, ctx, AuditAction.READ, "patient", patient.id,
+        db, ctx, AuditAction.PHI_VIEWED, "patient", patient.id,
         staff_id=staff.id if staff else None,
         patient_id=patient.id,
         detail="AI Prep Me summary generated",
-        metadata={"ai_model": "claude-sonnet-4-6-20250514", "encounter_count": len(encounters)},
+        metadata={"ai_model": ai_model, "encounter_count": len(encounters)},
         ip_address=request.client.host if request.client else None,
     )
 
-    return PrepMeResponse(summary=summary_text, encounter_count=len(encounters))
+    last_date = encounters[0].encounter_date if encounters else None
+    return PrepMeResponse(
+        summary=summary_text,
+        encounter_count=len(encounters),
+        last_encounter_date=last_date,
+    )

@@ -41,7 +41,7 @@ from backend.schemas.encounter import (
     ExamFindingsResponse,
     VitalsResponse,
 )
-from backend.schemas.refraction import RefractionSummary
+from backend.schemas.refraction import RefractionResponse
 
 router = APIRouter()
 
@@ -138,18 +138,7 @@ def _build_encounter_response(enc: Encounter) -> EncounterResponse:
         is_deleted=enc.is_deleted,
         vitals=vitals_resp,
         refractions=[
-            RefractionSummary(
-                id=rx.id,
-                refraction_type=rx.refraction_type,
-                is_final_rx=rx.is_final_rx,
-                od_sphere=rx.od_sphere,
-                od_cylinder=rx.od_cylinder,
-                od_axis=rx.od_axis,
-                os_sphere=rx.os_sphere,
-                os_cylinder=rx.os_cylinder,
-                os_axis=rx.os_axis,
-                created_at=rx.created_at,
-            )
+            RefractionResponse.from_orm_model(rx)
             for rx in enc.refractions
         ],
         diagnoses=[
