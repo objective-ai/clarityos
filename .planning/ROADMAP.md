@@ -163,7 +163,7 @@ Build order: Phase 8 → 9 → 10 → 11 → 12
   2. Date range picker (7d/30d/90d/6mo) filters all chart data
   3. Charts show encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, and Rx/optical metrics
   4. Page remains gated behind ADVANCED_ANALYTICS entitlement
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] 08-00-PLAN.md — Scaffold: recharts install, Pydantic schemas, Zustand store stub, VIEW_ANALYTICS permission, E2E test stub (ANAL-V2-01, ANAL-V2-02)
@@ -214,7 +214,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 8. Analytics Dashboard | 0/3 | Not started | — |
+| 8. Analytics Dashboard | 1/3 | In Progress|  |
 | 9. Claims Basics | 0/? | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
