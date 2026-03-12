@@ -1,0 +1,120 @@
+# Phase 9: Claims Basics - Context
+
+**Gathered:** 2026-03-12
+**Status:** Ready for planning
+
+<domain>
+## Phase Boundary
+
+Enable real insurance billing with payer management, patient insurance records, per-payer fee schedules, and CMS-1500 PDF generation. Extends the existing superbill system (Phase 4) with insurance infrastructure. Electronic claim submission and clearinghouse integration are out of scope (Phase V3-01).
+
+</domain>
+
+<decisions>
+## Implementation Decisions
+
+### Payer Management
+- New tab in the Admin panel (alongside Staff, Branding, Compliance)
+- Essential fields only: name, payer ID (for claims routing), phone, address, active/inactive toggle
+- No electronic payer ID yet — deferred to clearinghouse integration (V3-01)
+- Pre-seed ~10 common California payers (VSP, EyeMed, Davis Vision, Medicare, Medi-Cal, etc.) in database seed + manual CRUD
+- Admin + Owner roles only (matches staff management pattern)
+
+### Patient Insurance Capture
+- New "Insurance" tab on the patient detail page (alongside Demographics, Encounters, Flowsheets)
+- Primary + secondary insurance slots (two records max)
+- Dedicated PatientInsurance DB table with FK to InsurancePayer (not JSONB)
+- Standard billing fields per record:
+  - Payer (dropdown from payer list)
+  - Subscriber ID (member ID)
+  - Group number
+  - Plan name
+  - Relationship to subscriber (self/spouse/child/other)
+  - Subscriber name + DOB (if different from patient)
+- Sufficient for CMS-1500 Boxes 1a, 4, 7, 9, 11
+
+### Fee Schedule Design
+- Per-payer fee overrides on top of a base fee catalog
+- Base fee catalog moved from hardcoded CPT_CATALOG (TypeScript/Python) to a DB table (FeeScheduleItem)
+- Seed base fees with current CPT_CATALOG values; admin can edit via UI
+- If payer has a negotiated rate for a CPT code, use it; otherwise fall back to base fee
+- No effective dates — single active fee per payer-CPT pair; admin updates when rates change
+- Fee management nested under payer detail in admin panel (click payer → see/edit fee overrides)
+- Separate admin section for base fee catalog
+
+### CMS-1500 PDF Generation
+- Clean professional layout (NOT red government form replica) — clinic header, patient/insurance info, service lines table, totals
+- Server-side generation using reportlab (Python) — FastAPI endpoint returns binary PDF
+- Download button available from both billing dashboard row AND encounter superbill view
+- Downloading PDF does NOT auto-transition claim status — separate manual action for status changes
+- Superbill must be in "ready_to_bill" or later status to generate PDF
+
+### Claim Status Tracking
+- Existing ClaimStatus enum already covers: draft → ready_to_bill → submitted → accepted → rejected
+- Status transitions remain manual actions in the billing dashboard and encounter view
+- No automated submission workflow in this phase
+
+### Claude's Discretion
+- Exact payer seed data (which CA payers to include)
+- PatientInsurance migration strategy (whether to migrate existing JSONB insurance data or start fresh)
+- Base fee catalog admin UI layout
+- CMS-1500 PDF visual design details (typography, spacing, clinic logo inclusion)
+- Whether superbill line items auto-populate fees on creation vs on-demand recalculation
+- Exact reportlab layout implementation details
+
+</decisions>
+
+<specifics>
+## Specific Ideas
+
+- Payer management should feel like the existing Staff management tab — same glass-card table pattern, same CRUD modal pattern
+- Fee schedule editing should feel spreadsheet-like — CPT code, description, base fee, payer override fee in a table
+- Patient insurance tab should show primary/secondary as two distinct glass cards with clear visual hierarchy
+- CMS-1500 PDF should include the clinic's logo and NPI prominently
+
+</specifics>
+
+<code_context>
+## Existing Code Insights
+
+### Reusable Assets
+- `backend/db/models/tenant/clinical.py`: Superbill + SuperbillLineItem models with ClaimStatus enum — extend with insurance FKs
+- `backend/api/routes/billing.py`: Full superbill CRUD, MDM calculation, CPT-ICD validation — extend with fee lookup
+- `backend/api/routes/billing_list.py`: Superbill list endpoint with status/date filters
+- `backend/schemas/billing.py`: Pydantic models for superbill operations — extend for payer/insurance
+- `store/billingStore.ts` + `store/billingDashboardStore.ts`: Zustand stores for superbill operations
+- `components/billing/SuperbillEditor.tsx`: Superbill line item editor with CptAddDropdown
+- `app/(tenant)/[tenant]/billing/page.tsx`: Billing dashboard with status filters and CSV export
+- `lib/utils/cms1500.ts`: CMS-1500 JSON builder + validator — PDF endpoint replaces downloadCms1500Json
+- `types/billing.ts`: TypeScript types including CPT_CATALOG constant (will be replaced by API data)
+- `app/(tenant)/[tenant]/admin/page.tsx`: Admin panel with tabbed layout — add Payers tab
+- `app/(tenant)/[tenant]/patients/[patientId]/page.tsx`: Patient detail with tabs — add Insurance tab
+
+### Established Patterns
+- BFF proxy: `app/api/<resource>/route.ts` → `proxyToFastAPI(request, '/api/<resource>/')`
+- Admin panel uses tabbed glass-card layout with role gating (admin/owner)
+- Patient detail uses tabbed layout with glass cards per section
+- Zustand stores: create with devtools, async fetch with loading/error/saving state
+- SQLAlchemy enums stored as VARCHAR (native_enum=False)
+- Alembic migrations with DO blocks for idempotent operations
+
+### Integration Points
+- `backend/api/main.py`: Register new payer, insurance, fee schedule routers
+- `backend/db/models/tenant/clinical.py`: Add InsurancePayer, PatientInsurance, FeeScheduleItem models
+- `backend/seed_db.py`: Add payer seed data
+- Superbill creation flow: Look up patient's primary insurance → resolve payer fee schedule → populate line item fees
+- CMS-1500 PDF endpoint: Read superbill + patient insurance + payer info → generate PDF with reportlab
+
+</code_context>
+
+<deferred>
+## Deferred Ideas
+
+None — discussion stayed within phase scope
+
+</deferred>
+
+---
+
+*Phase: 09-claims-basics*
+*Context gathered: 2026-03-12*
