@@ -144,14 +144,86 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 
 ---
 
-## V2 Roadmap (Post-MVP)
+## V2 Milestone (Post-MVP)
 
-Features planned after MVP launch. No plans written yet — these are scoped ideas.
+Build order: Phase 8 → 9 → 10 → 11 → 12
 
-| # | Feature | Description |
-|---|---------|-------------|
-| V2-01 | **Fee Schedule Management** | Admin UI for clinic-specific CPT fee schedules. DB table (`fee_schedules`) with tenant-scoped CRUD. Replaces hardcoded `CPT_CATALOG`. Support per-payer fee schedules later. |
-| V2-02 | **AI Scribe E2E** | Audio transcript → SOAP note generation, accept/reject flow |
-| V2-03 | **Encounter Addenda** | Timestamped amendments to finalized encounters without reopening |
-| V2-04 | **Patient Rx History** | Longitudinal refraction history on patient detail page |
-| V2-05 | **Multi-payer Billing** | Per-payer fee schedules, ERA/EOB import, claim status tracking |
+- [ ] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics
+- [ ] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
+- [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
+- [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
+- [ ] **Phase 12: Mobile/Tablet UX** - Responsive pass on Schedule, Optical, Patients, Dashboard, Encounter; bottom nav on mobile
+
+### Phase 8: Analytics Dashboard
+**Goal**: Replace placeholder analytics charts with 7 real data visualizations covering clinical and financial metrics
+**Depends on**: Phase 2 (requires real encounter, billing, patient, appointment data)
+**Requirements**: Analytics page already scaffolded with placeholder cards. Entitlement gate (ADVANCED_ANALYTICS) exists.
+**Success Criteria** (what must be TRUE):
+  1. Analytics page displays 7 real charts with data from the database (no "Chart coming soon" placeholders)
+  2. Date range picker (7d/30d/90d/6mo) filters all chart data
+  3. Charts show encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, and Rx/optical metrics
+  4. Page remains gated behind ADVANCED_ANALYTICS entitlement
+
+### Phase 9: Claims Basics
+**Goal**: Enable real insurance billing with payer management, patient insurance records, fee schedules, and CMS-1500 PDF generation
+**Depends on**: Phase 4 (requires superbill system)
+**Requirements**: New DB models (InsurancePayer, FeeSchedule, PatientInsurance). Extend Superbill with claim fields.
+**Success Criteria** (what must be TRUE):
+  1. Admin can CRUD insurance payers and manage per-payer fee schedules
+  2. Patient detail shows primary/secondary insurance with subscriber info
+  3. Superbill auto-populates line item fees from patient's payer fee schedule
+  4. Posted superbills can generate downloadable CMS-1500 PDF forms
+  5. Claims track status: Draft → Posted → Submitted → Accepted/Rejected
+
+### Phase 10: Reporting & Exports
+**Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
+**Depends on**: Phase 9 (CMS-1500 generation), Phase 8 (aggregate queries)
+**Requirements**: reportlab for PDF generation. Existing CSV pattern from audit logs.
+**Success Criteria** (what must be TRUE):
+  1. Schedule page has "Export Day Summary" button generating PDF/CSV of daily encounters
+  2. Billing page has "Monthly Report" button generating revenue-by-payer PDF
+  3. Encounter page has "Print Summary" button generating patient-friendly encounter summary
+  4. Billing page supports batch CMS-1500 export (select multiple → ZIP download)
+
+### Phase 11: AI Scribe Audio
+**Goal**: Clinicians record audio during encounters, which is transcribed and structured into SOAP notes automatically
+**Depends on**: Phase 2 (existing ai_scribe.py text→SOAP endpoint)
+**Requirements**: Deepgram API key. Supabase Storage bucket for audio. Web Audio API / MediaRecorder.
+**Success Criteria** (what must be TRUE):
+  1. Encounter page has mic button that records audio with waveform visualization
+  2. Recorded audio is transcribed via Deepgram and displayed as editable transcript
+  3. Transcript feeds into existing AI Scribe pipeline → SOAP + structured JSON
+  4. User can review and accept auto-populated encounter fields
+  5. Audio files stored in Supabase Storage linked to encounter for audit trail
+
+### Phase 12: Mobile/Tablet UX
+**Goal**: Key pages are responsive and usable on tablets and phones with touch-friendly interactions
+**Depends on**: All prior phases (responsive pass on existing pages)
+**Requirements**: Tailwind responsive utilities only — no new framework.
+**Success Criteria** (what must be TRUE):
+  1. Schedule, Optical, Patients, Dashboard, and Encounter pages render correctly on tablet (768px) and phone (375px)
+  2. Bottom tab navigation replaces sidebar on mobile screens
+  3. All interactive elements have minimum 44px tap targets
+  4. No horizontal scrolling on mobile for primary content areas
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 8. Analytics Dashboard | 0/? | Not started | — |
+| 9. Claims Basics | 0/? | Not started | — |
+| 10. Reporting & Exports | 0/? | Not started | — |
+| 11. AI Scribe Audio | 0/? | Not started | — |
+| 12. Mobile/Tablet UX | 0/? | Not started | — |
+
+---
+
+## V3 Roadmap (Future)
+
+| # | Feature | Notes |
+|---|---------|-------|
+| V3-01 | Clearinghouse Integration | Electronic claim submission via Availity/Change Healthcare, ERA/EOB |
+| V3-02 | Full Revenue Cycle | Payment posting, aging reports, denial management, patient statements |
+| V3-03 | Patient Portal | Separate frontend: Rx view, appointments, intake, secure messaging |
+| V3-04 | Smart Scheduling | Appointment type durations, availability rules, waitlist, auto-fill cancellations |
+| V3-05 | Real-time Ambient AI Scribe | WebSocket streaming, speaker diarization, live transcription during encounter |
+| V3-06 | Multi-location Support | Tenant/location hierarchy, cross-location scheduling |
+| V3-07 | Lab Integration | HL7/FHIR interface engine for lab orders and results |
