@@ -41,6 +41,12 @@ export function clearEphi() {
     keysToRemove.forEach((key) => localStorage.removeItem(key));
   }
 
+  // Force-close any Radix Dialog portals still in the DOM.
+  // Prevents orphaned black overlays when logout races with React state updates.
+  if (typeof document !== "undefined") {
+    document.querySelectorAll("[data-radix-portal]").forEach((el) => el.remove());
+  }
+
   // Reset clinical Zustand stores to empty state
   // These stores contain ePHI and must be cleared on logout
   useEncounterStore.setState({ encounters: {}, finalizeModalOpen: false });

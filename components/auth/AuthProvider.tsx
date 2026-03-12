@@ -12,6 +12,7 @@ import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { hydrateFromSupabaseSession } from "@/lib/auth/session-hydrator";
 import { useSessionStore } from "@/store/sessionStore";
+import { clearEphi } from "@/components/auth/LogoutButton";
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -44,7 +45,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           .getState()
           .setSession(hydrateFromSupabaseSession(session));
       } else if (event === "SIGNED_OUT") {
+        clearEphi();
         useSessionStore.getState().clearSession();
+        // Hard navigation to fully destroy all DOM (portals, overlays, etc.)
+        window.location.href = "/login";
       }
     });
 
