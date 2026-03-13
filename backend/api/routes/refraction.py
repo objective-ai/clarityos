@@ -75,14 +75,41 @@ async def sync_refraction(
         )
         db.add(rx)
 
+    # Update OD fields
     if payload.od:
         rx.od_sphere = payload.od.sphere
         rx.od_cylinder = payload.od.cylinder
         rx.od_axis = payload.od.axis
+        rx.od_add = payload.od.add
+        rx.od_prism = payload.od.prism
+        rx.od_prism_base = payload.od.prism_base
+        rx.od_visual_acuity = payload.od.visual_acuity
+
+    # Update OS fields
     if payload.os:
         rx.os_sphere = payload.os.sphere
         rx.os_cylinder = payload.os.cylinder
         rx.os_axis = payload.os.axis
+        rx.os_add = payload.os.add
+        rx.os_prism = payload.os.prism
+        rx.os_prism_base = payload.os.prism_base
+        rx.os_visual_acuity = payload.os.visual_acuity
+
+    # Update PD fields
+    if payload.pd_distance is not None:
+        rx.pd_distance = payload.pd_distance
+    if payload.pd_near is not None:
+        rx.pd_near = payload.pd_near
+    if payload.pd_od is not None:
+        rx.pd_od = payload.pd_od
+    if payload.pd_os is not None:
+        rx.pd_os = payload.pd_os
+
+    # Update other fields
+    if payload.is_final_rx is not None:
+        rx.is_final_rx = payload.is_final_rx
+    if payload.notes is not None:
+        rx.notes = payload.notes
 
     await db.flush()
     await log_action(
