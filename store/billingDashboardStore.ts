@@ -24,6 +24,7 @@ interface BillingDashboardState {
 interface BillingDashboardActions {
   fetchSuperbills: (status?: ClaimStatus) => Promise<void>;
   setStatusFilter: (status: ClaimStatus | "all") => void;
+  updateClaimStatus: (encounterId: string, newStatus: ClaimStatus) => Promise<void>;
 }
 
 type BillingDashboardStore = BillingDashboardState & BillingDashboardActions;
@@ -64,6 +65,32 @@ export const useBillingDashboardStore = create<BillingDashboardStore>()(
       setStatusFilter: (status) => {
         set({ statusFilter: status }, false, "setStatusFilter");
         get().fetchSuperbills(status === "all" ? undefined : status);
+      },
+
+      updateClaimStatus: async (encounterId, newStatus) => {
+        try {
+          await apiFetch(`/api/encounters/${encounterId}/superbill`, {
+            method: "PATCH",
+            body: JSON.stringify({ claimStatus: newStatus }),
+          });
+          set(
+            {
+              superbills: get().superbills.map((sb) =>
+                sb.encounterId === encounterId
+                  ? { ...sb, claimStatus: newStatus }
+                  : sb
+              ),
+            },
+            false,
+            "updateClaimStatus/success",
+          );
+        } catch (err) {
+          set(
+            { error: err instanceof Error ? err.message : "Failed to update status" },
+            false,
+            "updateClaimStatus/error",
+          );
+        }
       },
     }),
     { name: "ClarityOS/BillingDashboard" },

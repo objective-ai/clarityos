@@ -58,6 +58,16 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
+def _safe_optical_status(raw: str | None) -> OpticalStatus:
+    """Convert DB value to OpticalStatus, falling back to WAITING for invalid values."""
+    if not raw:
+        return OpticalStatus.WAITING
+    try:
+        return OpticalStatus(raw)
+    except ValueError:
+        return OpticalStatus.WAITING
+
+
 def _compute_se(sphere: Decimal | None, cylinder: Decimal | None) -> Decimal | None:
     """Compute spherical equivalent: SE = sphere + (cylinder / 2)."""
     if sphere is None:
@@ -226,7 +236,7 @@ async def get_optical_queue(
                 pd_od=final_rx.pd_od,
                 pd_os=final_rx.pd_os,
                 rx_change_alert=rx_change_alert,
-                status=OpticalStatus(enc.optical_status) if enc.optical_status else OpticalStatus.WAITING,
+                status=_safe_optical_status(enc.optical_status),
             )
         )
 

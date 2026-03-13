@@ -747,7 +747,7 @@ def _seed_enc_hargrove(session: Session) -> None:
     if session.get(Encounter, ENC_IDS[0]):
         warn("Encounter 1 (Hargrove) exists — skipping"); return
 
-    enc_date = datetime.date(2026, 2, 20)
+    enc_date = TODAY  # Optical queue needs finalized encounters on TODAY
     session.add(Encounter(
         id=ENC_IDS[0], tenant_id=TENANT_ID,
         patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
@@ -833,7 +833,7 @@ def _seed_enc_vasquez(session: Session) -> None:
     if session.get(Encounter, ENC_IDS[1]):
         warn("Encounter 2 (Vasquez) exists — skipping"); return
 
-    enc_date = datetime.date(2026, 2, 21)
+    enc_date = TODAY  # Optical queue needs finalized encounters on TODAY
     session.add(Encounter(
         id=ENC_IDS[1], tenant_id=TENANT_ID,
         patient_id=PATIENT_IDS[1], provider_id=STAFF_SARAH_ID,

@@ -169,8 +169,10 @@ export default function OpticalPage() {
           </div>
           <div className="text-center">
             <p className="text-subhead">No patients in optical queue</p>
-            <p className="text-caption text-[var(--text-muted)] mt-1">
-              Patients appear here after their encounter is finalized with a final prescription.
+            <p className="text-caption text-[var(--text-muted)] mt-1 max-w-sm">
+              Patients appear here after their encounter is finalized and a refraction
+              is marked as the final Rx. If encounters are missing, check that
+              &quot;Use as Final Rx&quot; is enabled on a refraction.
             </p>
           </div>
         </div>

@@ -3,8 +3,16 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Download } from "lucide-react";
+import { Download, MoreHorizontal, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useBillingDashboardStore } from "@/store/billingDashboardStore";
@@ -12,7 +20,7 @@ import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
 import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
-// Status badge styling
+// Status badge styling + descriptions
 // ---------------------------------------------------------------------------
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
@@ -23,15 +31,75 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; 
   rejected:      { bg: "rgba(251,113,133,0.10)", text: "#FB7185", border: "rgba(251,113,133,0.25)", label: "Rejected" },
 };
 
+const STATUS_DESCRIPTIONS: Record<string, string> = {
+  draft:         "Superbill created but not yet reviewed or posted",
+  ready_to_bill: "Posted to billing — ready for claim submission",
+  submitted:     "Claim submitted to insurance/payer",
+  accepted:      "Claim accepted and payment received or approved",
+  rejected:      "Claim rejected — review and resubmit or appeal",
+};
+
 function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
   return (
     <Badge
-      className="text-[10px]"
+      className="text-[10px] cursor-help"
       style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}` }}
+      title={STATUS_DESCRIPTIONS[status] ?? ""}
     >
       {style.label}
     </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Status action transitions
+// ---------------------------------------------------------------------------
+
+const NEXT_ACTIONS: Record<ClaimStatus, { label: string; value: ClaimStatus }[]> = {
+  draft:         [{ label: "Mark Ready to Bill", value: "ready_to_bill" }],
+  ready_to_bill: [{ label: "Mark Submitted", value: "submitted" }],
+  submitted:     [
+    { label: "Mark Accepted", value: "accepted" },
+    { label: "Mark Rejected", value: "rejected" },
+  ],
+  accepted:      [],
+  rejected:      [{ label: "Resubmit", value: "submitted" }],
+};
+
+function StatusActionsMenu({ encounterId, currentStatus }: { encounterId: string; currentStatus: ClaimStatus }) {
+  const updateClaimStatus = useBillingDashboardStore((s) => s.updateClaimStatus);
+  const actions = NEXT_ACTIONS[currentStatus] ?? [];
+
+  if (actions.length === 0) return <span className="inline-block w-[26px]" />;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="p-1.5 rounded-md hover:bg-[var(--accent-dim)] transition-colors"
+          title="Status actions"
+        >
+          <MoreHorizontal size={14} className="text-[var(--text-muted)]" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[180px]">
+        <DropdownMenuLabel className="text-[10px] uppercase text-[var(--text-muted)]">
+          Change Status
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {actions.map((action) => (
+          <DropdownMenuItem
+            key={action.value}
+            onClick={() => updateClaimStatus(encounterId, action.value)}
+            className="text-xs cursor-pointer"
+          >
+            <ChevronRight size={12} className="mr-1.5 text-[var(--accent)]" />
+            {action.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -43,6 +111,9 @@ const FILTERS: { label: string; value: ClaimStatus | "all" }[] = [
   { label: "All", value: "all" },
   { label: "Draft", value: "draft" },
   { label: "Posted", value: "ready_to_bill" },
+  { label: "Submitted", value: "submitted" },
+  { label: "Accepted", value: "accepted" },
+  { label: "Rejected", value: "rejected" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -205,6 +276,7 @@ export default function BillingPage() {
                 <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">CPT Codes</th>
                 <th className="px-4 py-3 text-right text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Total</th>
                 <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Status</th>
+                <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-12"></th>
               </tr>
             </thead>
             <tbody>
@@ -243,6 +315,9 @@ export default function BillingPage() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <StatusBadge status={sb.claimStatus} />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <StatusActionsMenu encounterId={sb.encounterId} currentStatus={sb.claimStatus} />
                   </td>
                 </tr>
               ))}
