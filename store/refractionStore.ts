@@ -78,6 +78,9 @@ interface RefractionStoreActions {
   /** Called once when the component mounts with encounter data from the server */
   init: (encounterId: string, initialRefractions: RefractionDraft[], isReadOnly: boolean) => void;
 
+  /** Update the read-only flag without reinitializing (when encounter finalization status changes) */
+  setIsReadOnly: (value: boolean) => void;
+
   /** Update a single cell value in the draft (called on every keystroke) */
   setCellValue: (colIndex: number, rowKey: RowKey, value: number | string | null) => void;
 
@@ -313,6 +316,10 @@ export const useRefractionStore = create<RefractionStore>()(
           };
         });
         set({ columns, encounterId, isReadOnly }, false, "init");
+      },
+
+      setIsReadOnly(value) {
+        set({ isReadOnly: value }, false, "setIsReadOnly");
       },
 
       setCellValue(colIndex, rowKey, value) {

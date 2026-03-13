@@ -9,10 +9,10 @@ goal: find_root_cause
 
 ## Current Focus
 
-hypothesis: Debounce timer is not firing OR flushSave is being blocked by a saveStatus check
-test: Added comprehensive logging to trace entire flow: onChange → setCellValue → scheduleSave → flushSave → saveColumnToAPI
-expecting: Console logs will show where the flow breaks
-next_action: Run browser, enter value in refraction field, check console for log sequence
+hypothesis: CONFIRMED - RefractionGrid's useEffect has `isReadOnly` in deps, causing init() to be called on every parent re-render, wiping user input
+test: Fixed dependency array to only include [encounterId, init, initialRefractions], added separate effect for setIsReadOnly
+expecting: User input should now persist when parent re-renders
+next_action: Verify fix works — user should be able to enter values without them clearing
 
 ## Symptoms
 
@@ -29,31 +29,32 @@ timeline: Happens every time, no PATCH requests at all
 ## Evidence
 
 - timestamp: 2026-03-13
-  checked: RefractionGrid component flow
-  found: RxCell component uses local `rawText` state (line 233) AND store `storedValue` (line 206). On change, `handleChange` calls `setCellValue()` which updates Zustand.
-  implication: Two-layer state; need to verify both update correctly
+  checked: RefractionGrid dependency array
+  found: `useEffect(() => { init(...) }, [encounterId, init, initialRefractions, isReadOnly])` - includes `isReadOnly` in deps
+  implication: **CRITICAL BUG**: If parent component's `isReadOnly` (derived from `isFinalized` or auth state) changes, the effect runs and calls `init()` with empty `initialRefractions = []`, reinitializing the store and clearing user input!
 
 - timestamp: 2026-03-13
-  checked: RxCell useEffect (lines 243-248)
-  found: Effect resets `rawText` when `storedValue` changes AND `!hasFocus`. This prevents external updates from overwriting user typing.
-  implication: When field loses focus, rawText will reset to formatted storedValue. But user is typing INTO the field, so hasFocus should be true.
+  checked: Where isReadOnly comes from in parent
+  found: `const clinicalReadOnly = isFinalized || !canEditClinical;` (line 218) — passed to RefractionGrid. If encounter store updates, this changes.
+  implication: Any change to encounter store (even unrelated) triggers RefractionGrid re-init, wiping user input
 
 - timestamp: 2026-03-13
-  checked: handleChange implementation (lines 290-307)
-  found: Calls `setRawText(raw)` first, then calls `setCellValue(colIndex, rowKey, value)` if parseError is null
-  implication: rawText is updated immediately before store is updated. Good.
-
-- timestamp: 2026-03-13
-  checked: Keyboard handler for Enter/Arrow keys (useRefractionKeyboard.ts lines 232-245)
-  found: When user presses Enter, handler calls `focusCellSelectAll()` to move to NEXT cell AND calls `setFocused()` to update store. This causes BLUR on current cell.
-  implication: **CRITICAL**: When user presses Enter to confirm entry and move to next field, the current field gets onBlur called BEFORE the 1.5s debounce timer fires!
+  checked: Encounter store lifecycle
+  found: EncounterStore updates from API calls, status changes, etc. Any such update causes parent to re-render with possibly different `isReadOnly`.
+  implication: During typing, if ANY encounter store update happens, `isReadOnly` changes, effect runs, `init()` clears all columns with empty draft!
 
 ## Resolution
 
-root_cause: (pending confirmation)
+root_cause: RefractionGrid's useEffect dependency array included `isReadOnly`, causing the init() action to be called on every parent re-render. Since the component doesn't pass initialRefractions (defaults to []), each init() call reinitializes the store with blank drafts, immediately wiping out any user input. Parent re-renders frequently due to encounter store changes, loading states, etc.
 
-fix: (pending)
+fix:
+1. Added new store action `setIsReadOnly()` that updates read-only flag WITHOUT reinitializing columns
+2. Changed RefractionGrid's first useEffect to only depend on [encounterId, init, initialRefractions]
+3. Added second useEffect with [isReadOnly, setIsReadOnly] to update read-only flag when it changes
+4. This separates initialization (one-time per encounter) from read-only state updates (on-demand)
 
-verification: (pending)
+verification: Ready for user testing
 
-files_changed: []
+files_changed:
+  - components/encounter/RefractionGrid.tsx: Split useEffect, removed isReadOnly from init() deps, added setIsReadOnly() effect
+  - store/refractionStore.ts: Added setIsReadOnly() action and logging throughout save flow

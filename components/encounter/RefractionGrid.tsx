@@ -573,15 +573,24 @@ export function RefractionGrid({
   isReadOnly = false,
 }: RefractionGridProps) {
   const init            = useRefractionStore((s) => s.init);
+  const setIsReadOnly   = useRefractionStore((s) => s.setIsReadOnly);
   const hasAnyError     = useRefractionStore((s) => s.columns.some((c) => c.errors.length > 0));
   const isReadOnlyStore = useIsReadOnly();
 
 
   const gridRef = useRef<HTMLDivElement>(null);
 
+  // Initialize store ONLY when encountering a new encounter (mount or navigate).
+  // Never include isReadOnly in deps — it changes often (on parent re-renders) and would
+  // wipe user input by calling init() with empty initialRefractions.
   useEffect(() => {
     init(encounterId, initialRefractions, isReadOnly);
-  }, [encounterId, init, initialRefractions, isReadOnly]);
+  }, [encounterId, init, initialRefractions]);
+
+  // Update read-only flag independently when it changes (e.g., encounter finalized)
+  useEffect(() => {
+    setIsReadOnly(isReadOnly);
+  }, [isReadOnly, setIsReadOnly]);
 
   // No auto-focus — let the user click into the field they want.
   // Auto-focusing Habitual/SPH was hiding the loaded value on first render.
