@@ -31,7 +31,7 @@ import {
   type VitalsSaveStatus,
   type VitalsState,
 } from "@/types/vitals";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, HttpError } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -215,9 +215,8 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
             "loadVitals/loaded"
           );
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "";
           // 404 means no vitals recorded yet — use blank draft (not an error)
-          const isNotFound = msg.includes("not found") || msg.includes("404");
+          const isNotFound = err instanceof HttpError && err.status === 404;
           set(
             (state) => {
               const enc = state.encounters[encounterId];

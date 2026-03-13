@@ -31,7 +31,7 @@ import {
   type StructureFinding,
 } from "@/types/exam-findings";
 import { getFieldMeta } from "@/lib/exam-findings-fields";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, HttpError } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -209,9 +209,9 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
             "loadFindings/loaded"
           );
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "";
           // 404 means no findings saved yet — initialize with blank draft (not an error)
-          if (msg.includes("not found") || msg.includes("404")) {
+          const msg = err instanceof Error ? err.message : "";
+          if (err instanceof HttpError && err.status === 404) {
             set(
               (state) => ({
                 findings: {
