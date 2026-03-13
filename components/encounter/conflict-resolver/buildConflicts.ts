@@ -6,6 +6,9 @@
  */
 
 import type { ScribeStructuredDataV2, ConfidenceLevel } from "@/types/scribe";
+import { ANTERIOR_FIELD_META, POSTERIOR_FIELD_META } from "@/lib/exam-findings-fields";
+import { mapAiStatus } from "@/lib/ai-status-mapper";
+import type { ExamSection } from "@/types/exam-findings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +32,7 @@ export interface ConflictRow {
   confidence: ConfidenceLevel;
   hasConflict: boolean;
   resolution: "keep" | "use_ai";
+  tier: "auto" | "review";
   /** Raw structured data for complex fields (e.g., diagnosis, pupils) */
   aiRawData?: Record<string, unknown>;
 }
@@ -51,6 +55,42 @@ export interface StoreSnapshots {
     od: Record<string, unknown>;
     os: Record<string, unknown>;
   } | null;
+  examAnteriorSaved: boolean;
+  examPosteriorSaved: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Normal-value lookup (derived from field metadata — single source of truth)
+// ---------------------------------------------------------------------------
+
+const NORMAL_VALUES: Record<string, string> = {};
+for (const field of [...ANTERIOR_FIELD_META, ...POSTERIOR_FIELD_META]) {
+  NORMAL_VALUES[field.key] = field.defaultStatus;
+}
+
+function isNormalFinding(
+  section: ConflictSection,
+  fieldKey: string,
+  aiValue: string,
+): boolean {
+  if (section !== "exam_anterior" && section !== "exam_posterior") return false;
+
+  // Extract structure name from fieldKey: "exam.anterior.od.cornea.status" → "cornea"
+  const parts = fieldKey.split(".");
+  if (parts.length < 5) return false;
+  const structure = parts[3];
+  const fieldName = parts[4];
+
+  // Only check status fields, not notes
+  if (fieldName !== "status") return false;
+
+  const normalValue = NORMAL_VALUES[structure];
+  if (!normalValue) return false;
+
+  // Normalize AI value through mapAiStatus for case-insensitive matching
+  const examSection = (section === "exam_anterior" ? "anterior_segment" : "posterior_segment") as ExamSection;
+  const mapped = mapAiStatus(examSection, structure, aiValue, "");
+  return mapped.status === normalValue;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +110,7 @@ function addRow(
   humanValue: string | null,
   aiValue: string | null,
   confidence: ConfidenceLevel,
+  opts?: { examSaved?: boolean },
 ) {
   if (!aiValue) return; // AI has nothing to suggest
 
@@ -77,10 +118,31 @@ function addRow(
   const aiStr = aiValue.trim();
   if (!aiStr) return;
 
-  // Both match → skip (auto-accepted silently)
-  if (humanStr && humanStr === aiStr) return;
+  // Both match — skip IF the exam data was explicitly saved by doctor
+  if (humanStr && humanStr === aiStr) {
+    if (opts?.examSaved !== false) return; // genuine match, skip
+    // examSaved === false: default data, fall through to create auto-tier row
+  }
 
-  const hasConflict = humanStr != null && humanStr !== aiStr;
+  const hasConflict = humanStr != null && humanStr !== aiStr && opts?.examSaved !== false;
+
+  // Tier classification
+  const isEmptyOrDefault = humanStr == null || opts?.examSaved === false;
+  const isHighConf = confidence === "high";
+  const isDx = section === "diagnoses";
+  const isNormal = isNormalFinding(section, fieldKey, aiStr);
+  const isAP = section === "assessment";
+
+  let tier: "auto" | "review";
+  if (isHighConf && isEmptyOrDefault && !isDx && !isAP && !hasConflict) {
+    if (section === "exam_anterior" || section === "exam_posterior") {
+      tier = isNormal ? "auto" : "review";
+    } else {
+      tier = "auto";
+    }
+  } else {
+    tier = "review";
+  }
 
   rows.push({
     section,
@@ -90,8 +152,8 @@ function addRow(
     aiValue: aiStr,
     confidence,
     hasConflict,
-    // Default: keep doctor's entry on conflict, use AI when doctor field is empty
-    resolution: hasConflict ? "keep" : "use_ai",
+    resolution: tier === "auto" ? "use_ai" : (hasConflict ? "keep" : "use_ai"),
+    tier,
   });
 }
 
@@ -175,6 +237,7 @@ export function buildConflicts(
         confidence: pupilConfidence,
         hasConflict: humanPerrl != null && (!!humanPerrl) !== perrlValue,
         resolution: humanPerrl != null && (!!humanPerrl) !== perrlValue ? "keep" : "use_ai",
+        tier: "review",
         aiRawData: { rawPupilText },
       };
       if (humanPerrl == null || (!!humanPerrl) !== perrlValue) {
@@ -196,6 +259,7 @@ export function buildConflicts(
           confidence: pupilConfidence,
           hasConflict: humanRapd != null && (!!humanRapd) !== rapdValue,
           resolution: humanRapd != null && (!!humanRapd) !== rapdValue ? "keep" : "use_ai",
+          tier: "review",
           aiRawData: { rawPupilText },
         };
         if (humanRapd == null || (!!humanRapd) !== rapdValue) {
@@ -221,6 +285,10 @@ export function buildConflicts(
       for (const [structure, finding] of Object.entries(structures)) {
         const prettyStructure = structure.replace(/_/g, " ");
 
+        const examSaved = sectionKey === "exam_anterior"
+          ? stores.examAnteriorSaved
+          : stores.examPosteriorSaved;
+
         // Status
         if (finding.status) {
           const humanStatus = str(eyeFindings?.[structure]?.status);
@@ -232,6 +300,7 @@ export function buildConflicts(
             humanStatus,
             finding.status,
             finding.confidence,
+            { examSaved },
           );
         }
 
@@ -246,6 +315,7 @@ export function buildConflicts(
             humanNotes,
             finding.notes,
             finding.confidence,
+            { examSaved },
           );
         }
       }
@@ -292,6 +362,7 @@ export function buildConflicts(
           confidence: aiDx.confidence,
           hasConflict: false,
           resolution: "keep", // Doctor must explicitly confirm new ICD-10 codes
+          tier: "review",
           aiRawData: {
             icdCode: aiDx.icdCode,
             description: aiDx.description,
