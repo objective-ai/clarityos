@@ -7,7 +7,7 @@ import { useCurrentUser } from "@/store/sessionStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useAppointmentStore } from "@/store/appointmentStore";
-import { clinicToday, formatClinicTime, formatClinicDateTime } from "@/lib/timezone";
+import { clinicToday, formatClinicTime } from "@/lib/timezone";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -70,17 +70,23 @@ const BASE_ACTIONS = [
 
 
 function formatEncounterDate(iso: string, tz: string): string {
-  const time = formatClinicTime(iso, tz);
-  // Simple today/yesterday check using clinic timezone
+  // encounter_date is a DATE-only field ("YYYY-MM-DD") — no time component.
+  // Parsing it with new Date() would yield UTC midnight, which shifts the
+  // displayed "time" by the clinic's UTC offset (e.g. 5:00 PM PDT). Instead,
+  // we compare the date string directly and show only relative date labels.
   const today = clinicToday(tz);
   const dateOnly = iso.slice(0, 10);
-  if (dateOnly === today) return `Today, ${time}`;
+  if (dateOnly === today) return "Today";
   // Yesterday check
   const d = new Date(today + "T12:00:00");
   d.setDate(d.getDate() - 1);
   const yesterday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  if (dateOnly === yesterday) return `Yesterday, ${time}`;
-  return formatClinicDateTime(iso, tz);
+  if (dateOnly === yesterday) return "Yesterday";
+  // Older: format as "Mar 13" using noon-anchored date to avoid UTC shift
+  return new Date(dateOnly + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function DashboardPage({
