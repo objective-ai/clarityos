@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
@@ -9,6 +9,7 @@ import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/ex
 import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
 import { apiFetch } from "@/lib/api-client";
 import { useVitalsStore, useVitalsDraft } from "@/store/vitalsStore";
+import type { VitalsDraft } from "@/types/vitals";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
 import { useDiagnosisStore, useDiagnoses } from "@/store/diagnosisStore";
 import { useRefractionStore } from "@/store/refractionStore";
@@ -81,6 +82,8 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { applyResolutions } from "@/components/encounter/conflict-resolver/applyResolutions";
+import type { ConflictRow } from "@/components/encounter/conflict-resolver/buildConflicts";
 
 // Refraction field mapping (used for audit-trail revert)
 const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
@@ -90,6 +93,41 @@ const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
   add:      { od: "od_add",      os: "os_add" },
 };
 const FINAL_RX_COL = 3;
+
+// ---------------------------------------------------------------------------
+// Undo Snapshot (staged commit flow)
+// ---------------------------------------------------------------------------
+
+interface UndoSnapshot {
+  encounter: {
+    chiefComplaint: string;
+    assessmentAndPlan: string;
+  };
+  vitals: unknown;
+  examAnterior: unknown;
+  examPosterior: unknown;
+  diagnoses: unknown;
+  refractionColumns: unknown;
+  appliedCount: number;
+}
+
+function captureUndoSnapshot(encounterId: string): Omit<UndoSnapshot, "appliedCount"> {
+  const enc = useEncounterStore.getState().encounters[encounterId];
+  const anteriorKey = `${encounterId}:anterior_segment`;
+  const posteriorKey = `${encounterId}:posterior_segment`;
+
+  return {
+    encounter: {
+      chiefComplaint: enc?.chiefComplaint ?? "",
+      assessmentAndPlan: enc?.assessmentAndPlan ?? "",
+    },
+    vitals: structuredClone(useVitalsStore.getState().encounters[encounterId] ?? null),
+    examAnterior: structuredClone(useExamFindingsStore.getState().findings[anteriorKey as FindingsStoreKey] ?? null),
+    examPosterior: structuredClone(useExamFindingsStore.getState().findings[posteriorKey as FindingsStoreKey] ?? null),
+    diagnoses: structuredClone(useDiagnosisStore.getState().encounters[encounterId]?.diagnoses ?? []),
+    refractionColumns: structuredClone(useRefractionStore.getState().columns),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Encounter Workflow Header
@@ -185,6 +223,9 @@ export default function EncounterPage({
   const [superbillOpen, setSuperbillOpen] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [reviewMode, setReviewMode] = useState(false);
+  const undoRef = useRef<UndoSnapshot | null>(null);
+  const [undoToast, setUndoToast] = useState<{ count: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [exitingReview, setExitingReview] = useState(false);
 
   // Required-field gate for the Finalize button
   const vitalsDraftForFinalize = useVitalsDraft(params.encounterId);
@@ -208,7 +249,7 @@ export default function EncounterPage({
       revertChiefComplaint(eid, (oldValue as string) ?? "");
     } else if (field.startsWith("vitals.")) {
       const vitalField = field.replace("vitals.", "");
-      revertVitalsField(eid, vitalField as never, oldValue);
+      revertVitalsField(eid, vitalField as keyof VitalsDraft, oldValue);
     } else if (field.startsWith("exam.")) {
       const [, section, eye, structure, fieldName] = field.split(".");
       revertStructureField(eid, section as ExamSection, eye as "od" | "os", structure, fieldName as keyof StructureFinding, oldValue as string);
@@ -299,6 +340,104 @@ export default function EncounterPage({
       setStatusError(e instanceof Error ? e.message : "Failed to revert to pre-test.");
     }
   }, [encounterState?.appointmentId, loadEncounter, params.encounterId]);
+
+  // --- Staged Commit: commit handler ---
+  const handleCommit = useCallback(async (
+    autoRows: ConflictRow[],
+    reviewRows: ConflictRow[],
+    soapText: string,
+  ) => {
+    // 1. Snapshot before writing
+    const snapshot = captureUndoSnapshot(params.encounterId);
+
+    // 2. Pre-filter: auto-tier (all use_ai) + review-tier (only use_ai)
+    const rowsToApply = [
+      ...autoRows.filter((r) => r.resolution === "use_ai"),
+      ...reviewRows.filter((r) => r.resolution === "use_ai"),
+    ];
+
+    // 3. Apply
+    const count = await applyResolutions(params.encounterId, rowsToApply, soapText);
+
+    // 4. Store snapshot with count
+    undoRef.current = { ...snapshot, appliedCount: count };
+
+    // 5. Exit animation
+    setExitingReview(true);
+    setTimeout(() => {
+      setReviewMode(false);
+      setExitingReview(false);
+      setAiStructuredData(params.encounterId, null);
+    }, 200);
+
+    // 6. Show undo toast
+    const timer = setTimeout(() => {
+      undoRef.current = null;
+      setUndoToast(null);
+    }, 8000);
+    setUndoToast({ count, timer });
+  }, [params.encounterId, setAiStructuredData]);
+
+  // --- Staged Commit: undo handler ---
+  const handleUndo = useCallback(() => {
+    const snapshot = undoRef.current;
+    if (!snapshot) return;
+
+    const eid = params.encounterId;
+
+    // Restore encounter fields (A&P included per spec)
+    useEncounterStore.getState().setChiefComplaint(eid, snapshot.encounter.chiefComplaint);
+    useEncounterStore.getState().setAssessmentAndPlan(eid, snapshot.encounter.assessmentAndPlan);
+
+    // Restore vitals
+    if (snapshot.vitals) {
+      const vitalsState = useVitalsStore.getState();
+      useVitalsStore.setState({
+        encounters: { ...vitalsState.encounters, [eid]: snapshot.vitals },
+      } as Partial<typeof vitalsState>);
+    }
+
+    // Restore exam findings
+    const anteriorKey = `${eid}:anterior_segment`;
+    const posteriorKey = `${eid}:posterior_segment`;
+    if (snapshot.examAnterior) {
+      const examState = useExamFindingsStore.getState();
+      useExamFindingsStore.setState({
+        findings: { ...examState.findings, [anteriorKey]: snapshot.examAnterior },
+      } as Partial<typeof examState>);
+    }
+    if (snapshot.examPosterior) {
+      const examState = useExamFindingsStore.getState();
+      useExamFindingsStore.setState({
+        findings: { ...examState.findings, [posteriorKey]: snapshot.examPosterior },
+      } as Partial<typeof examState>);
+    }
+
+    // Restore refraction
+    if (snapshot.refractionColumns) {
+      const rxState = useRefractionStore.getState();
+      useRefractionStore.setState({
+        columns: snapshot.refractionColumns,
+      } as Partial<typeof rxState>);
+    }
+
+    // NOTE: Diagnoses NOT auto-removed (clinical safety per spec)
+
+    // Fire audit log for revert
+    fetch(`/api/encounters/${eid}/ai-scribe/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes: { reverted: true, count: snapshot.appliedCount } }),
+    }).catch(() => {});
+
+    // Clean up toast
+    if (undoToast?.timer) clearTimeout(undoToast.timer);
+    undoRef.current = null;
+    setUndoToast(null);
+
+    // Re-open review mode
+    setReviewMode(true);
+  }, [params.encounterId, undoToast]);
 
   // Show full-page skeleton while encounter header is loading
   if (encounterLoadStatus === "loading" || encounterLoadStatus === "idle") {
@@ -446,15 +585,14 @@ export default function EncounterPage({
       </div>
 
       {/* Review Mode: inline review section replaces clinical forms */}
-      {reviewMode ? (
-        <InlineReviewSection
-          encounterId={params.encounterId}
-          onClose={() => setReviewMode(false)}
-          onApply={() => {
-            setReviewMode(false);
-            setAiStructuredData(params.encounterId, null);
-          }}
-        />
+      {(reviewMode || exitingReview) ? (
+        <div className={exitingReview ? "animate-fade-out" : ""}>
+          <InlineReviewSection
+            encounterId={params.encounterId}
+            onClose={() => setReviewMode(false)}
+            onCommit={handleCommit}
+          />
+        </div>
       ) : (
         <>
           <div id="section-vitals">
@@ -471,7 +609,7 @@ export default function EncounterPage({
               <CardContent className="p-6">
                 <RefractionGrid
                   encounterId={params.encounterId}
-                  initialRefractions={[]}
+
                   isReadOnly={clinicalReadOnly}
                 />
               </CardContent>
@@ -542,6 +680,32 @@ export default function EncounterPage({
 
       {/* Spacer so fixed bottom bar doesn't overlap content */}
       <div className="h-16" />
+
+      {/* Undo toast */}
+      {undoToast && (
+        <div className="fixed bottom-20 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--glass-border)] shadow-[var(--shadow-lg)] animate-fade-in">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3.5 7.5l2.5 2.5 4.5-5" />
+          </svg>
+          <span className="text-xs font-medium text-[var(--text-primary)]">
+            {undoToast.count} field{undoToast.count !== 1 ? "s" : ""} applied
+          </span>
+          <button
+            type="button"
+            onClick={handleUndo}
+            className="text-xs px-3 py-1.5 rounded-lg font-semibold text-[var(--accent)] border border-[var(--accent)]/30 hover:bg-[var(--accent)]/10 transition-colors"
+          >
+            Undo
+          </button>
+          {/* 8-second progress bar */}
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl overflow-hidden">
+            <div
+              className="h-full bg-[var(--accent)]/30"
+              style={{ animation: "shrink-bar 8s linear forwards" }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Status action error (shown above bottom bar) */}
       {statusError && (
