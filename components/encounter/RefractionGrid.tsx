@@ -195,21 +195,34 @@ const ErrorTooltip = memo(function ErrorTooltip({ message }: { message: string }
 interface RxCellProps {
   colIndex:   number;
   rowKey:     RowKey;
-  isFocused:  boolean;
   isReadOnly: boolean;
-  error?:     string;
 }
 
 const RxCell = memo(function RxCell({
   colIndex,
   rowKey,
-  isFocused,
   isReadOnly,
-  error,
 }: RxCellProps) {
   const storedValue = useRefractionStore(
     useCallback(
       (s) => getDraftValue(s.columns[colIndex].draft, rowKey),
+      [colIndex, rowKey]
+    )
+  );
+  const isFocused = useRefractionStore(
+    useCallback(
+      (s) => s.focusedCell?.colIndex === colIndex && s.focusedCell?.rowKey === rowKey,
+      [colIndex, rowKey]
+    )
+  );
+  const error = useRefractionStore(
+    useCallback(
+      (s) => {
+        const errors = s.columns[colIndex].errors;
+        if (!errors.length) return undefined;
+        const fieldPath = rowKey.replace("_", ".");
+        return errors.find((e) => e.field === fieldPath || e.field === "_column")?.message;
+      },
       [colIndex, rowKey]
     )
   );
@@ -482,6 +495,37 @@ function SectionRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ErrorSummary — detailed error list below the grid (subscribes independently)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ErrorSummary = memo(function ErrorSummary() {
+  const columns = useRefractionStore((s) => s.columns);
+
+  return (
+    <div className="mt-3 space-y-1">
+      {columns.map((col, colIndex) =>
+        col.errors.map((err, i) => (
+          <div
+            key={`${colIndex}-${i}`}
+            className="flex items-start gap-2 px-3 py-1.5 rounded text-xs animate-slide-down"
+            style={{
+              background: "rgba(248, 113, 113, 0.07)",
+              border: "1px solid rgba(248, 113, 113, 0.20)",
+              color: "var(--state-critical)",
+            }}
+          >
+            <span className="flex-shrink-0 font-bold">
+              {REFRACTION_COLUMN_LABELS[REFRACTION_COLUMNS[colIndex]]}:
+            </span>
+            <span>{err.message}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RefractionGrid — main export
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -496,9 +540,8 @@ export function RefractionGrid({
   initialRefractions = [],
   isReadOnly = false,
 }: RefractionGridProps) {
-  const init          = useRefractionStore((s) => s.init);
-  const focusedCell   = useRefractionStore((s) => s.focusedCell);
-  const allErrors     = useRefractionStore((s) => s.columns.map((c) => c.errors));
+  const init            = useRefractionStore((s) => s.init);
+  const hasAnyError     = useRefractionStore((s) => s.columns.some((c) => c.errors.length > 0));
   const isReadOnlyStore = useIsReadOnly();
 
 
@@ -513,19 +556,6 @@ export function RefractionGrid({
 
   const colCount = REFRACTION_COLUMNS.length;
 
-  const getCellError = useCallback(
-    (colIndex: number, rowKey: RowKey): string | undefined => {
-      const errors = allErrors[colIndex];
-      if (!errors.length) return undefined;
-      const fieldPath = rowKey.replace("_", ".");
-      const err = errors.find(
-        (e) => e.field === fieldPath || e.field === `_column`
-      );
-      return err?.message;
-    },
-    [allErrors]
-  );
-
   return (
     <div ref={gridRef} className="relative">
       <div className="flex items-center justify-between mb-3">
@@ -539,7 +569,7 @@ export function RefractionGrid({
         </div>
 
         <div className="flex items-center gap-2">
-          {allErrors.some((e) => e.length > 0) && (
+          {hasAnyError && (
             <span
               className="text-xs px-2 py-1 rounded"
               style={{
@@ -630,30 +660,22 @@ export function RefractionGrid({
                       </span>
                     </td>
 
-                    {REFRACTION_COLUMNS.map((_, colIndex) => {
-                      const focused =
-                        focusedCell?.colIndex === colIndex &&
-                        focusedCell?.rowKey === rowKey;
-
-                      return (
-                        <td
-                          key={colIndex}
-                          className="align-middle"
-                          style={{
-                            padding: "4px 6px",
-                          }}
-                          role="gridcell"
-                        >
-                          <RxCell
-                            colIndex={colIndex}
-                            rowKey={rowKey}
-                            isFocused={focused}
-                            isReadOnly={isReadOnly || isReadOnlyStore}
-                            error={getCellError(colIndex, rowKey)}
-                          />
-                        </td>
-                      );
-                    })}
+                    {REFRACTION_COLUMNS.map((_, colIndex) => (
+                      <td
+                        key={colIndex}
+                        className="align-middle"
+                        style={{
+                          padding: "4px 6px",
+                        }}
+                        role="gridcell"
+                      >
+                        <RxCell
+                          colIndex={colIndex}
+                          rowKey={rowKey}
+                          isReadOnly={isReadOnly || isReadOnlyStore}
+                        />
+                      </td>
+                    ))}
                   </tr>
                 </React.Fragment>
               );
@@ -662,28 +684,7 @@ export function RefractionGrid({
         </table>
       </div>
 
-      {allErrors.some((e) => e.length > 0) && (
-        <div className="mt-3 space-y-1">
-          {allErrors.map((errors, colIndex) =>
-            errors.map((err, i) => (
-              <div
-                key={`${colIndex}-${i}`}
-                className="flex items-start gap-2 px-3 py-1.5 rounded text-xs animate-slide-down"
-                style={{
-                  background: "rgba(248, 113, 113, 0.07)",
-                  border: "1px solid rgba(248, 113, 113, 0.20)",
-                  color: "var(--state-critical)",
-                }}
-              >
-                <span className="flex-shrink-0 font-bold">
-                  {REFRACTION_COLUMN_LABELS[REFRACTION_COLUMNS[colIndex]]}:
-                </span>
-                <span>{err.message}</span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      {hasAnyError && <ErrorSummary />}
 
     </div>
   );

@@ -87,8 +87,8 @@ interface RefractionStoreActions {
   /** Immediately flush a column to the API (called on blur of last field) */
   flushSave: (colIndex: number) => void;
 
-  /** Called by the API layer on success */
-  commitColumn: (colIndex: number, savedDraft: RefractionDraft) => void;
+  /** Called by the API layer on success — merges server ID into live draft */
+  commitColumn: (colIndex: number, serverId: string | null) => void;
 
   /** Called by the API layer on error */
   setColumnError: (colIndex: number, errors: { field: string; message: string }[]) => void;
@@ -224,9 +224,8 @@ async function saveColumnToAPI(
       `/api/encounters/${encounterId}/column/${colIndex}`,
       { method: "PATCH", body: JSON.stringify(body) },
     );
-    const savedDraft: RefractionDraft = { ...draft, id: json.id ?? draft.id };
 
-    actions.commitColumn(colIndex, savedDraft);
+    actions.commitColumn(colIndex, json.id ?? null);
     setTimeout(() => actions.resetStatus(colIndex), 2000);
   } catch (err) {
     actions.setColumnError(colIndex, [
@@ -380,16 +379,19 @@ export const useRefractionStore = create<RefractionStore>()(
         });
       },
 
-      commitColumn(colIndex, savedDraft) {
+      commitColumn(colIndex, serverId) {
+        const wasDirty = get().columns[colIndex].saveStatus === "dirty";
         set(
           (state) => {
             const columns = [...state.columns];
+            const current = columns[colIndex];
+            const draftWithId = { ...current.draft, id: serverId ?? current.draft.id };
             columns[colIndex] = {
-              ...columns[colIndex],
-              draft:       savedDraft,
-              committed:   savedDraft,
-              saveStatus:  "saved",
-              errors:      [],
+              ...current,
+              draft:       draftWithId,
+              committed:   draftWithId,
+              saveStatus:  wasDirty ? "dirty" : "saved",
+              errors:      wasDirty ? current.errors : [],
               lastSavedAt: new Date(),
             };
             return { columns };
@@ -397,6 +399,9 @@ export const useRefractionStore = create<RefractionStore>()(
           false,
           "commitColumn"
         );
+        if (wasDirty) {
+          get().scheduleSave(colIndex);
+        }
       },
 
       setColumnError(colIndex, errors) {

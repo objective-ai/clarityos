@@ -221,20 +221,18 @@ export function setDraftValue(
   rowKey: RowKey,
   value: number | string | null
 ): RefractionDraft {
-  const d = structuredClone(draft);
   switch (rowKey) {
-    case "od_sphere":   d.od.sphere        = value as number | null; break;
-    case "od_cylinder": d.od.cylinder      = value as number | null; break;
-    case "od_axis":     d.od.axis          = value as number | null; break;
-    case "od_add":      d.od.add           = value as number | null; break;
-    case "od_va":       d.od.visual_acuity = value as string | null; break;
-    case "os_sphere":   d.os.sphere        = value as number | null; break;
-    case "os_cylinder": d.os.cylinder      = value as number | null; break;
-    case "os_axis":     d.os.axis          = value as number | null; break;
-    case "os_add":      d.os.add           = value as number | null; break;
-    case "os_va":       d.os.visual_acuity = value as string | null; break;
-    case "pd_distance": d.pd_distance      = value as number | null; break;
-    case "pd_near":     d.pd_near          = value as number | null; break;
+    case "od_sphere":   return { ...draft, od: { ...draft.od, sphere:        value as number | null } };
+    case "od_cylinder": return { ...draft, od: { ...draft.od, cylinder:      value as number | null } };
+    case "od_axis":     return { ...draft, od: { ...draft.od, axis:          value as number | null } };
+    case "od_add":      return { ...draft, od: { ...draft.od, add:           value as number | null } };
+    case "od_va":       return { ...draft, od: { ...draft.od, visual_acuity: value as string | null } };
+    case "os_sphere":   return { ...draft, os: { ...draft.os, sphere:        value as number | null } };
+    case "os_cylinder": return { ...draft, os: { ...draft.os, cylinder:      value as number | null } };
+    case "os_axis":     return { ...draft, os: { ...draft.os, axis:          value as number | null } };
+    case "os_add":      return { ...draft, os: { ...draft.os, add:           value as number | null } };
+    case "os_va":       return { ...draft, os: { ...draft.os, visual_acuity: value as string | null } };
+    case "pd_distance": return { ...draft, pd_distance: value as number | null };
+    case "pd_near":     return { ...draft, pd_near:     value as number | null };
   }
-  return d;
 }
