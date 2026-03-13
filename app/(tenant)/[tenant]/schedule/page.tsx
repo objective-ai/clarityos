@@ -45,6 +45,8 @@ import {
   STATUS_LABELS,
   STATUS_COLORS,
 } from "@/types/appointment";
+import { OverflowMenu } from "@/components/schedule/OverflowMenu";
+import type { OverflowMenuItem } from "@/components/schedule/OverflowMenu";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -117,77 +119,7 @@ function StatusBadge({ status }: { status: AppointmentStatus }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Overflow Menu (kebab) — generic item array
-// ---------------------------------------------------------------------------
-
-interface OverflowMenuItem {
-  label: string;
-  onClick: () => void;
-  variant?: "danger";
-}
-
-function OverflowMenu({ items }: { items: OverflowMenuItem[] }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open]);
-
-  if (items.length === 0) return null;
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
-        aria-label="More actions"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <circle cx="8" cy="3" r="1.25" />
-          <circle cx="8" cy="8" r="1.25" />
-          <circle cx="8" cy="13" r="1.25" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 min-w-[180px] py-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)]">
-          {items.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => {
-                setOpen(false);
-                item.onClick();
-              }}
-              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
-                item.variant === "danger"
-                  ? "text-red-500 hover:bg-red-500/10"
-                  : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// OverflowMenu and OverflowMenuItem are imported from @/components/schedule/OverflowMenu
 
 // ---------------------------------------------------------------------------
 // Appointment Card
@@ -204,6 +136,7 @@ function AppointmentCard({
   onFollowUp,
   onViewEncounter,
   onSendIntake,
+  onMarkNoShow,
 }: {
   appointment: Appointment;
   tz?: string;
@@ -215,24 +148,21 @@ function AppointmentCard({
   onFollowUp: (appt: Appointment) => void;
   onViewEncounter: (encounterId: string) => void;
   onSendIntake: (appt: Appointment) => void;
+  onMarkNoShow: (id: string) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const canCheckIn =
     appointment.status === "scheduled" || appointment.status === "confirmed";
   const canStartExam = appointment.status === "arrived";
+  const canContinuePretest = appointment.status === "in_pretest";
+  const canContinueExam = appointment.status === "in_exam";
+  const canViewEncounter =
+    appointment.status === "completed" || appointment.status === "finalized";
   const hasEncounter = !!appointment.encounterId;
-  const isClickable =
-    hasEncounter &&
-    (appointment.status === "in_exam" || appointment.status === "completed");
 
   // Build overflow menu items based on status
   const overflowItems: OverflowMenuItem[] = [];
-
-  if (hasEncounter && (appointment.status === "in_exam" || appointment.status === "completed")) {
-    overflowItems.push({
-      label: appointment.status === "in_exam" ? "Continue Encounter" : "View Encounter",
-      onClick: () => onViewEncounter(appointment.encounterShortId!),
-    });
-  }
 
   if (canCheckIn) {
     overflowItems.push({
@@ -242,6 +172,11 @@ function AppointmentCard({
     overflowItems.push({
       label: "Reschedule",
       onClick: () => onReschedule(appointment),
+    });
+    overflowItems.push({
+      label: "Mark as No-Show",
+      onClick: () => onMarkNoShow(appointment.id),
+      variant: "danger",
     });
     overflowItems.push({
       label: "Cancel Appointment",
@@ -260,6 +195,23 @@ function AppointmentCard({
       onClick: () => onReschedule(appointment),
     });
     overflowItems.push({
+      label: "Mark as No-Show",
+      onClick: () => onMarkNoShow(appointment.id),
+      variant: "danger",
+    });
+    overflowItems.push({
+      label: "Cancel Appointment",
+      onClick: () => onCancel(appointment.id),
+      variant: "danger",
+    });
+  }
+
+  if (canContinuePretest || canContinueExam) {
+    overflowItems.push({
+      label: "Reschedule",
+      onClick: () => onReschedule(appointment),
+    });
+    overflowItems.push({
       label: "Cancel Appointment",
       onClick: () => onCancel(appointment.id),
       variant: "danger",
@@ -273,17 +225,10 @@ function AppointmentCard({
     });
   }
 
-  const handleCardClick = () => {
-    if (isClickable) {
-      onViewEncounter(appointment.encounterShortId!);
-    }
-  };
-
   return (
     <div
-      className={`glass-card glass-card-hover p-4 transition-all${isClickable ? " cursor-pointer" : ""}`}
-      onClick={handleCardClick}
-      role={isClickable ? "link" : undefined}
+      className="glass-card glass-card-hover p-4 transition-all"
+      style={menuOpen ? { position: "relative", zIndex: 50 } : undefined}
     >
       <div className="flex items-center gap-4">
         {/* Color bar */}
@@ -365,10 +310,27 @@ function AppointmentCard({
           )}
           {canStartExam && (
             <Button size="sm" onClick={() => onStartExam(appointment.id)}>
-              Start Exam
+              Start Pre-Test
             </Button>
           )}
-          {overflowItems.length > 0 && <OverflowMenu items={overflowItems} />}
+          {canContinuePretest && hasEncounter && (
+            <Button size="sm" onClick={() => onViewEncounter(appointment.encounterShortId!)}>
+              Continue Pre-Test
+            </Button>
+          )}
+          {canContinueExam && hasEncounter && (
+            <Button size="sm" onClick={() => onViewEncounter(appointment.encounterShortId!)}>
+              Continue Exam
+            </Button>
+          )}
+          {canViewEncounter && hasEncounter && (
+            <Button size="sm" variant="outline" onClick={() => onViewEncounter(appointment.encounterShortId!)}>
+              View Encounter
+            </Button>
+          )}
+          {overflowItems.length > 0 && (
+            <OverflowMenu items={overflowItems} onOpenChange={setMenuOpen} />
+          )}
         </div>
       </div>
     </div>
@@ -1104,6 +1066,7 @@ function SchedulePageInner() {
     fetchAppointments,
     createAppointment,
     cancelAppointment,
+    markNoShow,
     checkInPatient,
     revertCheckIn,
     rescheduleAppointment,
@@ -1293,6 +1256,19 @@ function SchedulePageInner() {
       }
     },
     [generateIntakeToken]
+  );
+
+  const handleMarkNoShow = useCallback(
+    async (id: string) => {
+      setActionError(null);
+      try {
+        await markNoShow(id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Mark no-show failed";
+        setActionError(msg);
+      }
+    },
+    [markNoShow]
   );
 
   const handleBook = useCallback(
@@ -1552,15 +1528,16 @@ function SchedulePageInner() {
         <TimelineView
           appointments={appointments}
           selectedDate={selectedDate}
-          onAppointmentClick={(appt) => {
-            // For appointments with encounters, navigate; otherwise open reschedule
-            if (appt.encounterId && (appt.status === "in_exam" || appt.status === "completed")) {
-              router.push(`/${tenant}/encounter/${appt.encounterShortId}`);
-            } else if (appt.status === "scheduled" || appt.status === "confirmed") {
-              setRescheduleTarget(appt);
-            }
-          }}
-          onSlotClick={(time) => {
+          onCheckIn={handleCheckIn}
+          onStartExam={handleStartExam}
+          onViewEncounter={(encId) => router.push(`/${tenant}/encounter/${encId}`)}
+          onCancel={(id) => setCancelTarget(id)}
+          onRevertCheckIn={handleRevertCheckIn}
+          onReschedule={(a) => setRescheduleTarget(a)}
+          onFollowUp={handleFollowUp}
+          onSendIntake={handleSendIntake}
+          onMarkNoShow={handleMarkNoShow}
+          onSlotClick={() => {
             setBookingDefaults(undefined);
             setBookingOpen(true);
           }}
@@ -1570,13 +1547,15 @@ function SchedulePageInner() {
           appointments={appointments}
           selectedDate={selectedDate}
           selectedProviderId={selectedProviderId || undefined}
-          onAppointmentClick={(appt) => {
-            if (appt.encounterId && (appt.status === "in_exam" || appt.status === "completed")) {
-              router.push(`/${tenant}/encounter/${appt.encounterShortId}`);
-            } else if (appt.status === "scheduled" || appt.status === "confirmed") {
-              setRescheduleTarget(appt);
-            }
-          }}
+          onCheckIn={handleCheckIn}
+          onStartExam={handleStartExam}
+          onViewEncounter={(encId) => router.push(`/${tenant}/encounter/${encId}`)}
+          onCancel={(id) => setCancelTarget(id)}
+          onRevertCheckIn={handleRevertCheckIn}
+          onReschedule={(a) => setRescheduleTarget(a)}
+          onFollowUp={handleFollowUp}
+          onSendIntake={handleSendIntake}
+          onMarkNoShow={handleMarkNoShow}
           onSlotClick={(time, providerId) => {
             setBookingDefaults(providerId ? { providerId } : undefined);
             setBookingOpen(true);
@@ -1597,6 +1576,7 @@ function SchedulePageInner() {
               onFollowUp={handleFollowUp}
               onViewEncounter={(encId) => router.push(`/${tenant}/encounter/${encId}`)}
               onSendIntake={handleSendIntake}
+              onMarkNoShow={handleMarkNoShow}
             />
           ))}
         </div>
