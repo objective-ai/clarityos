@@ -5,7 +5,7 @@ import type { Appointment } from "@/types/appointment";
 import { APPOINTMENT_TYPE_LABELS } from "@/types/appointment";
 import { useAppointmentStore } from "@/store/appointmentStore";
 import { Button } from "@/components/ui/button";
-import { clinicDateISO, clinicLocalToUTC, formatClinicTime } from "@/lib/timezone";
+import { clinicDateISO, clinicLocalToUTC } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Cancel Confirmation Modal

@@ -270,7 +270,7 @@ export function buildConflicts(
   }
 
   // --- Exam Findings (Anterior + Posterior) ---
-  for (const [sectionKey, sectionLabel, examData, storeDraft] of [
+  for (const [sectionKey, , examData, storeDraft] of [
     ["exam_anterior", "Anterior", aiData.exam_findings?.anterior, stores.examAnterior] as const,
     ["exam_posterior", "Posterior", aiData.exam_findings?.posterior, stores.examPosterior] as const,
   ]) {

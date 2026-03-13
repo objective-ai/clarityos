@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useAiScribe } from "@/hooks/useAiScribe";
-import type { ScribeStructuredDataV2 } from "@/types/scribe";
 import type { FindingsStoreKey } from "@/types/exam-findings";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import type { EntitlementKey } from "@/types/session";

@@ -57,7 +57,6 @@ import {
   ROW_LABELS,
   cellId,
   getDraftValue,
-  type GridCoord,
   type RowKey,
   type RefractionDraft,
   type SaveStatus,
@@ -73,7 +72,6 @@ import {
   decrementDiopter,
   incrementAxis,
   decrementAxis,
-  getEyeForRow,
 } from "@/lib/rx-format";
 import { useRefractionKeyboard } from "@/hooks/useRefractionKeyboard";
 import {
@@ -672,10 +670,7 @@ export function RefractionGrid({
           <tbody>
             {ROW_KEYS.map((rowKey) => {
               const section = isSectionHeader(rowKey);
-              const eye     = getEyeForRow(rowKey);
               const label   = ROW_LABELS[rowKey];
-              const isPD    = eye === "binocular";
-
               return (
                 <React.Fragment key={rowKey}>
                   {section && (

@@ -20,7 +20,6 @@ import {
   parseAxis,
   formatDiopter,
   formatAdd,
-  formatAxis,
 } from "@/lib/rx-format";
 
 // ---------------------------------------------------------------------------

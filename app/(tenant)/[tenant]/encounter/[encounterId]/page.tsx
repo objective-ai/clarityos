@@ -6,7 +6,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import type { RowKey } from "@/types/refraction";
 import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/exam-findings";
-import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
+import { useEncounterStore } from "@/store/encounterStore";
 import { apiFetch } from "@/lib/api-client";
 import { useVitalsStore, useVitalsDraft } from "@/store/vitalsStore";
 import type { VitalsDraft } from "@/types/vitals";
@@ -76,9 +76,6 @@ const InlineReviewSection = dynamic(
 import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -205,7 +202,6 @@ export default function EncounterPage({
   const encounterState = useEncounterStore((s) => s.encounters[params.encounterId]);
   const isFinalized = encounterState?.isFinalized ?? false;
   const encounterLoadStatus = encounterState?.loadStatus ?? "idle";
-  const aiStructuredData = encounterState?.aiStructuredData ?? null;
   const setAiStructuredData = useEncounterStore((s) => s.setAiStructuredData);
 
   // patientId flows from encounterStore (set by loadEncounter)

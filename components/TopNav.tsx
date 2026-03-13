@@ -17,8 +17,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { useSessionStore } from "@/store/sessionStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
-import { useEncounterStore } from "@/store/encounterStore";
-import type { PatientHeaderData, StaffRole } from "@/types/session";
+import type { PatientHeaderData } from "@/types/session";
 import { formatClinicDate } from "@/lib/timezone";
 
 function calculateAge(dob: string): number {
@@ -59,7 +58,7 @@ const SCENARIO_LABELS: [DevScenario, string][] = [
   ["owner", "Owner"],
 ];
 
-export function TopNav({ tenant, patient }: TopNavProps) {
+export function TopNav({ patient }: TopNavProps) {
   const pathname = usePathname();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -77,10 +76,6 @@ export function TopNav({ tenant, patient }: TopNavProps) {
   const diagnoses = useDiagnosisStore(
     (s) => (encounterId ? s.encounters[encounterId]?.diagnoses : null) ?? []
   );
-  const encounter = useEncounterStore(
-    (s) => (encounterId ? s.encounters[encounterId] : null) ?? null
-  );
-
   // Derive active scenario from actual session state so badge and checkmark stay in sync
   const activeScenario: DevScenario = (() => {
     if (role === "receptionist") return "receptionist";

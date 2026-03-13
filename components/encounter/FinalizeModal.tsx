@@ -119,8 +119,6 @@ export function FinalizeModal({
 
   // ── Derived ─────────────────────────────────────────────────────────────
   const hasIop = vitalsDraft?.iop_od != null || vitalsDraft?.iop_os != null;
-  const hasBp = !!vitalsDraft?.blood_pressure;
-  const vitalsEmpty = !hasIop && !hasBp;
   const hasDiagnoses = activeDiagnoses.length > 0;
   const hasRx =
     finalRxDraft?.od?.sphere != null ||

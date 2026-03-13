@@ -13,7 +13,7 @@
  * https://www.cms.gov/medicare/cms-forms/cms-forms/cms-forms-items/cms012949
  */
 
-import type { Superbill, SuperbillLineItem } from "@/types/billing";
+import type { Superbill } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
 // CMS-1500 JSON Schema Types

@@ -48,8 +48,6 @@ export default function OpticalPage() {
     if (val) setQueueDate(val);
   };
 
-  const isToday = queueDate === clinicToday(tz);
-
   // Count items with Rx change alerts
   const alertCount = items.filter((i) => i.rxChangeAlert.hasChange).length;
 

@@ -37,7 +37,6 @@ import { devtools, subscribeWithSelector } from "zustand/middleware";
 const isDev = process.env.NODE_ENV === "development";
 import {
   blankDraft,
-  getDraftValue,
   setDraftValue,
   REFRACTION_COLUMNS,
   type ColumnState,
@@ -304,7 +303,7 @@ export const useRefractionStore = create<RefractionStore>()(
       },
 
       init(encounterId, initialRefractions, isReadOnly) {
-        const columns: ColumnState[] = REFRACTION_COLUMNS.map((type, i) => {
+        const columns: ColumnState[] = REFRACTION_COLUMNS.map((type) => {
           const existing = initialRefractions.find((r) => r.refraction_type === type);
           const draft = existing ?? blankDraft(type);
           return {

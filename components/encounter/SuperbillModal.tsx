@@ -23,7 +23,7 @@ import {
 import { useBillingStore, useSuperbill, useBillingWarnings, useMdmResult } from "@/store/billingStore";
 import { useDiagnoses } from "@/store/diagnosisStore";
 import { CPT_CATALOG } from "@/types/billing";
-import type { ClaimStatus, CptEntry, LineItemCreateRequest, Superbill } from "@/types/billing";
+import type { CptEntry, LineItemCreateRequest } from "@/types/billing";
 import { buildCms1500Claim, downloadCms1500Json, validateCms1500Claim } from "@/lib/utils/cms1500";
 
 // ---------------------------------------------------------------------------

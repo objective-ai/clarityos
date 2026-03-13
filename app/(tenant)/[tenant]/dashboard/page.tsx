@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import { useCurrentTenant, useCurrentUser } from "@/store/sessionStore";
+import { useCurrentUser } from "@/store/sessionStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useAppointmentStore } from "@/store/appointmentStore";
@@ -88,8 +88,7 @@ export default function DashboardPage({
 }: {
   params: { tenant: string };
 }) {
-  const { planName, requireRole } = useEntitlements();
-  const tenant = useCurrentTenant();
+  const { requireRole } = useEntitlements();
   const user = useCurrentUser();
   const isAdmin = requireRole("admin", "owner");
   const base = `/${params.tenant}`;

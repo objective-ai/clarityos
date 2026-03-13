@@ -18,7 +18,6 @@ import { clearEphi } from "@/components/auth/LogoutButton";
 import { Button } from "@/components/ui/button";
 
 const WARNING_TIMEOUT_MS = 28 * 60 * 1000; // 28 minutes
-const LOGOUT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const COUNTDOWN_SECONDS = 120; // 2 minutes between warning and logout
 
 export function SessionTimeoutModal() {

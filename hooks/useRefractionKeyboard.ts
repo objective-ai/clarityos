@@ -50,10 +50,6 @@ import {
 } from "@/types/refraction";
 import {
   getFieldType,
-  incrementDiopter,
-  decrementDiopter,
-  incrementAxis,
-  decrementAxis,
   parseCellValue,
 } from "@/lib/rx-format";
 import { useRefractionStore } from "@/store/refractionStore";
@@ -61,16 +57,6 @@ import { useRefractionStore } from "@/store/refractionStore";
 // ---------------------------------------------------------------------------
 // DOM focus helper
 // ---------------------------------------------------------------------------
-
-function focusCell(colIndex: number, rowKey: RowKey): boolean {
-  const el = document.getElementById(cellId(colIndex, rowKey)) as HTMLInputElement | null;
-  if (!el) return false;
-  el.focus();
-  // Move cursor to end of value
-  const len = el.value.length;
-  try { el.setSelectionRange(len, len); } catch {}
-  return true;
-}
 
 function focusCellSelectAll(colIndex: number, rowKey: RowKey): boolean {
   const el = document.getElementById(cellId(colIndex, rowKey)) as HTMLInputElement | null;
@@ -138,7 +124,7 @@ function belowCoord(current: GridCoord): GridCoord {
 function clinicalEnterTarget(
   current: GridCoord,
   currentValue: string,
-  cylValue: number | null
+  _cylValue: number | null
 ): GridCoord | null {
   const { colIndex, rowKey } = current;
 

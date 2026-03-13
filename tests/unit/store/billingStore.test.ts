@@ -37,8 +37,9 @@ describe("loadSuperbill", () => {
     expect(slice.error).toBeNull();
   });
 
-  test("handles 404 (not found) gracefully", async () => {
-    mockApiFetch.mockRejectedValueOnce(new Error("not found"));
+  test("handles 204 (no superbill yet) gracefully", async () => {
+    // Backend returns 204 for missing superbill; apiFetch converts 204 → null
+    mockApiFetch.mockResolvedValueOnce(null);
 
     await useBillingStore.getState().loadSuperbill("enc-1");
 

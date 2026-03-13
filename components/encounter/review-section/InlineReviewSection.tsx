@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import type { ScribeStructuredDataV2 } from "@/types/scribe";
 import type { FindingsStoreKey } from "@/types/exam-findings";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useVitalsStore } from "@/store/vitalsStore";
@@ -14,7 +13,6 @@ import {
   type ConflictSection,
   type StoreSnapshots,
 } from "../conflict-resolver/buildConflicts";
-import { applyResolutions } from "../conflict-resolver/applyResolutions";
 import { ConflictTable } from "../conflict-resolver/ConflictTable";
 import { StickySoapNote } from "./StickySoapNote";
 import { QuickNav } from "./QuickNav";
@@ -153,11 +151,6 @@ export function InlineReviewSection({
   useEffect(() => {
     containerRef.current?.focus();
   }, []);
-
-  // Derive counts
-  const selectedCount = conflicts.filter(
-    (r) => r.resolution === "use_ai",
-  ).length;
 
   // Sections that have at least one suggestion
   const activeSections = useMemo(() => {

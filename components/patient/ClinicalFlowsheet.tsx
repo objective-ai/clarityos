@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { usePatientStore } from "@/store/patientStore";
 import { formatClinicDate } from "@/lib/timezone";
-import type { FlowsheetRow } from "@/types/patient";
 
 // ---------------------------------------------------------------------------
 // Helpers

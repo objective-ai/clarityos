@@ -55,7 +55,6 @@ interface DiagnosisPickerProps {
 export function DiagnosisPicker({
   encounterId,
   isReadOnly = false,
-  columns = 1,
   initialDiagnoses,
 }: DiagnosisPickerProps) {
   const store = useDiagnosisStore();
