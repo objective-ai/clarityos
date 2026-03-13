@@ -19,6 +19,7 @@ import { useSessionStore } from "@/store/sessionStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
 import { useEncounterStore } from "@/store/encounterStore";
 import type { PatientHeaderData, StaffRole } from "@/types/session";
+import { formatClinicDate } from "@/lib/timezone";
 
 function calculateAge(dob: string): number {
   const birth = new Date(dob);
@@ -137,7 +138,7 @@ export function TopNav({ tenant, patient }: TopNavProps) {
                     <span className="text-[var(--border-strong)]">&middot;</span>
                     <span>{calculateAge(patient.dob)}y</span>
                     <span className="text-[var(--border-strong)]">&middot;</span>
-                    <span>{new Date(patient.dob + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    <span>{formatClinicDate(patient.dob)}</span>
                     <span className="text-[var(--border-strong)]">&middot;</span>
                   </>
                 )}

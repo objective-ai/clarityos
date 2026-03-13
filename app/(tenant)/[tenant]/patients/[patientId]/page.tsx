@@ -12,6 +12,7 @@ import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import dynamic from "next/dynamic";
 import { usePatientStore } from "@/store/patientStore";
 import type { PatientDetail, PatientUpdatePayload } from "@/types/patient";
+import { formatClinicDate } from "@/lib/timezone";
 
 const EncounterTimeline = dynamic(
   () => import("@/components/patient/EncounterTimeline").then((m) => ({ default: m.EncounterTimeline })),
@@ -540,11 +541,7 @@ export default function PatientDetailPage() {
   }
 
   const age = calculateAge(patient.dob);
-  const dobFormatted = new Date(patient.dob).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const dobFormatted = formatClinicDate(patient.dob);
 
   return (
     <div className="flex flex-col gap-6 stagger">

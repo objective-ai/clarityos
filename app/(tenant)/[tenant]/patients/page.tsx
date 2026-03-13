@@ -8,6 +8,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { usePatientStore } from "@/store/patientStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Search input with debounce
@@ -102,11 +103,7 @@ export default function PatientsPage() {
   }
 
   function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    return formatClinicDate(dateStr);
   }
 
   function calculateAge(dob: string): number {

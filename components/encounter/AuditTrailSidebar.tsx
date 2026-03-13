@@ -5,6 +5,7 @@ import { X, History, Bot, User, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ClinicalDiffViewer } from "@/components/encounter/ClinicalDiffViewer";
 import type { DiffEntry } from "@/components/encounter/ClinicalDiffViewer";
+import { formatClinicDateTime, useClinicTimezone } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,15 +54,8 @@ function isAiAction(action: string): boolean {
   return action.startsWith("ai_scribe");
 }
 
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+function formatTimestamp(iso: string, tz: string): string {
+  return formatClinicDateTime(iso, tz);
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +117,7 @@ function ChangesDiff({ changes }: { changes: Record<string, unknown> }) {
 // ---------------------------------------------------------------------------
 
 export function AuditTrailSidebar({ encounterId, isOpen, onClose, isReadOnly = false, onRevert }: AuditTrailSidebarProps) {
+  const tz = useClinicTimezone();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -255,7 +250,7 @@ export function AuditTrailSidebar({ encounterId, isOpen, onClose, isReadOnly = f
                       </div>
 
                       <p className="text-[11px] mt-1" style={{ color: "var(--text-secondary)" }}>
-                        {log.staff_name ?? "System"} — {formatTimestamp(log.timestamp)}
+                        {log.staff_name ?? "System"} — {formatTimestamp(log.timestamp, tz)}
                       </p>
 
                       {log.detail && (

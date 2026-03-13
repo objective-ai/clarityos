@@ -7,35 +7,14 @@ import { OpticalQueueCard } from "@/components/optical/OpticalQueueCard";
 import { RxPrintView } from "@/components/optical/RxPrintView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-// ---------------------------------------------------------------------------
-// Date navigation helpers
-// ---------------------------------------------------------------------------
-
-function formatDisplayDate(isoDate: string): string {
-  return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function addDays(isoDate: string, days: number): string {
-  const d = new Date(isoDate + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
-}
-
-function todayIso(): string {
-  return new Date().toISOString().split("T")[0];
-}
+import { formatDateLong, shiftDate, clinicToday, useClinicTimezone } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Page Component
 // ---------------------------------------------------------------------------
 
 export default function OpticalPage() {
+  const tz = useClinicTimezone();
   const items = useOpticalStore((s) => s.items);
   const total = useOpticalStore((s) => s.total);
   const queueDate = useOpticalStore((s) => s.queueDate);
@@ -58,8 +37,8 @@ export default function OpticalPage() {
 
   // Subtitle
   useEffect(() => {
-    const isToday = queueDate === todayIso();
-    setSubtitle(formatDisplayDate(queueDate) + (isToday ? " · Today" : ""));
+    const isToday = queueDate === clinicToday(tz);
+    setSubtitle(formatDateLong(queueDate) + (isToday ? " · Today" : ""));
     return () => setSubtitle(null);
   }, [queueDate, setSubtitle]);
 
@@ -69,7 +48,7 @@ export default function OpticalPage() {
     if (val) setQueueDate(val);
   };
 
-  const isToday = queueDate === todayIso();
+  const isToday = queueDate === clinicToday(tz);
 
   // Count items with Rx change alerts
   const alertCount = items.filter((i) => i.rxChangeAlert.hasChange).length;
@@ -111,7 +90,7 @@ export default function OpticalPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setQueueDate(addDays(queueDate, -1))}
+            onClick={() => setQueueDate(shiftDate(queueDate, -1))}
             title="Previous day"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -121,14 +100,14 @@ export default function OpticalPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setQueueDate(todayIso())}
+            onClick={() => setQueueDate(clinicToday(tz))}
           >
             Today
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setQueueDate(addDays(queueDate, 1))}
+            onClick={() => setQueueDate(shiftDate(queueDate, 1))}
             title="Next day"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

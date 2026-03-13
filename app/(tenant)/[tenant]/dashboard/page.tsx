@@ -6,7 +6,8 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentTenant, useCurrentUser } from "@/store/sessionStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEncounterStore } from "@/store/encounterStore";
-import { useAppointmentStore, localDateISO } from "@/store/appointmentStore";
+import { useAppointmentStore } from "@/store/appointmentStore";
+import { clinicToday, formatClinicTime, formatClinicDateTime } from "@/lib/timezone";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -68,18 +69,18 @@ const BASE_ACTIONS = [
 ];
 
 
-function formatEncounterDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = d.toDateString() === yesterday.toDateString();
-
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  if (isToday) return `Today, ${time}`;
-  if (isYesterday) return `Yesterday, ${time}`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + `, ${time}`;
+function formatEncounterDate(iso: string, tz: string): string {
+  const time = formatClinicTime(iso, tz);
+  // Simple today/yesterday check using clinic timezone
+  const today = clinicToday(tz);
+  const dateOnly = iso.slice(0, 10);
+  if (dateOnly === today) return `Today, ${time}`;
+  // Yesterday check
+  const d = new Date(today + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  const yesterday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (dateOnly === yesterday) return `Yesterday, ${time}`;
+  return formatClinicDateTime(iso, tz);
 }
 
 export default function DashboardPage({
@@ -97,11 +98,12 @@ export default function DashboardPage({
   const encounters = useEncounterStore((s) => s.encounters);
   const appointments = useAppointmentStore((s) => s.appointments);
   const fetchAppointments = useAppointmentStore((s) => s.fetchAppointments);
+  const clinicTimezone = useAppointmentStore((s) => s.clinicTimezone);
 
   // Fetch today's appointments for "Next Patient" stat
   useEffect(() => {
-    fetchAppointments(localDateISO());
-  }, [fetchAppointments]);
+    fetchAppointments(clinicToday(clinicTimezone));
+  }, [fetchAppointments, clinicTimezone]);
 
   // Compute next upcoming patient
   const nextPatient = useMemo(() => {
@@ -114,9 +116,9 @@ export default function DashboardPage({
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     if (upcoming.length === 0) return null;
     const next = upcoming[0];
-    const time = new Date(next.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const time = formatClinicTime(next.startTime, clinicTimezone);
     return { name: next.patientName ?? "Patient", time };
-  }, [appointments]);
+  }, [appointments, clinicTimezone]);
 
   useEffect(() => {
     const firstName = (() => {
@@ -148,7 +150,7 @@ export default function DashboardPage({
         id,
         shortId: enc.shortId ?? id,
         name: enc.patientName ?? "Unknown Patient",
-        date: formatEncounterDate(enc.encounterDate),
+        date: formatEncounterDate(enc.encounterDate, clinicTimezone),
         status: enc.status,
       }))
       .sort((a, b) => {

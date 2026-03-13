@@ -3,6 +3,7 @@
 import { useOpticalStore } from "@/store/opticalStore";
 import { Button } from "@/components/ui/button";
 import type { RxPdfData } from "@/types/optical";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,11 +33,7 @@ function formatPd(data: RxPdfData): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatClinicDate(dateStr);
 }
 
 // ---------------------------------------------------------------------------

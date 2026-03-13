@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { usePatientStore } from "@/store/patientStore";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,10 +131,7 @@ export function RxHistoryTable({ patientId }: RxHistoryTableProps) {
             </thead>
             <tbody>
               {rxHistory.map((row, idx) => {
-                const dateStr = new Date(row.encounterDate).toLocaleDateString(
-                  "en-US",
-                  { year: "2-digit", month: "short", day: "numeric" }
-                );
+                const dateStr = formatClinicDate(row.encounterDate);
                 return (
                   <tr
                     key={`${row.encounterId}-${row.rxType}`}

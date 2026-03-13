@@ -12,6 +12,7 @@ import { contrastRatio, meetsAALarge } from "@/lib/color-utils";
 import { SCRIBE_SCENARIOS, type ScribeScenario } from "@/lib/scribe-scenarios";
 import type { ThemePreference } from "@/store/themeStore";
 import type { StaffRole } from "@/types/session";
+import { formatClinicDateTime, useClinicTimezone } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Staff type — maps to /api/staff backend response (snake_case → camelCase)
@@ -1218,6 +1219,7 @@ const ACTION_OPTIONS = [
 ];
 
 function ComplianceSection() {
+  const clinicTz = useClinicTimezone();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -1354,9 +1356,7 @@ function ComplianceSection() {
                 return (
                   <tr key={log.id} className="hover-row border-t border-[var(--border-subtle)]">
                     <td className="px-5 py-3 whitespace-nowrap text-[var(--text-secondary)]">
-                      {new Date(log.timestamp).toLocaleString("en-US", {
-                        month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true,
-                      })}
+                      {formatClinicDateTime(log.timestamp, clinicTz)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-[var(--text-primary)] font-medium">
                       {log.staff_name ?? "System"}

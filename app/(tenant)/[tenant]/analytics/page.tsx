@@ -29,6 +29,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { cn } from "@/lib/utils";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -64,8 +65,7 @@ const RX_MODALITY_LABELS: Record<string, string> = {
 
 function fmtDate(dateStr: string): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatClinicDate(dateStr).replace(/,\s*\d{4}$/, ""); // "Mar 13"
 }
 
 /**

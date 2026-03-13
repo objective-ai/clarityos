@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api-client";
 import type { PrepMeResponse } from "@/types/patient";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -108,13 +109,7 @@ export function PrepMeCard({ patientId }: PrepMeCardProps) {
   if (status === "idle") return null;
 
   // Format the date label
-  const formattedDate = lastDate
-    ? new Date(lastDate + "T00:00:00").toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : null;
+  const formattedDate = lastDate ? formatClinicDate(lastDate) : null;
 
   return (
     <div data-testid="prep-me-card" className="glass-card overflow-hidden border-[var(--border-glow)]">

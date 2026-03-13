@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { useOpticalStore } from "@/store/opticalStore";
 import type { OpticalQueueItem, OpticalStatus } from "@/types/optical";
+import { formatClinicTime, formatClinicDate, useClinicTimezone } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,20 +55,12 @@ function formatPd(
   return "--";
 }
 
-function formatTime(isoString: string): string {
-  return new Date(isoString).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+function formatTime(isoString: string, tz: string): string {
+  return formatClinicTime(isoString, tz);
 }
 
 function formatDob(dob: string): string {
-  return new Date(dob + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatClinicDate(dob);
 }
 
 const STATUS_CONFIG: Record<
@@ -94,6 +87,7 @@ interface OpticalQueueCardProps {
 }
 
 export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
+  const tz = useClinicTimezone();
   const updateItemStatus = useOpticalStore((s) => s.updateItemStatus);
   const openPrintPreview = useOpticalStore((s) => s.openPrintPreview);
 
@@ -140,7 +134,7 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
               </span>
             )}
           </span>
-          <span>Finalized {formatTime(item.finalizedAt)}</span>
+          <span>Finalized {formatTime(item.finalizedAt, tz)}</span>
         </div>
 
         {/* Rx table */}

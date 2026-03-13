@@ -1,6 +1,7 @@
 "use client";
 
 import { highlightSOAP } from "./soap-highlighter";
+import { formatClinicTime, useClinicTimezone } from "@/lib/timezone";
 
 interface SOAPViewerProps {
   soapText: string;
@@ -8,6 +9,7 @@ interface SOAPViewerProps {
 }
 
 export function SOAPViewer({ soapText, generatedAt }: SOAPViewerProps) {
+  const tz = useClinicTimezone();
   // Split SOAP text into sections and render with highlighting
   const lines = soapText.split("\n");
 
@@ -18,7 +20,7 @@ export function SOAPViewer({ soapText, generatedAt }: SOAPViewerProps) {
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">AI-Generated Note</h3>
         {generatedAt && (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-elevated)] text-[var(--text-muted)]">
-            {new Date(generatedAt).toLocaleTimeString()}
+            {formatClinicTime(generatedAt, tz)}
           </span>
         )}
       </div>

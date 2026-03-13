@@ -9,6 +9,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useBillingDashboardStore } from "@/store/billingDashboardStore";
 import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Status badge styling
@@ -53,7 +54,7 @@ function downloadCsv(superbills: SuperbillListItem[]) {
   const header = "Date,Patient,Provider,CPT Codes,Total Fee,Status";
   const rows = posted.map((sb) =>
     [
-      new Date(sb.createdAt).toLocaleDateString(),
+      formatClinicDate(sb.createdAt),
       `"${sb.patientName}"`,
       `"${sb.providerName}"`,
       `"${sb.cptCodes.join(", ")}"`,
@@ -113,11 +114,7 @@ export default function BillingPage() {
   }
 
   function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    return formatClinicDate(dateStr);
   }
 
   return (

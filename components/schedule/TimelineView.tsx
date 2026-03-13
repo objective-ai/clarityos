@@ -8,6 +8,12 @@ import {
   STATUS_COLORS,
 } from "@/types/appointment";
 import { Button } from "@/components/ui/button";
+import {
+  clinicHoursMinutes,
+  clinicNow,
+  clinicToday,
+  formatClinicTime,
+} from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -24,14 +30,8 @@ function formatSlotTime(hour: number, min: number): string {
   return `${h}:${String(min).padStart(2, "0")} ${ampm}`;
 }
 
-function formatTimeRange(startIso: string, endIso: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  return `${fmt(startIso)} – ${fmt(endIso)}`;
+function formatTimeRange(startIso: string, endIso: string, tz: string): string {
+  return `${formatClinicTime(startIso, tz)} – ${formatClinicTime(endIso, tz)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,16 +42,18 @@ function NowIndicator({
   dateStr,
   startHour,
   endHour,
+  clinicTimezone,
 }: {
   dateStr: string;
   startHour: number;
   endHour: number;
+  clinicTimezone: string;
 }) {
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const todayStr = clinicToday(clinicTimezone);
   if (dateStr !== todayStr) return null;
 
-  const mins = (now.getHours() - startHour) * 60 + now.getMinutes();
+  const { hours, minutes } = clinicNow(clinicTimezone);
+  const mins = (hours - startHour) * 60 + minutes;
   if (mins < 0 || mins > (endHour - startHour) * 60) return null;
 
   const top = (mins / SLOT_MINUTES) * ROW_HEIGHT;
@@ -136,6 +138,7 @@ function AppointmentBlock({
   onFollowUp,
   onSendIntake,
   onMarkNoShow,
+  clinicTimezone,
 }: {
   appointment: Appointment;
   startHour: number;
@@ -150,9 +153,10 @@ function AppointmentBlock({
   onFollowUp: (appt: Appointment) => void;
   onSendIntake: (appt: Appointment) => void;
   onMarkNoShow: (id: string) => void;
+  clinicTimezone: string;
 }) {
-  const d = new Date(appointment.startTime);
-  const mins = (d.getHours() - startHour) * 60 + d.getMinutes();
+  const { hours, minutes } = clinicHoursMinutes(appointment.startTime, clinicTimezone);
+  const mins = (hours - startHour) * 60 + minutes;
   const top = (mins / SLOT_MINUTES) * ROW_HEIGHT + 2;
   const height = Math.max(
     (appointment.durationMinutes / SLOT_MINUTES) * ROW_HEIGHT - 6,
@@ -240,7 +244,7 @@ function AppointmentBlock({
                   {appointment.providerName && ` · ${appointment.providerName}`}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  {formatTimeRange(appointment.startTime, appointment.endTime)}{" "}
+                  {formatTimeRange(appointment.startTime, appointment.endTime, clinicTimezone)}{" "}
                   <span className="text-[var(--text-secondary)]">({appointment.durationMinutes} min)</span>
                 </p>
               </div>
@@ -332,6 +336,7 @@ function AppointmentBlock({
 export default function TimelineView({
   appointments,
   selectedDate,
+  clinicTimezone,
   onCheckIn,
   onStartExam,
   onViewEncounter,
@@ -345,6 +350,7 @@ export default function TimelineView({
 }: {
   appointments: Appointment[];
   selectedDate: string;
+  clinicTimezone: string;
   onCheckIn: (id: string) => void;
   onStartExam: (id: string) => void;
   onViewEncounter: (shortId: string) => void;
@@ -385,15 +391,14 @@ export default function TimelineView({
     let minHour = DEFAULT_START_HOUR;
     let maxHour = DEFAULT_END_HOUR;
     for (const appt of appointments) {
-      const sd = new Date(appt.startTime);
-      const startH = sd.getHours();
-      const ed = new Date(appt.endTime);
-      const endH = ed.getHours() + (ed.getMinutes() > 0 ? 1 : 0);
-      if (startH < minHour) minHour = startH;
+      const s = clinicHoursMinutes(appt.startTime, clinicTimezone);
+      const e = clinicHoursMinutes(appt.endTime, clinicTimezone);
+      const endH = e.hours + (e.minutes > 0 ? 1 : 0);
+      if (s.hours < minHour) minHour = s.hours;
       if (endH > maxHour) maxHour = endH;
     }
     return { effectiveStart: minHour, effectiveEnd: maxHour };
-  }, [appointments]);
+  }, [appointments, clinicTimezone]);
 
   const totalSlots = ((effectiveEnd - effectiveStart) * 60) / SLOT_MINUTES;
 
@@ -454,6 +459,7 @@ export default function TimelineView({
                   key={appt.id}
                   appointment={appt}
                   startHour={effectiveStart}
+                  clinicTimezone={clinicTimezone}
                   isExpanded={expandedId === appt.id}
                   onToggleExpand={() =>
                     setExpandedId((cur) => (cur === appt.id ? null : appt.id))
@@ -473,6 +479,7 @@ export default function TimelineView({
                 dateStr={selectedDate}
                 startHour={effectiveStart}
                 endHour={effectiveEnd}
+                clinicTimezone={clinicTimezone}
               />
             </div>
           </div>

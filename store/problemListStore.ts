@@ -11,6 +11,8 @@ import { devtools, subscribeWithSelector } from "zustand/middleware";
 
 const isDev = process.env.NODE_ENV === "development";
 import { apiFetch } from "@/lib/api-client";
+import { clinicToday } from "@/lib/timezone";
+import { useAppointmentStore } from "@/store/appointmentStore";
 import type {
   PatientProblem,
   ProblemCreateRequest,
@@ -258,7 +260,7 @@ const problemListStoreImpl = subscribeWithSelector(devtools<ProblemListStore>((s
       async resolveProblem(patientId, problemId) {
         await get().updateProblem(patientId, problemId, {
           status: "resolved",
-          resolvedDate: new Date().toISOString().split("T")[0],
+          resolvedDate: clinicToday(useAppointmentStore.getState().clinicTimezone),
         });
       },
 

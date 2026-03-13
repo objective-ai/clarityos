@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { formatClinicDateTime, useClinicTimezone } from "@/lib/timezone";
 import {
   Card,
   CardHeader,
@@ -86,16 +87,8 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
     }
   };
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
+  const tz = useClinicTimezone();
+  const formatDate = (iso: string) => formatClinicDateTime(iso, tz);
 
   return (
     <Card className="glass-card">

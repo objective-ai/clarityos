@@ -9,15 +9,16 @@ import type { RowKey } from "@/types/refraction";
 import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/exam-findings";
 import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
 import { apiFetch } from "@/lib/api-client";
-import { useVitalsStore } from "@/store/vitalsStore";
+import { useVitalsStore, useVitalsDraft } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
-import { useDiagnosisStore } from "@/store/diagnosisStore";
+import { useDiagnosisStore, useDiagnoses } from "@/store/diagnosisStore";
 import { useRefractionStore } from "@/store/refractionStore";
 import { AiScribeWidget } from "@/components/encounter/AiScribeWidget";
 import dynamic from "next/dynamic";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { useSidebarCollapsed } from "@/contexts/SidebarContext";
 import { EncounterBottomTabs } from "@/components/encounter/EncounterBottomTabs";
+import { formatClinicDate, clinicToday, useClinicTimezone } from "@/lib/timezone";
 import { GlassCardSkeleton } from "@/components/ui/skeleton";
 
 const AuditTrailSidebar = dynamic(
@@ -163,6 +164,7 @@ export default function EncounterPage({
   const loadDiagnoses = useDiagnosisStore((s) => s.loadDiagnoses);
   const loadRefractions = useRefractionStore((s) => s.loadRefractions);
   const fetchProblems = useProblemListStore((s) => s.fetchProblems);
+  const clinicTz = useClinicTimezone();
   const encounterState = useEncounterStore((s) => s.encounters[params.encounterId]);
   const isFinalized = encounterState?.isFinalized ?? false;
   const encounterLoadStatus = encounterState?.loadStatus ?? "idle";
@@ -183,6 +185,16 @@ export default function EncounterPage({
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
   const [superbillOpen, setSuperbillOpen] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+
+  // Required-field gate for the Finalize button
+  const vitalsDraftForFinalize = useVitalsDraft(params.encounterId);
+  const allDiagnosesForFinalize = useDiagnoses(params.encounterId);
+  const canFinalize =
+    (encounterState?.chiefComplaint ?? "").trim().length > 0 &&
+    !!(vitalsDraftForFinalize?.ucva_od || vitalsDraftForFinalize?.ucva_os ||
+       vitalsDraftForFinalize?.bcva_od || vitalsDraftForFinalize?.bcva_os) &&
+    allDiagnosesForFinalize.filter((dx) => dx.status.toLowerCase() === "active").length > 0 &&
+    (encounterState?.assessmentAndPlan ?? "").trim().length >= 10;
 
   // Store setters for revert functionality
   const revertChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
@@ -359,11 +371,7 @@ export default function EncounterPage({
             <span className="text-[var(--text-secondary)]">
               by {encounterState.signedByName}
               {encounterState.signedAt &&
-                ` on ${new Date(encounterState.signedAt).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}`}
+                ` on ${formatClinicDate(encounterState.signedAt)}`}
             </span>
           )}
           {!encounterState?.signedByName && (
@@ -556,6 +564,7 @@ export default function EncounterPage({
         isFinalized={isFinalized}
         sidebarCollapsed={sidebarCollapsed}
         patientId={patientId ?? ""}
+        canFinalize={canFinalize}
         onAdvanceStatus={handleAdvanceStatus}
         onRevertToPretest={handleRevertToPretest}
       />
@@ -586,7 +595,7 @@ export default function EncounterPage({
         encounterId={params.encounterId}
         patientName="Patient"
         providerName={encounterState?.providerName ?? "Unknown Provider"}
-        encounterDate={encounterState?.encounterDate ?? new Date().toISOString().split("T")[0]}
+        encounterDate={encounterState?.encounterDate ?? clinicToday(clinicTz)}
       />
     </div>
   );

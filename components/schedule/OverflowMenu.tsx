@@ -19,6 +19,7 @@ export function OverflowMenu({
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggle = (v: boolean) => {
     if (v && btnRef.current) {
@@ -32,7 +33,11 @@ export function OverflowMenu({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) toggle(false);
+      const target = e.target as Node;
+      if (
+        btnRef.current && !btnRef.current.contains(target) &&
+        (!menuRef.current || !menuRef.current.contains(target))
+      ) toggle(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -71,6 +76,7 @@ export function OverflowMenu({
 
       {open && coords && createPortal(
         <div
+          ref={menuRef}
           className="fixed z-[9999] min-w-[180px] py-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)]"
           style={{ top: coords.top, right: coords.right }}
         >

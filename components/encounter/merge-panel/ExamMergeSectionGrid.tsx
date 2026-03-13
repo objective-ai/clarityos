@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { Undo2 } from "lucide-react";
+import { Undo2, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,9 @@ interface ExamMergeSectionGridProps {
   onInsert: (sectionShort: string, eye: "od" | "os", structure: string, finding: ScribeStructureFindingV2) => void;
   onRevert: (sectionShort: string, eye: "od" | "os", structure: string) => void;
 }
+
+// 7-column layout: Structure | Dr OD | icon | AI OD | Dr OS | icon | AI OS
+const GRID = "grid grid-cols-[120px_1fr_28px_minmax(100px,1fr)_1fr_28px_minmax(100px,1fr)] gap-2";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -83,7 +86,7 @@ export function ExamMergeSectionGrid({
           {draft.is_normal_wnl && <Badge variant="success">WNL</Badge>}
           {saveStatus !== "idle" && saveStatus !== "dirty" && (
             <Badge variant={saveStatus === "saving" ? "info" : saveStatus === "saved" ? "success" : "destructive"}>
-              {saveStatus === "saving" ? "Saving\u2026" : saveStatus === "saved" ? "Saved" : "Error"}
+              {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : "Error"}
             </Badge>
           )}
         </div>
@@ -92,19 +95,21 @@ export function ExamMergeSectionGrid({
             Set WNL
           </Button>
           <Button variant="ghost" size="sm" onClick={handleCopyOdToOs} className="text-xs">
-            OD \u2192 OS
+            OD → OS
           </Button>
         </div>
       </div>
 
-      {/* 5-column grid */}
+      {/* 7-column grid */}
       <div className="px-5 pb-4">
         {/* Column headers */}
-        <div className="grid grid-cols-[120px_1fr_minmax(100px,1fr)_1fr_minmax(100px,1fr)] gap-2 py-2 border-b border-[var(--border-subtle)]">
+        <div className={`${GRID} py-2 border-b border-[var(--border-subtle)]`}>
           <span className="text-overline text-[var(--text-muted)]">Structure</span>
           <span className="text-overline text-center text-[var(--text-muted)]">OD (Doctor)</span>
+          <span />
           <span className="text-overline text-center text-[var(--accent)]/70">OD (AI)</span>
           <span className="text-overline text-center text-[var(--text-muted)]">OS (Doctor)</span>
+          <span />
           <span className="text-overline text-center text-[var(--accent)]/70">OS (AI)</span>
         </div>
 
@@ -125,14 +130,12 @@ export function ExamMergeSectionGrid({
           const aiOsRaw = aiOS?.[field.key];
           const hasAiData = !!aiOdRaw || !!aiOsRaw;
 
-          // Map AI status to dropdown values
           const aiOdMapped = aiOdRaw ? mapAiStatus(section, field.key, aiOdRaw.status, aiOdRaw.notes) : null;
           const aiOsMapped = aiOsRaw ? mapAiStatus(section, field.key, aiOsRaw.status, aiOsRaw.notes) : null;
 
           const odAbnormal = odFinding.status !== field.defaultStatus;
           const osAbnormal = osFinding.status !== field.defaultStatus;
 
-          // Highlight row if AI suggests abnormal but doctor has default
           const aiOdAbnormal = aiOdMapped && aiOdMapped.status !== field.defaultStatus;
           const aiOsAbnormal = aiOsMapped && aiOsMapped.status !== field.defaultStatus;
           const odConflict = aiOdAbnormal && !odAbnormal;
@@ -152,7 +155,7 @@ export function ExamMergeSectionGrid({
           return (
             <div
               key={field.key}
-              className={`grid grid-cols-[120px_1fr_minmax(100px,1fr)_1fr_minmax(100px,1fr)] gap-2 py-2 border-b border-[var(--border-subtle)] last:border-b-0 rounded-sm ${rowHighlight}`}
+              className={`${GRID} py-2 border-b border-[var(--border-subtle)] last:border-b-0 rounded-sm ${rowHighlight}`}
             >
               {/* Structure label */}
               <label className="text-xs font-medium text-[var(--text-secondary)] self-center pl-1">
@@ -166,11 +169,34 @@ export function ExamMergeSectionGrid({
                 eye="od"
                 structure={field.key}
                 isAbnormal={odAbnormal}
-                isInserted={odIsInserted}
                 onStatusChange={handleStatusChange}
                 onFindingChange={handleFindingChange}
-                onRevert={() => onRevert(sectionShort, "od", field.key)}
               />
+
+              {/* OD icon: insert or revert */}
+              <div className="self-center flex justify-center">
+                {aiOdRaw && aiOdMapped ? (
+                  odIsInserted ? (
+                    <button
+                      type="button"
+                      onClick={() => onRevert(sectionShort, "od", field.key)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                      title="Revert to original"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onInsert(sectionShort, "od", field.key, aiOdRaw)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors"
+                      title="Insert AI value"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                    </button>
+                  )
+                ) : null}
+              </div>
 
               {/* OD AI */}
               <div className="self-center">
@@ -180,10 +206,9 @@ export function ExamMergeSectionGrid({
                     notes={aiOdMapped.finding}
                     confidence={aiOdRaw.confidence}
                     inserted={odIsInserted}
-                    onInsert={() => onInsert(sectionShort, "od", field.key, aiOdRaw)}
                   />
                 ) : (
-                  <span className="text-[10px] text-[var(--text-muted)]/50">\u2014</span>
+                  <span className="text-[10px] text-[var(--text-muted)]/50">—</span>
                 )}
               </div>
 
@@ -194,11 +219,34 @@ export function ExamMergeSectionGrid({
                 eye="os"
                 structure={field.key}
                 isAbnormal={osAbnormal}
-                isInserted={osIsInserted}
                 onStatusChange={handleStatusChange}
                 onFindingChange={handleFindingChange}
-                onRevert={() => onRevert(sectionShort, "os", field.key)}
               />
+
+              {/* OS icon: insert or revert */}
+              <div className="self-center flex justify-center">
+                {aiOsRaw && aiOsMapped ? (
+                  osIsInserted ? (
+                    <button
+                      type="button"
+                      onClick={() => onRevert(sectionShort, "os", field.key)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                      title="Revert to original"
+                    >
+                      <Undo2 className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onInsert(sectionShort, "os", field.key, aiOsRaw)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors"
+                      title="Insert AI value"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                    </button>
+                  )
+                ) : null}
+              </div>
 
               {/* OS AI */}
               <div className="self-center">
@@ -208,10 +256,9 @@ export function ExamMergeSectionGrid({
                     notes={aiOsMapped.finding}
                     confidence={aiOsRaw.confidence}
                     inserted={osIsInserted}
-                    onInsert={() => onInsert(sectionShort, "os", field.key, aiOsRaw)}
                   />
                 ) : (
-                  <span className="text-[10px] text-[var(--text-muted)]/50">\u2014</span>
+                  <span className="text-[10px] text-[var(--text-muted)]/50">—</span>
                 )}
               </div>
             </div>
@@ -232,10 +279,8 @@ interface DoctorCellProps {
   eye: "od" | "os";
   structure: string;
   isAbnormal: boolean;
-  isInserted: boolean;
   onStatusChange: (eye: "od" | "os", structure: string, value: string) => void;
   onFindingChange: (eye: "od" | "os", structure: string, value: string) => void;
-  onRevert: () => void;
 }
 
 function DoctorCell({
@@ -244,42 +289,28 @@ function DoctorCell({
   eye,
   structure,
   isAbnormal,
-  isInserted,
   onStatusChange,
   onFindingChange,
-  onRevert,
 }: DoctorCellProps) {
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1">
-        <select
-          value={finding.status}
-          onChange={(e) => onStatusChange(eye, structure, e.target.value)}
-          className={`flex-1 px-2 py-1.5 rounded-lg text-xs glass-input ${
-            isAbnormal ? "ring-1 ring-[var(--state-warning)]" : ""
-          } ${isInserted ? "ring-1 ring-emerald-400/50" : ""}`}
-        >
-          {field.options.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-        {isInserted && (
-          <button
-            type="button"
-            onClick={onRevert}
-            className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
-            title="Revert to original"
-          >
-            <Undo2 className="w-3 h-3" />
-          </button>
-        )}
-      </div>
+      <select
+        value={finding.status}
+        onChange={(e) => onStatusChange(eye, structure, e.target.value)}
+        className={`w-full px-2 py-1.5 rounded-lg text-xs glass-input ${
+          isAbnormal ? "ring-1 ring-[var(--state-warning)]" : ""
+        }`}
+      >
+        {field.options.map((opt) => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
       {isAbnormal && (
         <input
           type="text"
           value={finding.finding}
           onChange={(e) => onFindingChange(eye, structure, e.target.value)}
-          placeholder="Details\u2026"
+          placeholder="Details…"
           className="w-full px-2 py-1 rounded-lg text-xs glass-input"
         />
       )}

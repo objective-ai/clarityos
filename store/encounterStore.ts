@@ -163,6 +163,7 @@ export const useEncounterStore = create<EncounterStoreState>()(
                     // Preserve client-only AI Scribe state across API refreshes
                     aiScribeTranscript: state.encounters[id]?.aiScribeTranscript,
                     aiScribeStatus: state.encounters[id]?.aiScribeStatus,
+                    aiStructuredData: state.encounters[id]?.aiStructuredData,
                     loadStatus: "loaded",
                     loadError: undefined,
                   },
