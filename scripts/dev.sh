@@ -17,6 +17,31 @@ case "${1:-help}" in
     # Fall through to restart-api
     ;&
 
+  restart-next)
+    echo "--- Killing Next.js on port 3001 ---"
+    PID=$(netstat -ano 2>/dev/null | grep ":3001 " | grep "LISTENING" | awk '{print $NF}' | head -1)
+    if [ -n "$PID" ] && [ "$PID" != "0" ]; then
+      taskkill //F //PID "$PID" 2>/dev/null || true
+      echo "Killed PID $PID"
+    else
+      echo "No process found on port 3001"
+    fi
+    sleep 1
+
+    echo "--- Starting Next.js ---"
+    cd "$PROJECT_DIR"
+    npm run dev &
+    sleep 5
+
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "000")
+    if [ "$STATUS" = "200" ] || [ "$STATUS" = "307" ]; then
+      echo "Next.js is UP (HTTP $STATUS)"
+    else
+      echo "Next.js FAILED (HTTP $STATUS)"
+      exit 1
+    fi
+    ;;
+
   restart-api)
     echo "--- Killing existing uvicorn ---"
     taskkill //F //IM uvicorn.exe 2>/dev/null || true
@@ -41,6 +66,14 @@ case "${1:-help}" in
     fi
     ;;
 
+  restart-all)
+    echo "=== Restarting FastAPI ==="
+    bash "$0" restart-api
+    echo ""
+    echo "=== Restarting Next.js ==="
+    bash "$0" restart-next
+    ;;
+
   check-api)
     API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "down")
     NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "down")
@@ -53,7 +86,7 @@ case "${1:-help}" in
     NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "000")
     FAIL=0
     if [ "$API" != "200" ]; then echo "FAIL: FastAPI not responding ($API)"; FAIL=1; fi
-    if [ "$NEXT" != "200" ]; then echo "FAIL: Next.js not responding ($NEXT)"; FAIL=1; fi
+    if [ "$NEXT" != "200" ] && [ "$NEXT" != "307" ]; then echo "FAIL: Next.js not responding ($NEXT)"; FAIL=1; fi
     if [ "$FAIL" = "1" ]; then
       echo "Start servers before running tests: npm run dev + uvicorn backend.main:app --reload"
       exit 1
@@ -86,11 +119,13 @@ case "${1:-help}" in
     ;;
 
   help)
-    echo "Usage: scripts/dev.sh {ensure-api|restart-api|check-api|pre-test|seed|reseed|verify <script>|smoke}"
+    echo "Usage: scripts/dev.sh {ensure-api|restart-api|restart-next|restart-all|check-api|pre-test|seed|reseed|verify <script>|smoke}"
     echo ""
     echo "Commands:"
     echo "  ensure-api    Start FastAPI only if not already running (idempotent)"
     echo "  restart-api   Kill uvicorn, verify imports, start fresh, health-check"
+    echo "  restart-next  Kill Next.js, start fresh on port 3001, health-check"
+    echo "  restart-all   Restart both FastAPI and Next.js"
     echo "  check-api     Quick health-check of FastAPI + Next.js"
     echo "  pre-test      Gate: verify both servers up before tests (exits 1 if not)"
     echo "  seed          Populate DB with seed data (skips existing rows)"

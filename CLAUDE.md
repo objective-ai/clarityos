@@ -11,7 +11,7 @@
 - `app/(tenant)/[tenant]/` — tenant pages | `app/api/` — BFF proxy routes (no business logic)
 - `backend/api/routes/` — FastAPI endpoints | `backend/schemas/` — Pydantic models
 - `backend/db/models/tenant/clinical.py` — ORM + enums | `store/` — Zustand stores
-- `lib/` — all business logic + DB access | `lib/bff.ts` — BFF proxy
+- `lib/` — all business logic + DB access | `lib/bff.ts` — BFF proxy helper
 - `components/` — presentational only, no DB or fetch calls
 - `types/` — shared TS types | `tests/e2e/` — Playwright specs
 
@@ -29,6 +29,7 @@
 - **DB:** Seed into `public` schema only. `clinic_sunview` unused (future v2/v3).
 - **APIs:** Check `backend/api/routes/` AND `app/api/` before calling endpoints.
 - **DB columns:** Check ORM model in `clinical.py` before queries.
+- **Clinical data writes:** Always in the primary DB transaction — never fire-and-forget fetch calls.
 
 ## Clinical Data Rules (non-negotiable)
 - Any patient/clinical data change requires audit-clinical check
@@ -37,10 +38,12 @@
 
 ## Testing
 - Dev creds: duytran@yahoo.com / 123456
-- E2E: use `playwright-cli` — never standalone node scripts
+- E2E: use `playwright-cli` skill — never standalone node scripts
 - E2E helpers: `tests/e2e/helpers/test-utils.js` — use `loginOrRestore()` over `login()`
 - Run `bash scripts/dev.sh pre-test` before any E2E test
 - New features need at least one unit test in `lib/` before PR
+- `npm run lint` does NOT support `--cache` flags (next lint strips them)
+- `npx vitest run <file>` — vitest uses `--reporter` not `--testPathPattern`
 
 ## Requires My Approval
 - New database schema changes
