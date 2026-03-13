@@ -236,6 +236,9 @@ const RxCell = memo(function RxCell({
   const [localError, setLocalError] = useState<string | null>(null);
   const [hasFocus, setHasFocus] = useState(false);
 
+  const rawTextRef = useRef(rawText);
+  rawTextRef.current = rawText;
+
   const prevStoredRef = useRef(storedValue);
   useEffect(() => {
     if (prevStoredRef.current !== storedValue && !hasFocus) {
@@ -290,7 +293,11 @@ const RxCell = memo(function RxCell({
       setRawText(raw);
 
       const { value, error: parseError } = parseCellValue(rowKey, raw);
-      setLocalError(parseError);
+
+      // Suppress errors for partial typing prefixes (e.g. "-", "+", ".")
+      // so the user doesn't see "Must be a number" while still typing.
+      const isTypingPrefix = /^[+\-.]$/.test(raw) || /^[+\-]\.$/.test(raw);
+      setLocalError(parseError && !isTypingPrefix ? parseError : null);
 
       if (parseError === null) {
         setCellValue(colIndex, rowKey, value);
@@ -310,20 +317,29 @@ const RxCell = memo(function RxCell({
     [colIndex, rowKey, storedValue, setFocused]
   );
 
-  const handleBlur = useCallback(() => {
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     setHasFocus(false);
-    const { value, error: parseError } = parseCellValue(rowKey, rawText);
+    const currentRaw = rawTextRef.current;
+    const { value, error: parseError } = parseCellValue(rowKey, currentRaw);
     setLocalError(parseError);
 
     if (parseError === null && value !== null) {
       const formatted = rawCellValue(rowKey, value);
       setRawText(formatted);
       setCellValue(colIndex, rowKey, value);
-    } else if (!rawText.trim()) {
+    } else if (!currentRaw.trim()) {
       setRawText("");
     }
-    flushSave(colIndex);
-  }, [colIndex, rowKey, rawText, setCellValue, flushSave]);
+
+    // Only flush immediately when leaving this column — moving within
+    // the same column (e.g. CYL → AXIS) lets the debounce handle it,
+    // avoiding premature validation of incomplete field groups.
+    const nextEl = e.relatedTarget as HTMLElement | null;
+    const stayingInColumn = nextEl?.id?.startsWith(`rx-cell-${colIndex}-`) ?? false;
+    if (!stayingInColumn) {
+      flushSave(colIndex);
+    }
+  }, [colIndex, rowKey, setCellValue, flushSave]);
 
   const displayValue = hasFocus
     ? rawText

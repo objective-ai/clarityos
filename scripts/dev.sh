@@ -43,14 +43,14 @@ case "${1:-help}" in
 
   check-api)
     API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "down")
-    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "down")
+    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "down")
     echo "FastAPI: $API | Next.js: $NEXT"
     ;;
 
   pre-test)
     # Quick gate: ensure both servers are up before any test run
     API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "000")
-    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
+    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "000")
     FAIL=0
     if [ "$API" != "200" ]; then echo "FAIL: FastAPI not responding ($API)"; FAIL=1; fi
     if [ "$NEXT" != "200" ]; then echo "FAIL: Next.js not responding ($NEXT)"; FAIL=1; fi

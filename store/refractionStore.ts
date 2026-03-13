@@ -207,19 +207,10 @@ async function saveColumnToAPI(
   };
 
   try {
-    // Client-side validation (fast feedback)
-    const errors: { field: string; message: string }[] = [];
-    if (draft.od.cylinder && !draft.od.axis)
-      errors.push({ field: "od.axis", message: "Axis required when cylinder is set" });
-    if (draft.os.cylinder && !draft.os.axis)
-      errors.push({ field: "os.axis", message: "Axis required when cylinder is set" });
-
-    if (errors.length > 0) {
-      actions.setColumnError(colIndex, errors);
-      return;
-    }
-
     // Real API — PATCH /api/encounters/{id}/column/{col} — no mock fallback
+    // Note: cylinder/axis co-dependency is validated server-side by the
+    // Pydantic schema. Client-side validation was removed because it
+    // fired prematurely during normal CYL → AXIS data entry flow.
     const json = await apiFetch<{ id: string }>(
       `/api/encounters/${encounterId}/column/${colIndex}`,
       { method: "PATCH", body: JSON.stringify(body) },

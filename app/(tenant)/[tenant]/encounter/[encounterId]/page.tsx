@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import type { ScribeStructuredData } from "@/hooks/useAiScribe";
 import { Entitlement } from "@/lib/entitlements";
 import type { RowKey } from "@/types/refraction";
 import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/exam-findings";
@@ -69,8 +68,8 @@ const PrepMeCard = dynamic(
   () => import("@/components/encounter/PrepMeCard").then((m) => ({ default: m.PrepMeCard })),
   { loading: () => <div className="animate-pulse h-12 bg-white/5 rounded-xl" />, ssr: false },
 );
-const ExamMergePanel = dynamic(
-  () => import("@/components/encounter/merge-panel/ExamMergePanel").then((m) => ({ default: m.ExamMergePanel })),
+const InlineReviewSection = dynamic(
+  () => import("@/components/encounter/review-section/InlineReviewSection").then((m) => ({ default: m.InlineReviewSection })),
   { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
 );
 import { useProblemListStore } from "@/store/problemListStore";
@@ -185,6 +184,7 @@ export default function EncounterPage({
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
   const [superbillOpen, setSuperbillOpen] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [reviewMode, setReviewMode] = useState(false);
 
   // Required-field gate for the Finalize button
   const vitalsDraftForFinalize = useVitalsDraft(params.encounterId);
@@ -208,7 +208,7 @@ export default function EncounterPage({
       revertChiefComplaint(eid, (oldValue as string) ?? "");
     } else if (field.startsWith("vitals.")) {
       const vitalField = field.replace("vitals.", "");
-      revertVitalsField(eid, vitalField as keyof ScribeStructuredData["vitals"] & string, oldValue);
+      revertVitalsField(eid, vitalField as never, oldValue);
     } else if (field.startsWith("exam.")) {
       const [, section, eye, structure, fieldName] = field.split(".");
       revertStructureField(eid, section as ExamSection, eye as "od" | "os", structure, fieldName as keyof StructureFinding, oldValue as string);
@@ -421,97 +421,14 @@ export default function EncounterPage({
         </div>
       )}
 
-      <div id="section-vitals">
-        {canEditClinical && !isFinalized ? (
-          <VitalsForm encounterId={params.encounterId} />
-        ) : (
-          <VitalsCard encounterId={params.encounterId} isReadOnly={clinicalReadOnly} />
-        )}
-      </div>
-
-      {/* Refraction */}
-      <div id="section-rx">
-        <Card>
-          <CardContent className="p-6">
-            <RefractionGrid
-              encounterId={params.encounterId}
-              initialRefractions={[]}
-              isReadOnly={clinicalReadOnly}
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Continuity Sidebar -- active master problems */}
-      <ContinuitySidebar
-        patientId={patientId ?? ""}
-        encounterId={params.encounterId}
-        isReadOnly={clinicalReadOnly}
-      />
-
-      {/* Exam Findings -- Inline merge panel when AI data available, else normal side-by-side */}
-      <div id="section-exam">
-        {aiStructuredData?.exam_findings && !isFinalized && canEditClinical ? (
-          <PermissionGate roles={["doctor", "owner"]} fallback={
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card><CardContent className="p-6"><ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" /></CardContent></Card>
-              <Card><CardContent className="p-6"><ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" /></CardContent></Card>
-            </div>
-          }>
-            <ExamMergePanel
-              encounterId={params.encounterId}
-              structuredData={aiStructuredData}
-              onDismiss={() => setAiStructuredData(params.encounterId, null)}
-            />
-          </PermissionGate>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardContent className="p-6">
-                {isFinalized || !canEditClinical ? (
-                  <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
-                ) : (
-                  <PermissionGate roles={["doctor", "owner"]} fallback={
-                    <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
-                  }>
-                    <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="anterior_segment" />
-                  </PermissionGate>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                {isFinalized || !canEditClinical ? (
-                  <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
-                ) : (
-                  <PermissionGate roles={["doctor", "owner"]} fallback={
-                    <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
-                  }>
-                    <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="posterior_segment" />
-                  </PermissionGate>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-
-      {/* Diagnoses -- full width, 2-column list */}
-      <div id="section-dx">
-        <PermissionGate roles={["doctor", "owner"]}>
-          <Card>
-            <CardContent className="p-6">
-              <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} columns={2} />
-            </CardContent>
-          </Card>
-        </PermissionGate>
-      </div>
-
+      {/* AI Scribe widget — always visible above clinical sections */}
       <div id="section-plan">
         <PermissionGate roles={["doctor", "owner"]}>
           {!isFinalized ? (
-            <AiScribeWidget encounterId={params.encounterId} />
+            <AiScribeWidget
+              encounterId={params.encounterId}
+              onReviewMerge={() => setReviewMode(true)}
+            />
           ) : encounterState?.aiSummaryText ? (
             <Card>
               <CardContent className="p-6">
@@ -527,6 +444,92 @@ export default function EncounterPage({
           ) : null}
         </PermissionGate>
       </div>
+
+      {/* Review Mode: inline review section replaces clinical forms */}
+      {reviewMode ? (
+        <InlineReviewSection
+          encounterId={params.encounterId}
+          onClose={() => setReviewMode(false)}
+          onApply={() => {
+            setReviewMode(false);
+            setAiStructuredData(params.encounterId, null);
+          }}
+        />
+      ) : (
+        <>
+          <div id="section-vitals">
+            {canEditClinical && !isFinalized ? (
+              <VitalsForm encounterId={params.encounterId} />
+            ) : (
+              <VitalsCard encounterId={params.encounterId} isReadOnly={clinicalReadOnly} />
+            )}
+          </div>
+
+          {/* Refraction */}
+          <div id="section-rx">
+            <Card>
+              <CardContent className="p-6">
+                <RefractionGrid
+                  encounterId={params.encounterId}
+                  initialRefractions={[]}
+                  isReadOnly={clinicalReadOnly}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Continuity Sidebar -- active master problems */}
+          <ContinuitySidebar
+            patientId={patientId ?? ""}
+            encounterId={params.encounterId}
+            isReadOnly={clinicalReadOnly}
+          />
+
+          {/* Exam Findings -- always normal side-by-side view */}
+          <div id="section-exam">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardContent className="p-6">
+                  {isFinalized || !canEditClinical ? (
+                    <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
+                  ) : (
+                    <PermissionGate roles={["doctor", "owner"]} fallback={
+                      <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
+                    }>
+                      <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="anterior_segment" />
+                    </PermissionGate>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  {isFinalized || !canEditClinical ? (
+                    <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
+                  ) : (
+                    <PermissionGate roles={["doctor", "owner"]} fallback={
+                      <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
+                    }>
+                      <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="posterior_segment" />
+                    </PermissionGate>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Diagnoses -- full width, 2-column list */}
+          <div id="section-dx">
+            <PermissionGate roles={["doctor", "owner"]}>
+              <Card>
+                <CardContent className="p-6">
+                  <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} columns={2} />
+                </CardContent>
+              </Card>
+            </PermissionGate>
+          </div>
+        </>
+      )}
 
       {/* Addenda — post-finalization amendments (doctors & owners only) */}
       {isFinalized && (

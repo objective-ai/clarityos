@@ -157,6 +157,55 @@ Never omit confidence. Never fabricate a value to fill a field — use null with
 
 ---
 
+## SPOKEN NUMBER NORMALIZATION
+
+Doctors dictate numbers in spoken form. Convert to clinical format:
+- "minus one-fifty" → -1.50 | "minus one-seventy-five" → -1.75
+- "minus two-fifty" → -2.50 | "minus two-seventy-five" → -2.75
+- "minus one-twenty-five axis ninety" → cylinder: "-1.25", axis: "90"
+- "minus one-zero-zero axis eighty-five" → cylinder: "-1.00", axis: "85"
+- "plus two-zero-zero" → add: "+2.00" | "plus one-fifty" → add: "+1.50"
+- "minus three-zero-zero" → sphere: "-3.00"
+- "point-three cup" → cup_to_disc_ratio: "0.3"
+- "14 in the right and 15 in the left" → iop_od: 14, iop_os: 15
+- Refraction add power is ALWAYS positive (prefix with +)
+- Cylinder is ALWAYS negative in minus-cylinder convention
+
+---
+
+## WNL / NORMAL FINDINGS MAPPING
+
+When the doctor says "clear", "WNL", "within normal limits", "all normal", "looks good",
+"healthy", or gives no finding for a structure, use the correct normal dropdown value:
+- lids_lashes → status: "Normal"
+- conjunctiva_sclera → status: "White & quiet"
+- cornea → status: "Clear"
+- anterior_chamber → status: "Deep & quiet"
+- iris → status: "Flat, normal architecture"
+- lens → status: "Clear"
+- optic_nerve → status: "Healthy, pink"
+- macula → status: "Flat & intact"
+- vitreous → status: "Clear"
+- vessels → status: "Normal A/V ratio"
+- periphery → status: "Flat & intact"
+Do NOT output null for these — if any structure is examined and stated as normal, populate it.
+
+---
+
+## NOISE FILTERING
+
+Ignore non-clinical content. Extract only clinical data:
+IGNORE: Social greetings ("How are the kids?", "Good to see you", "See you next time")
+IGNORE: Instructions to the patient ("Look at my ear", "Hold still", "Cover your eye")
+IGNORE: Equipment/exam mechanics ("Let me adjust...", "Which is better, one or two?")
+IGNORE: Scheduling/cost/insurance questions from patient
+KEEP: Any numeric measurement (IOP, VA, Rx values) even if surrounded by noise
+KEEP: Any clinical observation ("scratch", "clear", "drusen") regardless of order
+KEEP: Any diagnosis, plan, or prescription decision
+When findings are stated out of order, group them by anatomical location before outputting.
+
+---
+
 ## Part 1 — SOAP Narrative
 
 Write a concise, professional clinical note in SOAP format:
@@ -313,22 +362,9 @@ async def generate_ai_scribe(
             enc.ai_summary_text = soap_text
             enc.ai_summary_generated_at = datetime.now(timezone.utc)
 
-            # ── Also persist assessment_and_plan from the JSON ────
-            if len(parts) > 1:
-                try:
-                    raw_json = parts[1].strip().lstrip("`").lstrip("json").strip()
-                    if raw_json.endswith("```"):
-                        raw_json = raw_json[:-3].strip()
-                    parsed = json.loads(raw_json)
-                    ap = parsed.get("assessment_and_plan")
-                    if isinstance(ap, dict):
-                        ap_val = ap.get("value")
-                    else:
-                        ap_val = ap
-                    if ap_val and isinstance(ap_val, str):
-                        enc.assessment_and_plan = ap_val
-                except (json.JSONDecodeError, KeyError):
-                    pass  # JSON parse failed — A&P will be saved via accept call
+            # A&P is no longer auto-saved during streaming.
+            # It will only be persisted when the doctor explicitly applies it
+            # through the inline review section → applyResolutions().
 
             await log_action(
                 db, ctx, AuditAction.AI_SCRIBE_GENERATED, "encounter", enc.id,

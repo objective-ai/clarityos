@@ -168,8 +168,8 @@ PATIENT_IDS = [uuid.UUID(f"d0000000-0005-0000-0000-{str(i).zfill(12)}") for i in
 # Appointments (13)
 APPT_IDS = [uuid.UUID(f"a0000000-0006-0000-0000-{str(i).zfill(12)}") for i in range(1, 14)]
 
-# Encounters (7)
-ENC_IDS = [uuid.UUID(f"e0000000-0007-0000-0000-{str(i).zfill(12)}") for i in range(1, 8)]
+# Encounters (8)
+ENC_IDS = [uuid.UUID(f"e0000000-0007-0000-0000-{str(i).zfill(12)}") for i in range(1, 9)]
 
 # Superbills (3)
 SB_IDS = [uuid.UUID(f"50000000-0008-0000-0000-{str(i).zfill(12)}") for i in range(1, 4)]
@@ -741,13 +741,14 @@ def _seed_appointments(session: Session) -> None:
 # ── Encounters ────────────────────────────────────────────────────────────
 
 def _seed_encounters(session: Session) -> None:
-    step("Seeding 7 Encounters")
+    step("Seeding 8 Encounters")
 
     _seed_enc_hargrove(session)
     _seed_enc_vasquez(session)
     _seed_enc_thornton_series(session)
     _seed_enc_thompson(session)
     _seed_enc_david_kim_today(session)
+    _seed_enc_donovan_today(session)
 
     session.flush()
 
@@ -1338,6 +1339,39 @@ def _seed_enc_david_kim_today(session: Session) -> None:
     ok("Encounter 7 (David Kim — in progress) created")
 
 
+def _seed_enc_donovan_today(session: Session) -> None:
+    """E8: William Donovan — post-LASIK annual, presbyopia worsening; in-exam today."""
+    if session.get(Encounter, ENC_IDS[7]):
+        warn("Encounter 8 (Donovan) exists — skipping"); return
+
+    session.add(Encounter(
+        id=ENC_IDS[7], tenant_id=TENANT_ID,
+        patient_id=PATIENT_IDS[4], provider_id=STAFF_DUY_ID,
+        appointment_id=APPT_IDS[4], encounter_date=TODAY,
+        is_finalized=False,
+    ))
+
+    # Pre-test vitals done — post-LASIK IOP typically normal-low
+    session.add(VitalsAndPretest(
+        id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[7],
+        iop_od=Decimal("13.0"), iop_os=Decimal("14.0"),
+        iop_time=_dt(TODAY, 9, 10), iop_method="icare",
+    ))
+
+    # Habitual Rx: plano post-LASIK with +1.50 reading add (no cylinder → axis NULL)
+    session.add(Refraction(
+        id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[7],
+        refraction_type=RefractionType.HABITUAL,
+        od_sphere=Decimal("0.00"), od_cylinder=Decimal("0.00"), od_axis=None,
+        od_add=Decimal("1.50"), od_visual_acuity="20/20",
+        os_sphere=Decimal("0.00"), os_cylinder=Decimal("0.00"), os_axis=None,
+        os_add=Decimal("1.50"), os_visual_acuity="20/20",
+    ))
+
+    session.flush()
+    ok("Encounter 8 (Donovan — in progress) created")
+
+
 # ── Superbills ────────────────────────────────────────────────────────────
 
 def _seed_superbills(session: Session) -> None:
@@ -1539,7 +1573,7 @@ def main() -> None:
   ├── Staff             : 4  (Dr. Duy Tran, Dr. Sarah Lin, Marcus Webb, Emily Nguyen)
   ├── Patients          : 10 (diverse demographics)
   ├── Appointments      : 13 (3 past + 8 today + 2 next week)
-  ├── Encounters        : 7  (5 finalized + 1 in-progress + 1 glaucoma series)
+  ├── Encounters        : 8  (5 finalized + 2 in-progress + 1 glaucoma series)
   ├── Superbills        : 3  (with CPT line items)
   └── IntakeTokens      : 2  (pending)
 

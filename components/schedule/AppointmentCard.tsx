@@ -180,13 +180,22 @@ export function AppointmentCard({
           )}
         </div>
 
-        {/* Status + Triage badges */}
+        {/* Intake · Status badges */}
         <div className="flex items-center gap-1.5 shrink-0">
           {appointment.intakeStatus === "submitted" && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
               Intake
             </span>
+          )}
+          {appointment.intakeStatus === "pending" && (
+            <button
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+              onClick={(e) => { e.stopPropagation(); onSendIntake(appointment); }}
+            >
+              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+              Intake Form
+            </button>
           )}
           {appointment.triageFlags?.urgency === "urgent" && (
             <span
@@ -209,15 +218,6 @@ export function AppointmentCard({
 
         {/* Actions */}
         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {appointment.intakeStatus === "pending" && (canCheckIn || canStartExam) && (
-            <button
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25 hover:bg-amber-500/20 transition-colors"
-              onClick={() => onSendIntake(appointment)}
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-              Intake Form
-            </button>
-          )}
           {canCheckIn && (
             <Button size="sm" onClick={() => onCheckIn(appointment.id)}>
               Check In
@@ -228,13 +228,13 @@ export function AppointmentCard({
               Start Pre-Test
             </Button>
           )}
-          {canContinuePretest && hasEncounter && (
-            <Button size="sm" onClick={() => onViewEncounter(appointment.encounterShortId!)}>
+          {canContinuePretest && (
+            <Button size="sm" onClick={() => onViewEncounter(appointment.encounterShortId ?? appointment.id)}>
               Continue Pre-Test
             </Button>
           )}
-          {canContinueExam && hasEncounter && (
-            <Button size="sm" onClick={() => onViewEncounter(appointment.encounterShortId!)}>
+          {canContinueExam && (
+            <Button size="sm" onClick={() => onViewEncounter(appointment.encounterShortId ?? appointment.id)}>
               Continue Exam
             </Button>
           )}

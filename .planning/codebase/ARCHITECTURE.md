@@ -59,8 +59,7 @@ RootLayout (app/layout.tsx)
   (tenant)/[tenantId]/layout.tsx
     SidebarProvider          — Passes collapsed state via React Context
     Sidebar                  — Glass nav sidebar (collapsible)
-    TopNav                   — Page title + sun/moon toggle + avatar
-    PatientStickyHeader      — Clinical safety banner (encounter routes only)
+    TopNav                   — Page title + sun/moon toggle + avatar (patient info shown inline on encounter routes)
     <main>
       {children}             — The actual page content
 ```
@@ -176,13 +175,13 @@ Every clinical route calls `log_action()` after a successful database operation.
 The AI Scribe is a streaming SSE endpoint (`POST /api/encounters/{id}/ai-scribe`) that:
 
 1. Validates the encounter exists and is not finalized
-2. Streams from `claude-sonnet-4-6-20250514` via the Anthropic SDK
-3. Emits `data: {"text": "..."}` events word-by-word to the frontend
-4. After Claude emits `___JSON_START___`, the backend extracts the SOAP narrative
-5. Saves the SOAP text to `encounter.ai_summary_text` on stream completion
-6. Appends an `AI_SCRIBE_GENERATED` audit log entry
+2. Resolves the AI model via `get_tenant_ai_model()` (tenant-configurable, defaults to `claude-sonnet-4-6-20250514`)
+3. Streams from Claude via the Anthropic SDK; emits `data: {"text": "..."}` events word-by-word
+4. After Claude emits `___JSON_START___`, the backend extracts the SOAP narrative and saves it to `encounter.ai_summary_text`
+5. Does NOT auto-save `assessment_and_plan` — only persists when the doctor explicitly applies via the merge panel
+6. Appends an `AI_SCRIBE_GENERATED` audit log entry on completion
 
-A companion endpoint (`POST /api/encounters/{id}/ai-scribe/accept`) is called client-side when the provider accepts the AI auto-fill. It appends an `AI_SCRIBE_AUTOFILL` audit log entry with the before/after diff.
+A companion endpoint (`POST /api/encounters/{id}/ai-scribe/accept`) is called after the provider applies resolutions from the inline merge panel. It persists `assessment_and_plan` if included, and appends an `AI_SCRIBE_AUTOFILL` audit log entry with the full before/after diff.
 
 ---
 
@@ -287,22 +286,39 @@ Component → Zustand store action
 ### AI Scribe Data Flow
 
 ```
-Provider types transcript → useAiScribe.generate(transcript)
-  → POST /api/encounters/{id}/ai-scribe
-    → FastAPI streams SSE: data: {"text": "..."}
-    → Frontend accumulates text:
-        before ___JSON_START___: updates soapText (visible)
-        after ___JSON_START___: buffers jsonBuffer (hidden)
-    → data: {"done": true}
-    → Frontend parses jsonBuffer → structuredData
-  → Provider reviews, clicks "Accept & Auto-Fill"
-    → handleAccept() dispatches to 5 stores simultaneously:
-        setChiefComplaint() → encounterStore
-        setField() (per vital) → vitalsStore
-        setStructureField() (per finding) → examFindingsStore
-        addDiagnosis() (per Dx) → diagnosisStore
-        setCellValue() (per Rx field) → refractionStore
-    → POST /api/encounters/{id}/ai-scribe/accept (audit log with diff)
+Provider pastes transcript → AiScribeWidget (components/encounter/AiScribeWidget.tsx)
+  → useAiScribe.generate(transcript)  [hooks/useAiScribe.ts]
+    → POST /api/encounters/{id}/ai-scribe
+      → FastAPI streams SSE: data: {"text": "..."}
+      → Frontend accumulates text:
+          before ___JSON_START___: updates soapText (displayed live)
+          after  ___JSON_START___: buffers jsonBuffer (hidden)
+      → data: {"done": true}
+      → handleParsedJson(): strips markdown fences → JSON.parse()
+      → normalizeScribeData()  [lib/scribe-normalizer.ts]
+          rounds Rx to 0.25D, enforces minus-cyl, clamps axis 1-180, rounds IOP
+      → structuredDataV2 stored in encounterStore.aiStructuredData
+
+  → Widget status → "ai_ready": SOAP displayed, "Review & Merge (N)" button
+  → Provider clicks "Review & Merge"
+    → InlineReviewSection opens  [components/encounter/review-section/]
+        Left pane: StickySoapNote (SOAPViewer with section syntax-highlighting)
+        Right pane: ConflictTable — per-row Keep/Use AI toggles grouped by section
+        buildConflicts(structuredDataV2, storeSnapshots) detects field-by-field diffs
+          Sections: chief_complaint, vitals, exam_anterior, exam_posterior,
+                    diagnoses, refraction(manifest), assessment_and_plan
+          Rules: match → skip; AI only → default use_ai; conflict → default keep
+                 new diagnoses → always default keep (clinical safety)
+    → Provider reviews rows, optional "Approve All Safe (N)"
+    → Provider clicks "Apply N Selected"
+      → applyResolutions(encounterId, rows, soapText)  [conflict-resolver/applyResolutions.ts]
+          dispatches use_ai rows to stores:
+            encounterStore.setChiefComplaint / setAssessmentAndPlan
+            vitalsStore.setField
+            examFindingsStore.setStructureField
+            diagnosisStore.addDiagnosis
+            refractionStore.setCellValue
+      → POST /api/encounters/{id}/ai-scribe/accept (audit log with diff)
 ```
 
 ---
