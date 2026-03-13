@@ -316,6 +316,9 @@ export const useRefractionStore = create<RefractionStore>()(
       },
 
       setCellValue(colIndex, rowKey, value) {
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] setCellValue(${colIndex}, ${rowKey}, ${value})`);
+        }
         set(
           (state) => {
             const columns = [...state.columns];
@@ -329,6 +332,9 @@ export const useRefractionStore = create<RefractionStore>()(
           false,
           "setCellValue"
         );
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] setCellValue: calling scheduleSave`);
+        }
         get().scheduleSave(colIndex);
       },
 
@@ -336,8 +342,17 @@ export const useRefractionStore = create<RefractionStore>()(
         // Cancel existing debounce for this column
         if (debounceTimers[colIndex]) {
           clearTimeout(debounceTimers[colIndex]);
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] scheduleSave(${colIndex}): cancelled previous timer`);
+          }
+        }
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] scheduleSave(${colIndex}): starting 1500ms debounce`);
         }
         debounceTimers[colIndex] = setTimeout(() => {
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] scheduleSave(${colIndex}): debounce fired, calling flushSave`);
+          }
           get().flushSave(colIndex);
         }, DEBOUNCE_MS);
       },
@@ -350,8 +365,17 @@ export const useRefractionStore = create<RefractionStore>()(
         const state = get();
         const column = state.columns[colIndex];
 
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] flushSave(${colIndex}): saveStatus=${column.saveStatus}`);
+        }
+
         // Don't save if nothing has changed or already saving
-        if (column.saveStatus === "idle" || column.saveStatus === "saving") return;
+        if (column.saveStatus === "idle" || column.saveStatus === "saving") {
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] flushSave(${colIndex}): SKIPPED - status is idle or saving`);
+          }
+          return;
+        }
 
         // Don't save if the draft has no data worth saving
         const draft = column.draft;
@@ -360,7 +384,16 @@ export const useRefractionStore = create<RefractionStore>()(
           draft.od.cylinder !== null ||
           draft.os.sphere !== null ||
           draft.os.cylinder !== null;
-        if (!hasAnyValue) return;
+        if (!hasAnyValue) {
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] flushSave(${colIndex}): SKIPPED - no data to save`);
+          }
+          return;
+        }
+
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] flushSave(${colIndex}): calling saveColumnToAPI`);
+        }
 
         saveColumnToAPI(state.encounterId, column, colIndex, {
           commitColumn:  state.commitColumn,

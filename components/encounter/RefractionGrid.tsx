@@ -291,6 +291,9 @@ const RxCell = memo(function RxCell({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
       setRawText(raw);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[RxCell ${colIndex}-${rowKey}] onChange: raw="${raw}"`);
+      }
 
       const { value, error: parseError } = parseCellValue(rowKey, raw);
 
@@ -301,6 +304,9 @@ const RxCell = memo(function RxCell({
 
       if (parseError === null) {
         setCellValue(colIndex, rowKey, value);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[RxCell ${colIndex}-${rowKey}] setCellValue: value=${value}`);
+        }
       }
     },
     [colIndex, rowKey, setCellValue]
@@ -320,6 +326,9 @@ const RxCell = memo(function RxCell({
   const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     setHasFocus(false);
     const currentRaw = rawTextRef.current;
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[RxCell ${colIndex}-${rowKey}] onBlur: currentRaw="${currentRaw}", relatedTarget=${e.relatedTarget?.id ?? "null"}`);
+    }
     const { value, error: parseError } = parseCellValue(rowKey, currentRaw);
     setLocalError(parseError);
 
@@ -337,7 +346,14 @@ const RxCell = memo(function RxCell({
     const nextEl = e.relatedTarget as HTMLElement | null;
     const stayingInColumn = nextEl?.id?.startsWith(`rx-cell-${colIndex}-`) ?? false;
     if (!stayingInColumn) {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[RxCell ${colIndex}-${rowKey}] onBlur: calling flushSave (leaving column)`);
+      }
       flushSave(colIndex);
+    } else {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[RxCell ${colIndex}-${rowKey}] onBlur: staying in column, debounce will handle save`);
+      }
     }
   }, [colIndex, rowKey, setCellValue, flushSave]);
 
