@@ -303,6 +303,20 @@ export const useRefractionStore = create<RefractionStore>()(
       },
 
       init(encounterId, initialRefractions, isReadOnly) {
+        // Idempotency guard: if the store already holds loaded data for this
+        // encounter (any column has a non-null committed value), skip blanking
+        // the drafts. This prevents RefractionGrid's mount-triggered init() from
+        // wiping live data when the component remounts after review mode toggles.
+        const current = get();
+        if (
+          current.encounterId === encounterId &&
+          current.columns.some((c) => c.committed !== null)
+        ) {
+          // Data is already loaded — just honour the read-only flag update.
+          set({ isReadOnly }, false, "init/skip");
+          return;
+        }
+
         const columns: ColumnState[] = REFRACTION_COLUMNS.map((type) => {
           const existing = initialRefractions.find((r) => r.refraction_type === type);
           const draft = existing ?? blankDraft(type);
