@@ -11,7 +11,7 @@ import {
 import type { EyeLaterality, Diagnosis } from "@/types/diagnosis";
 
 // ---------------------------------------------------------------------------
-// Common optometry ICD-10 codes
+// ICD-10 codes loaded from JSON
 // ---------------------------------------------------------------------------
 
 interface ICD10Code {
@@ -20,29 +20,21 @@ interface ICD10Code {
   category: string;
 }
 
-const COMMON_CODES: ICD10Code[] = [
-  { code: "H52.13", description: "Myopia, bilateral", category: "Refractive" },
-  { code: "H52.11", description: "Myopia, right eye", category: "Refractive" },
-  { code: "H52.12", description: "Myopia, left eye", category: "Refractive" },
-  { code: "H52.03", description: "Hypermetropia, bilateral", category: "Refractive" },
-  { code: "H52.223", description: "Regular astigmatism, bilateral", category: "Refractive" },
-  { code: "H52.4", description: "Presbyopia", category: "Refractive" },
-  { code: "H40.001", description: "Preglaucoma, unspecified, right eye", category: "Glaucoma" },
-  { code: "H40.002", description: "Preglaucoma, unspecified, left eye", category: "Glaucoma" },
-  { code: "H40.11X0", description: "Primary open-angle glaucoma, stage unspecified", category: "Glaucoma" },
-  { code: "H40.053", description: "Ocular hypertension, bilateral", category: "Glaucoma" },
-  { code: "H25.10", description: "Age-related nuclear cataract, unspecified eye", category: "Cataract" },
-  { code: "H25.11", description: "Age-related nuclear cataract, right eye", category: "Cataract" },
-  { code: "H25.12", description: "Age-related nuclear cataract, left eye", category: "Cataract" },
-  { code: "H35.30", description: "Unspecified macular degeneration", category: "Retinal" },
-  { code: "E11.319", description: "Type 2 DM with unspec diabetic retinopathy without macular edema", category: "Retinal" },
-  { code: "H35.3110", description: "Nonexudative AMD, right eye, stage unspec", category: "Retinal" },
-  { code: "H04.123", description: "Dry eye syndrome, bilateral", category: "Dry Eye" },
-  { code: "H04.121", description: "Dry eye syndrome, right eye", category: "Dry Eye" },
-  { code: "H04.122", description: "Dry eye syndrome, left eye", category: "Dry Eye" },
-  { code: "Z01.00", description: "Encounter for examination of eyes without abnormal findings", category: "General" },
-  { code: "Z01.01", description: "Encounter for examination of eyes with abnormal findings", category: "General" },
-];
+let ICD10_CODES_CACHE: ICD10Code[] | null = null;
+
+async function loadICD10Codes(): Promise<ICD10Code[]> {
+  if (ICD10_CODES_CACHE) return ICD10_CODES_CACHE;
+
+  try {
+    const response = await fetch("/icd10-codes.json");
+    const data = await response.json() as { codes: ICD10Code[] };
+    ICD10_CODES_CACHE = data.codes;
+    return data.codes;
+  } catch (error) {
+    console.error("Failed to load ICD-10 codes:", error);
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -71,23 +63,29 @@ export function DiagnosisPicker({
   const saveStatus = useDiagnosisSaveStatus(encounterId);
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [codes, setCodes] = useState<ICD10Code[]>([]);
 
-  // Initialize on mount
+  // Load ICD-10 codes on mount
+  useEffect(() => {
+    loadICD10Codes().then(setCodes);
+  }, []);
+
+  // Initialize store on mount
   useEffect(() => {
     store.init(encounterId, initialDiagnoses);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return COMMON_CODES;
+    if (!search.trim()) return codes;
     const q = search.toLowerCase();
-    return COMMON_CODES.filter(
+    return codes.filter(
       (c) =>
         c.code.toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q) ||
         c.category.toLowerCase().includes(q),
     );
-  }, [search]);
+  }, [search, codes]);
 
   const addDiagnosis = useCallback(
     async (code: ICD10Code, eye: EyeLaterality) => {
