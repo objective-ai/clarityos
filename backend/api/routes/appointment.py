@@ -13,8 +13,11 @@ Endpoints:
   POST   /{appointment_id}/cancel    -- Cancel with required reason
   POST   /{appointment_id}/check-in  -- Transition SCHEDULED/CONFIRMED -> ARRIVED
   POST   /{appointment_id}/revert-check-in -- Revert ARRIVED -> CONFIRMED
-  POST   /{appointment_id}/start-exam -- Transition ARRIVED -> IN_EXAM + create Encounter
+  POST   /{appointment_id}/start-exam -- Transition ARRIVED -> IN_PRETEST + create Encounter (pre-test phase)
+  POST   /{appointment_id}/start-exam-phase -- Transition IN_PRETEST -> IN_EXAM (doctor starts)
+  POST   /{appointment_id}/revert-to-pretest -- Transition IN_EXAM -> IN_PRETEST (back to tech)
   POST   /{appointment_id}/reschedule -- Move to a new time slot
+  POST   /{appointment_id}/no-show   -- Mark as no-show (SCHEDULED/CONFIRMED/ARRIVED -> NO_SHOW)
 """
 
 from datetime import date as _date
@@ -413,7 +416,7 @@ async def check_in_patient(
 
 
 # ---------------------------------------------------------------------------
-# POST /{appointment_id}/start-exam -- ARRIVED -> IN_EXAM + create Encounter
+# POST /{appointment_id}/start-exam -- ARRIVED -> IN_PRETEST + create Encounter
 # ---------------------------------------------------------------------------
 
 
@@ -425,13 +428,14 @@ async def start_exam(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Start the clinical exam for a checked-in patient.
+    Start the pre-test phase for a checked-in patient.
 
     - Validates the appointment is in ARRIVED status (else 409 Conflict).
     - If an Encounter already exists for this appointment, returns it
       with already_existed=True (idempotent -- HTTP 200).
     - Otherwise creates a new Encounter linked via appointment_id FK,
-      transitions appointment to IN_EXAM, returns encounter_id (HTTP 201).
+      transitions appointment to IN_PRETEST (technician phase), returns encounter_id (HTTP 201).
+    - Doctor transitions to IN_EXAM via the separate /start-exam-phase endpoint.
 
     Response: { "encounter_id": "<uuid>", "already_existed": <bool> }
     """
@@ -460,6 +464,12 @@ async def start_exam(
     if existing_enc is not None:
         from fastapi.responses import JSONResponse
 
+        # Ensure consistent state: appointment must be IN_PRETEST when encounter exists.
+        # If it's still ARRIVED (e.g. idempotent re-call or legacy data), transition it.
+        if appt.status == AppointmentStatus.ARRIVED:
+            appt.status = AppointmentStatus.IN_PRETEST
+            await db.flush()
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
@@ -481,7 +491,7 @@ async def start_exam(
     )
     db.add(enc)
 
-    appt.status = AppointmentStatus.IN_EXAM
+    appt.status = AppointmentStatus.IN_PRETEST
 
     await db.flush()
 
@@ -494,12 +504,108 @@ async def start_exam(
         staff_id=staff.id if staff else None,
         encounter_id=enc.id,
         patient_id=appt.patient_id,
-        detail=f"Exam started -- encounter {enc.id} created",
+        detail=f"Pre-test started -- encounter {enc.id} created",
         changes={"encounter_id": str(enc.id)},
         ip_address=request.client.host if request.client else None,
     )
 
     return {"encounter_id": str(enc.id), "encounter_short_id": enc.short_id, "already_existed": False}
+
+
+# ---------------------------------------------------------------------------
+# POST /{appointment_id}/start-exam-phase -- IN_PRETEST -> IN_EXAM
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{appointment_id}/start-exam-phase", response_model=AppointmentResponse)
+async def start_exam_phase(
+    appointment_id: UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.START_EXAM)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Transition from technician pre-test phase to active doctor exam.
+
+    Transitions status: IN_PRETEST -> IN_EXAM.
+    Called when the doctor clicks "Start Exam →" in the encounter page bottom bar.
+    Returns 409 if the appointment is not in IN_PRETEST status.
+    """
+    appt = await _get_appointment_or_404(appointment_id, ctx, db)
+
+    if appt.status != AppointmentStatus.IN_PRETEST:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Expected in_pretest status. "
+                f"Current status: '{appt.status.value}'."
+            ),
+        )
+
+    appt.status = AppointmentStatus.IN_EXAM
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.START_EXAM_PHASE,
+        "appointment",
+        appt.id,
+        patient_id=appt.patient_id,
+        detail="Doctor started exam phase",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    await db.flush()
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
+    return _build_appointment_response(appt)
+
+
+# ---------------------------------------------------------------------------
+# POST /{appointment_id}/revert-to-pretest -- IN_EXAM -> IN_PRETEST
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{appointment_id}/revert-to-pretest", response_model=AppointmentResponse)
+async def revert_to_pretest(
+    appointment_id: UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.START_EXAM)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Revert an active exam back to the pre-test phase.
+
+    Transitions status: IN_EXAM -> IN_PRETEST.
+    Called when the doctor clicks the "Pre-Test" step in the encounter bottom bar.
+    Returns 409 if the appointment is not in IN_EXAM status.
+    """
+    appt = await _get_appointment_or_404(appointment_id, ctx, db)
+
+    if appt.status != AppointmentStatus.IN_EXAM:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Expected in_exam status. "
+                f"Current status: '{appt.status.value}'."
+            ),
+        )
+
+    appt.status = AppointmentStatus.IN_PRETEST
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.REVERT_TO_PRETEST,
+        "appointment",
+        appt.id,
+        patient_id=appt.patient_id,
+        detail="Reverted from exam to pre-test",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    await db.flush()
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
+    return _build_appointment_response(appt)
 
 
 # ---------------------------------------------------------------------------
@@ -541,6 +647,58 @@ async def revert_check_in(
         appt.id,
         patient_id=appt.patient_id,
         detail="Reverted check-in — patient returned to confirmed",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    await db.flush()
+    appt = await _get_appointment_or_404(appt.id, ctx, db)
+    return _build_appointment_response(appt)
+
+
+# ---------------------------------------------------------------------------
+# POST /{appointment_id}/no-show -- SCHEDULED/CONFIRMED/ARRIVED -> NO_SHOW
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{appointment_id}/no-show", response_model=AppointmentResponse)
+async def mark_no_show(
+    appointment_id: UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_APPOINTMENT)),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mark a patient as a no-show.
+
+    Transitions status: SCHEDULED, CONFIRMED, or ARRIVED -> NO_SHOW.
+    Returns 409 if the appointment is not in a no-show-eligible state.
+    """
+    appt = await _get_appointment_or_404(appointment_id, ctx, db)
+
+    no_show_eligible = {
+        AppointmentStatus.SCHEDULED,
+        AppointmentStatus.CONFIRMED,
+        AppointmentStatus.ARRIVED,
+    }
+    if appt.status not in no_show_eligible:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot mark no-show for appointment with status '{appt.status.value}'. "
+                "Only SCHEDULED, CONFIRMED, or ARRIVED appointments can be marked as no-show."
+            ),
+        )
+
+    appt.status = AppointmentStatus.NO_SHOW
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.NO_SHOW,
+        "appointment",
+        appt.id,
+        patient_id=appt.patient_id,
+        detail="Patient marked as no-show",
         ip_address=request.client.host if request.client else None,
     )
 

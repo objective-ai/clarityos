@@ -37,6 +37,7 @@ interface AppointmentState {
   createAppointment: (payload: AppointmentCreatePayload) => Promise<Appointment>;
   updateAppointment: (id: string, payload: AppointmentUpdatePayload) => Promise<Appointment>;
   cancelAppointment: (id: string, reason: string) => Promise<void>;
+  markNoShow: (id: string) => Promise<Appointment>;
   checkInPatient: (id: string) => Promise<Appointment>;
   revertCheckIn: (id: string) => Promise<Appointment>;
   startExam: (id: string) => Promise<StartExamResponse>;
@@ -117,6 +118,16 @@ export const useAppointmentStore = create<AppointmentState>()(
         // Refresh the list
         const { selectedDate } = get();
         await get().fetchAppointments(selectedDate);
+      },
+
+      markNoShow: async (id) => {
+        const appt = await apiFetch<Appointment>(`/api/appointments/${id}/no-show`, {
+          method: "POST",
+        });
+        set((state) => ({
+          appointments: state.appointments.map((a) => (a.id === id ? appt : a)),
+        }));
+        return appt;
       },
 
       checkInPatient: async (id) => {
