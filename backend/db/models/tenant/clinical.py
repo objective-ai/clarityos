@@ -792,6 +792,14 @@ class Diagnosis(TimestampMixin, SoftDeleteMixin, TenantBase):
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Optional link to PatientProblem (for syncing master problem list on encounter finalization)
+    problem_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("patient_problems.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("staff.id", ondelete="SET NULL"),

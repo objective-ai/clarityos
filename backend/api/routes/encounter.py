@@ -387,26 +387,16 @@ async def finalize_encounter(
     )
 
     # ── Post-finalization: sync diagnoses back to master problem list ──
-    # If a promoted diagnosis was marked "Resolved" in the encounter,
-    # update the corresponding PatientProblem.
+    # If a diagnosis linked to a PatientProblem is marked "Resolved" in the encounter,
+    # update the corresponding PatientProblem status.
     for dx in enc.diagnoses:
-        if dx.is_deleted:
-            continue
-        if not dx.notes or "problem_id:" not in dx.notes:
-            continue
-        # Extract problem_id from notes
-        try:
-            pid_str = dx.notes.split("problem_id:")[1].strip().rstrip(")")
-            from uuid import UUID as _UUID
-
-            problem_id = _UUID(pid_str)
-        except (IndexError, ValueError):
+        if dx.is_deleted or not dx.problem_id:
             continue
 
         problem = (
             await db.execute(
                 select(PatientProblem).where(
-                    PatientProblem.id == problem_id,
+                    PatientProblem.id == dx.problem_id,
                     PatientProblem.tenant_id == ctx.tenant_id,
                     PatientProblem.is_deleted == False,  # noqa: E712
                 )

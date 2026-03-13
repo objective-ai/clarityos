@@ -28,6 +28,25 @@ import type {
 } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Coerce Decimal strings from backend into numbers.
+ * FastAPI returns Decimal as string; this normalizes them for frontend use.
+ */
+function normalizeSuperBill(superbill: Superbill): Superbill {
+  return {
+    ...superbill,
+    totalFee: Number(superbill.totalFee) || 0,
+    lineItems: (superbill.lineItems ?? []).map((li) => ({
+      ...li,
+      fee: Number(li.fee) || 0,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
 
@@ -123,15 +142,10 @@ export const useBillingStore = create<BillingStore>()(
         );
 
         try {
-          const superbill = await apiFetch<Superbill>(
+          const rawSuperbill = await apiFetch<Superbill>(
             `/api/encounters/${encounterId}/superbill`,
           );
-
-          // Backend returns Decimal as string — coerce to number
-          superbill.totalFee = Number(superbill.totalFee) || 0;
-          for (const li of superbill.lineItems ?? []) {
-            li.fee = Number(li.fee) || 0;
-          }
+          const superbill = normalizeSuperBill(rawSuperbill);
 
           set(
             {
@@ -197,19 +211,14 @@ export const useBillingStore = create<BillingStore>()(
         );
 
         try {
-          const superbill = await apiFetch<Superbill>(
+          const rawSuperbill = await apiFetch<Superbill>(
             `/api/encounters/${encounterId}/superbill`,
             {
               method: "POST",
               body: JSON.stringify(payload),
             },
           );
-
-          // Backend returns Decimal as string — coerce to number
-          superbill.totalFee = Number(superbill.totalFee) || 0;
-          for (const li of superbill.lineItems ?? []) {
-            li.fee = Number(li.fee) || 0;
-          }
+          const superbill = normalizeSuperBill(rawSuperbill);
 
           set(
             {

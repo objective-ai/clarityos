@@ -26,6 +26,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -462,8 +463,6 @@ async def start_exam(
     ).scalar_one_or_none()
 
     if existing_enc is not None:
-        from fastapi.responses import JSONResponse
-
         # Ensure consistent state: appointment must be IN_PRETEST when encounter exists.
         # If it's still ARRIVED (e.g. idempotent re-call or legacy data), transition it.
         if appt.status == AppointmentStatus.ARRIVED:
