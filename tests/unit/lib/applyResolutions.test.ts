@@ -86,10 +86,12 @@ describe("applyResolutions", () => {
           diagnoses: [
             { id: "dx-1", icd10Code: "H52.13", description: "Myopia", eyeAffected: "OD" },
           ],
+          saveStatus: "idle" as const,
+          error: null,
         },
       },
       updateDiagnosis,
-    } as ReturnType<typeof useDiagnosisStore.getState>);
+    } as unknown as ReturnType<typeof useDiagnosisStore.getState>);
 
     const row = makeRow({
       section: "diagnoses",

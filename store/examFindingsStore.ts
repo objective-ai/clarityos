@@ -236,7 +236,7 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
                     draft: state.findings[key]?.draft ?? blankDraft(section),
                     committed: state.findings[key]?.committed ?? null,
                     saveStatus: "error" as FindingsSaveStatus,
-                    errors: [{ field: "_load", message: msg || "Could not load exam findings" }],
+                    errors: [{ field: "_load", message: err instanceof Error ? err.message : "Could not load exam findings" }],
                     lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
                   },
                 },
