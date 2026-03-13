@@ -8,6 +8,7 @@ import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import type { EntitlementKey } from "@/types/session";
 import { useEncounterStore } from "@/store/encounterStore";
 import { formatClinicTime, useClinicTimezone } from "@/lib/timezone";
+import { SCRIBE_SCENARIOS } from "@/lib/scribe-scenarios";
 import {
   Card,
   CardHeader,
@@ -17,24 +18,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-// ---------------------------------------------------------------------------
-// Demo transcript (pre-loaded so demo can start without typing)
-// ---------------------------------------------------------------------------
-
-const DEMO_TRANSCRIPT =
-  "Okay so today I'm seeing Sarah Chen, 34 year old female coming in for her annual comprehensive exam. " +
-  "Chief complaint is blurry vision at near, she says it's been getting worse over the past six months, " +
-  "especially with reading and computer work. Her current glasses are about two years old. " +
-  "She also mentions some dryness and irritation, worse in the afternoon, no flashes or floaters. " +
-  "Uncorrected distance is 20/80 OD, 20/60 OS. With current glasses 20/40 OD, 20/30 OS. " +
-  "Near VA with current glasses J3 OD, J2 OS. IOP by iCare: 16 OD, 15 OS at 10:05 AM. " +
-  "Manifest refraction: OD -2.25 -0.75 axis 180, OS -2.00 -0.50 axis 175, add plus 1.50 OU. " +
-  "BCVA with new Rx 20/20 OD, 20/20 OS, J1 near OU. " +
-  "Anterior: trace punctate staining OU on NaFl, grade 1 nuclear sclerosis lens OU. " +
-  "Posterior: CDR 0.35 OU, healthy rim tissue, macula flat, vessels normal, periphery intact 360. " +
-  "Assessment: myopia with astigmatism OU, dry eye syndrome OU, early cataract OU — just monitoring for now. " +
-  "Plan: new glasses Rx dispensed, start preservative-free artificial tears four times a day, " +
-  "discuss blue light filters given screen time, follow up in 12 months.";
 
 // ---------------------------------------------------------------------------
 // UpsellModal (moved from page.tsx)
@@ -400,16 +383,6 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
     }
   }, [aiText, status, encounterId, setAiScribeStatus]);
 
-  // Pre-populate demo transcript if empty and no AI text (once)
-  const hasInitialized = useRef(false);
-  useEffect(() => {
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
-    if (!transcript && !aiText) {
-      setAiScribeTranscript(encounterId, DEMO_TRANSCRIPT);
-    }
-  }, [transcript, aiText, encounterId, setAiScribeTranscript]);
-
   const handleTranscriptChange = useCallback(
     (text: string) => {
       // Immediate local update via store (no local state needed, store IS the state)
@@ -585,6 +558,22 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
                 : "Document your clinical decisions and next steps"}
             </CardDescription>
           </div>
+          {hasAiScribe && process.env.NODE_ENV === "development" && (
+            <select
+              className="text-xs px-2 py-1 rounded bg-[var(--bg-glass)] border border-[var(--border-subtle)] text-[var(--text-secondary)] max-w-[160px]"
+              defaultValue=""
+              onChange={(e) => {
+                const scenario = SCRIBE_SCENARIOS.find((s) => s.id === e.target.value);
+                if (scenario) setAiScribeTranscript(encounterId, scenario.transcript);
+                e.target.value = "";
+              }}
+            >
+              <option value="" disabled>[DEV] Load scenario</option>
+              {SCRIBE_SCENARIOS.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
           {hasAiScribe && (
             <Badge variant="default">Premium</Badge>
           )}
