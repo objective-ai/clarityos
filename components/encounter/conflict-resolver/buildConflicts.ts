@@ -113,6 +113,25 @@ const VITALS_MAP: Array<{
   { aiKey: "pupils_os", storeKey: "pupils_os", label: "Pupils OS" },
 ];
 
+/**
+ * Split conflicts into exam (handled by inline merge panel) and non-exam (modal).
+ */
+export function splitConflicts(rows: ConflictRow[]): {
+  exam: ConflictRow[];
+  other: ConflictRow[];
+} {
+  const exam: ConflictRow[] = [];
+  const other: ConflictRow[] = [];
+  for (const row of rows) {
+    if (row.section === "exam_anterior" || row.section === "exam_posterior") {
+      exam.push(row);
+    } else {
+      other.push(row);
+    }
+  }
+  return { exam, other };
+}
+
 export function buildConflicts(
   aiData: ScribeStructuredDataV2,
   stores: StoreSnapshots,

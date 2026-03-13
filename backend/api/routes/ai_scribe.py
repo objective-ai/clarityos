@@ -105,8 +105,43 @@ Diagnoses:
   - Astigmatism → H52.20 / H52.21 / H52.22
   - Presbyopia → H52.4
   - Glaucoma suspect → H40.001–H40.003
-  - Nuclear cataract → H26.10 / H26.11 / H26.12
+  - Nuclear cataract (age-related) / Nuclear sclerosis → H25.10 / H25.11 / H25.12 / H25.13
+  - Cortical cataract (age-related) → H25.01 / H25.011 / H25.012 / H25.013
+  - PSC cataract (age-related) → H25.04 / H25.041 / H25.042 / H25.043
+  - Traumatic cataract → H26.10 / H26.11 / H26.12 (ONLY if "injury", "trauma", or "accident" is mentioned)
   - Diabetic retinopathy → E11.3* (use most specific available)
+
+OU / Bilateral handling:
+- When the transcript says "OU", "both eyes", "bilateral", or describes a finding without specifying laterality:
+  ALWAYS output BOTH "OD" and "OS" entries in exam_findings with identical values.
+  DO NOT output only one eye. The EHR requires separate OD/OS entries.
+
+---
+
+## EXAM FINDINGS STATUS VALUES
+
+Do NOT use generic "normal"/"abnormal". Use the EXACT dropdown value from the EHR:
+
+Anterior:
+  lids_lashes: "Normal" | "Blepharitis" | "Chalazion" | "Ptosis" | "Dermatochalasis" | "Trichiasis" | "Other"
+  conjunctiva_sclera: "White & quiet" | "Injection" | "Pinguecula" | "Pterygium" | "Chemosis" | "Subconj hemorrhage" | "Other"
+  cornea: "Clear" | "SPK" | "Scar" | "Edema" | "Arcus" | "Abrasion" | "Infiltrate" | "Guttata" | "Other"
+  anterior_chamber: "Deep & quiet" | "Shallow" | "Cells" | "Flare" | "Hyphema" | "Other"
+  iris: "Flat, normal architecture" | "Iris bombe" | "Synechiae" | "Neovascularization" | "Heterochromia" | "Other"
+  lens: "Clear" | "Trace cataract" | "1+ NS" | "2+ NS" | "3+ NS" | "PSC" | "Cortical" | "IOL" | "Aphakia" | "Other"
+  tear_film: "Stable" | "Reduced TBUT" | "Debris" | "Mucus strands" | "Foamy" | "Other"
+  angles: "Open (Grade 4)" | "Grade 3" | "Grade 2" | "Narrow (Grade 1)" | "Closed"
+
+Posterior:
+  cup_to_disc_ratio: "0.1" through "1.0" (use nearest tenth, e.g., "0.35" → "0.4")
+  optic_nerve: "Healthy, pink" | "Pallor" | "Edema" | "Tilted" | "Drusen" | "Other"
+  macula: "Flat & intact" | "Drusen" | "Pigment changes" | "Edema" | "Hemorrhage" | "ERM" | "Hole" | "Other"
+  vitreous: "Clear" | "Floaters" | "Syneresis" | "PVD" | "Hemorrhage" | "Other"
+  vessels: "Normal A/V ratio" | "AV nicking" | "Hemorrhage" | "Cotton wool spots" | "Neovascularization" | "Other"
+  periphery: "Flat & intact" | "Lattice" | "Hole" | "Tear" | "Detachment" | "Cobblestone" | "Other"
+
+Use "notes" for clinical detail beyond the dropdown (e.g., status: "SPK", notes: "trace punctate staining on NaFl").
+If the finding does not match any known dropdown option, use "Other" and put full description in notes.
 
 ---
 
@@ -175,18 +210,18 @@ JSON SCHEMA:
   "exam_findings": {
     "anterior": {
       "OD": {
-        "<structure>": { "status": "normal|abnormal", "notes": "string", "confidence": "high|medium|low" }
+        "<structure>": { "status": "exact_dropdown_value", "notes": "string", "confidence": "high|medium|low" }
       },
       "OS": {
-        "<structure>": { "status": "normal|abnormal", "notes": "string", "confidence": "high|medium|low" }
+        "<structure>": { "status": "exact_dropdown_value", "notes": "string", "confidence": "high|medium|low" }
       }
     },
     "posterior": {
       "OD": {
-        "<structure>": { "status": "normal|abnormal", "notes": "string", "confidence": "high|medium|low" }
+        "<structure>": { "status": "exact_dropdown_value", "notes": "string", "confidence": "high|medium|low" }
       },
       "OS": {
-        "<structure>": { "status": "normal|abnormal", "notes": "string", "confidence": "high|medium|low" }
+        "<structure>": { "status": "exact_dropdown_value", "notes": "string", "confidence": "high|medium|low" }
       }
     }
   },

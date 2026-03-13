@@ -37,7 +37,7 @@ export interface ScribeVitals {
 }
 
 export interface ScribeStructureFinding {
-  status: "normal" | "abnormal";
+  status: string;
   notes?: string;
 }
 

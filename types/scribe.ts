@@ -34,7 +34,8 @@ export interface ScribeVitalsV2 {
 }
 
 export interface ScribeStructureFindingV2 {
-  status: "normal" | "abnormal";
+  /** Dropdown value from EHR field options (e.g., "SPK", "1+ NS"), or legacy "normal"/"abnormal" */
+  status: string;
   notes: string;
   confidence: ConfidenceLevel;
 }

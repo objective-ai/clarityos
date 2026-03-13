@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConflictResolverModal } from "./ConflictResolverModal";
-import { buildConflicts, type StoreSnapshots } from "./conflict-resolver/buildConflicts";
+import { buildConflicts, splitConflicts, type StoreSnapshots } from "./conflict-resolver/buildConflicts";
 import { useVitalsStore } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
@@ -368,13 +368,20 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
     [encounterId, setAiScribeTranscript],
   );
 
+  // Store action for structured data
+  const setAiStructuredData = useEncounterStore((s) => s.setAiStructuredData);
+
   // --- Transition: streaming → ai_ready on done ---
   useEffect(() => {
     if (isDone && status === "streaming" && soapText) {
       setAiSummary(encounterId, soapText);
       setAiScribeStatus(encounterId, "ai_ready");
+      // Store structured data for the inline merge panel
+      if (structuredDataV2) {
+        setAiStructuredData(encounterId, structuredDataV2);
+      }
     }
-  }, [isDone, status, soapText, encounterId, setAiSummary, setAiScribeStatus]);
+  }, [isDone, status, soapText, structuredDataV2, encounterId, setAiSummary, setAiScribeStatus, setAiStructuredData]);
 
   // --- Recover from interrupted streaming on reload ---
   useEffect(() => {
@@ -411,14 +418,14 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
   const handleRedo = useCallback(() => {
     reset();
     setAiSummary(encounterId, "");
+    setAiStructuredData(encounterId, null);
     setAiScribeStatus(encounterId, "draft");
-  }, [reset, encounterId, setAiSummary, setAiScribeStatus]);
+  }, [reset, encounterId, setAiSummary, setAiStructuredData, setAiScribeStatus]);
 
-  // Suggestions count: intentionally snapshotted at generation time via getState().
-  // Won't update if doctor edits fields while AI Ready is showing — that's OK,
-  // the ConflictResolverModal re-snapshots on open for accurate comparison.
-  const suggestionsCount = useMemo(() => {
-    if (!structuredDataV2) return 0;
+  // Suggestions count: split into exam (inline panel) and other (modal).
+  // Intentionally snapshotted at generation time via getState().
+  const { nonExamCount, totalCount } = useMemo(() => {
+    if (!structuredDataV2) return { nonExamCount: 0, totalCount: 0 };
     const encounter = useEncounterStore.getState().encounters[encounterId];
     const vitals = useVitalsStore.getState().encounters[encounterId]?.draft;
     const anteriorKey = `${encounterId}:anterior_segment` as FindingsStoreKey;
@@ -457,7 +464,9 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
         : null,
     };
 
-    return buildConflicts(structuredDataV2, snapshots).length;
+    const allConflicts = buildConflicts(structuredDataV2, snapshots);
+    const { other } = splitConflicts(allConflicts);
+    return { nonExamCount: other.length, totalCount: allConflicts.length };
   }, [structuredDataV2, encounterId]);
 
   // --- Render ---
@@ -483,10 +492,20 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
           <AiReadyView
             soapText={aiText}
             generatedAt={generatedAt}
-            suggestionsCount={suggestionsCount}
+            suggestionsCount={totalCount}
             onEdit={handleEdit}
             onRedo={handleRedo}
-            onReviewMerge={() => setMergeModalOpen(true)}
+            onReviewMerge={() => {
+              // Scroll to exam merge panel (inline)
+              const examSection = document.getElementById("section-exam");
+              if (examSection) {
+                examSection.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+              // Open modal only for non-exam conflicts
+              if (nonExamCount > 0) {
+                setMergeModalOpen(true);
+              }
+            }}
             error={error}
           />
         );

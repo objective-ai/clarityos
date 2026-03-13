@@ -3,6 +3,7 @@ import { persist, devtools } from "zustand/middleware";
 
 const isDev = process.env.NODE_ENV === "development";
 import type { EncounterStatus } from "@/types/encounter";
+import type { ScribeStructuredDataV2 } from "@/types/scribe";
 import { apiFetch } from "@/lib/api-client";
 
 export type { EncounterStatus };
@@ -35,6 +36,8 @@ export interface EncounterState {
   aiSummaryGeneratedAt?: string;
   aiScribeTranscript?: string;
   aiScribeStatus?: "draft" | "streaming" | "ai_ready" | "editing";
+  /** Parsed structured data from AI scribe (for inline merge panel) */
+  aiStructuredData?: ScribeStructuredDataV2 | null;
   /** Load status for this encounter from the API */
   loadStatus?: EncounterLoadStatus;
   loadError?: string;
@@ -78,6 +81,7 @@ interface EncounterStoreState {
   setAssessmentAndPlan: (id: string, text: string) => void;
   setAiScribeTranscript: (id: string, text: string) => void;
   setAiScribeStatus: (id: string, status: "draft" | "streaming" | "ai_ready" | "editing") => void;
+  setAiStructuredData: (id: string, data: ScribeStructuredDataV2 | null) => void;
   getEncounter: (id: string) => EncounterState | undefined;
 }
 
@@ -339,6 +343,19 @@ export const useEncounterStore = create<EncounterStoreState>()(
             }),
             false,
             "setAiScribeStatus"
+          );
+        },
+
+        setAiStructuredData: (id, data) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], aiStructuredData: data },
+              },
+            }),
+            false,
+            "setAiStructuredData"
           );
         },
 

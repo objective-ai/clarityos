@@ -68,6 +68,10 @@ const PrepMeCard = dynamic(
   () => import("@/components/encounter/PrepMeCard").then((m) => ({ default: m.PrepMeCard })),
   { loading: () => <div className="animate-pulse h-12 bg-white/5 rounded-xl" />, ssr: false },
 );
+const ExamMergePanel = dynamic(
+  () => import("@/components/encounter/merge-panel/ExamMergePanel").then((m) => ({ default: m.ExamMergePanel })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
 import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,
@@ -162,6 +166,8 @@ export default function EncounterPage({
   const encounterState = useEncounterStore((s) => s.encounters[params.encounterId]);
   const isFinalized = encounterState?.isFinalized ?? false;
   const encounterLoadStatus = encounterState?.loadStatus ?? "idle";
+  const aiStructuredData = encounterState?.aiStructuredData ?? null;
+  const setAiStructuredData = useEncounterStore((s) => s.setAiStructuredData);
 
   // patientId flows from encounterStore (set by loadEncounter)
   const patientId = useEncounterStore(
@@ -435,35 +441,52 @@ export default function EncounterPage({
         isReadOnly={clinicalReadOnly}
       />
 
-      {/* Exam Findings -- Anterior + Posterior side by side */}
-      <div id="section-exam" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardContent className="p-6">
-            {isFinalized || !canEditClinical ? (
-              <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
-            ) : (
-              <PermissionGate roles={["doctor", "owner"]} fallback={
-                <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
-              }>
-                <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="anterior_segment" />
-              </PermissionGate>
-            )}
-          </CardContent>
-        </Card>
+      {/* Exam Findings -- Inline merge panel when AI data available, else normal side-by-side */}
+      <div id="section-exam">
+        {aiStructuredData?.exam_findings && !isFinalized && canEditClinical ? (
+          <PermissionGate roles={["doctor", "owner"]} fallback={
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card><CardContent className="p-6"><ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" /></CardContent></Card>
+              <Card><CardContent className="p-6"><ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" /></CardContent></Card>
+            </div>
+          }>
+            <ExamMergePanel
+              encounterId={params.encounterId}
+              structuredData={aiStructuredData}
+              onDismiss={() => setAiStructuredData(params.encounterId, null)}
+            />
+          </PermissionGate>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                {isFinalized || !canEditClinical ? (
+                  <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
+                ) : (
+                  <PermissionGate roles={["doctor", "owner"]} fallback={
+                    <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
+                  }>
+                    <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="anterior_segment" />
+                  </PermissionGate>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            {isFinalized || !canEditClinical ? (
-              <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
-            ) : (
-              <PermissionGate roles={["doctor", "owner"]} fallback={
-                <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
-              }>
-                <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="posterior_segment" />
-              </PermissionGate>
-            )}
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="p-6">
+                {isFinalized || !canEditClinical ? (
+                  <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
+                ) : (
+                  <PermissionGate roles={["doctor", "owner"]} fallback={
+                    <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
+                  }>
+                    <ExamFindings encounterId={params.encounterId} isReadOnly={false} section="posterior_segment" />
+                  </PermissionGate>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Diagnoses -- full width, 2-column list */}
