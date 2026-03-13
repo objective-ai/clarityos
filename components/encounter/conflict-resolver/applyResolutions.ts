@@ -42,9 +42,8 @@ export async function applyResolutions(
   encounterId: string,
   rows: ConflictRow[],
   soapText: string,
-): Promise<void> {
-  const selected = rows.filter((r) => r.resolution === "use_ai");
-  if (selected.length === 0) return;
+): Promise<number> {
+  if (rows.length === 0) return 0;
 
   const diff: Record<string, { old: unknown; new: unknown }> = {};
 
@@ -56,7 +55,7 @@ export async function applyResolutions(
   const addDiagnosis = useDiagnosisStore.getState().addDiagnosis;
   const setCellValue = useRefractionStore.getState().setCellValue;
 
-  for (const row of selected) {
+  for (const row of rows) {
     diff[row.fieldKey] = { old: row.humanValue, new: row.aiValue };
 
     // --- Chief Complaint ---
@@ -116,6 +115,26 @@ export async function applyResolutions(
       continue;
     }
 
+    // --- Diagnoses (laterality update) ---
+    if (row.fieldKey.startsWith("dx.") && row.fieldKey.endsWith(".laterality")) {
+      const icdCode = row.fieldKey.split(".")[1];
+      const dxStore = useDiagnosisStore.getState();
+      const existing = dxStore.encounters[encounterId]?.diagnoses?.find(
+        (d) => d.icd10Code === icdCode,
+      );
+      if (existing) {
+        await dxStore.updateDiagnosis(encounterId, existing.id, {
+          eyeAffected: row.aiValue as EyeLaterality,
+        });
+      }
+      continue;
+    }
+
+    // --- Diagnoses (description — display-only, schema change needed) ---
+    if (row.fieldKey.startsWith("dx.") && row.fieldKey.endsWith(".description")) {
+      continue;
+    }
+
     // --- Diagnoses (new additions) ---
     if (row.fieldKey.startsWith("dx.") && row.fieldKey.endsWith(".new")) {
       // Use aiRawData for reliable extraction (no regex parsing of display strings)
@@ -152,4 +171,6 @@ export async function applyResolutions(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ changes: diff }),
   }).catch((e) => console.error("Audit log failed:", e));
+
+  return rows.length;
 }
