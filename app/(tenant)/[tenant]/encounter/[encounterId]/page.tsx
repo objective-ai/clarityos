@@ -3,20 +3,17 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import { useAiScribe, v2ToV1, type ScribeStructuredData } from "@/hooks/useAiScribe";
-import type { ScribeStructuredDataV2 } from "@/types/scribe";
-import { ValidationStationModal } from "@/components/encounter/ValidationStationModal";
-import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
-import type { EntitlementKey } from "@/types/session";
+import type { ScribeStructuredData } from "@/hooks/useAiScribe";
+import { Entitlement } from "@/lib/entitlements";
 import type { RowKey } from "@/types/refraction";
 import type { ExamSection, FindingsStoreKey, StructureFinding } from "@/types/exam-findings";
-import type { EyeLaterality } from "@/types/diagnosis";
 import { useEncounterStore, type EncounterStatus } from "@/store/encounterStore";
 import { apiFetch } from "@/lib/api-client";
 import { useVitalsStore } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
 import { useRefractionStore } from "@/store/refractionStore";
+import { AiScribeWidget } from "@/components/encounter/AiScribeWidget";
 import dynamic from "next/dynamic";
 import { PermissionGate } from "@/components/auth/PermissionGate";
 import { useSidebarCollapsed } from "@/contexts/SidebarContext";
@@ -81,592 +78,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-// ---------------------------------------------------------------------------
-// UpsellModal
-// ---------------------------------------------------------------------------
-
-interface UpsellModalProps {
-  feature: EntitlementKey;
-  onClose: () => void;
-}
-
-function UpsellModal({ feature, onClose }: UpsellModalProps) {
-  const meta = ENTITLEMENT_META[feature];
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm glass-card animate-slide-down overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 pt-5 pb-4 border-b border-[var(--border-subtle)]">
-          <div className="flex items-start justify-between gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-[var(--accent-dim)] border border-[var(--mono-border)]">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2L10.8 6.5H15.5L11.8 9.2L13.5 14L9 11L4.5 14L6.2 9.2L2.5 6.5H7.2L9 2Z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-overline text-[var(--accent)] mb-1">{meta.plan} Feature</div>
-              <h3 className="text-subhead">{meta.label}</h3>
-            </div>
-            <button onClick={onClose} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-              &times;
-            </button>
-          </div>
-        </div>
-
-        <div className="px-5 py-5">
-          <p className="text-body mb-4">{meta.description}</p>
-          <div className="rounded-xl p-4 mb-4 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="text-overline mb-2">What you unlock:</div>
-            <ul className="space-y-2">
-              {feature === "ai_scribe" && [
-                "AI-generated SOAP notes in seconds",
-                "Saves 12\u201315 min per encounter",
-                "Learns your documentation style",
-                "Streams directly into your text fields",
-              ].map((item) => (
-                <li key={item} className="flex items-center gap-2 text-caption text-[var(--text-secondary)]">
-                  <span className="text-[var(--state-normal)]">&check;</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110">
-            Upgrade to {meta.plan} &rarr;
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full py-3 text-xs mt-2 hover-btn text-[var(--text-muted)]"
-          >
-            Not right now
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AI Scribe Widget — Ambient Data-Entry Scribe
-// ---------------------------------------------------------------------------
-
-// Demo transcript pre-loaded into the textarea so a demo can start without typing.
-// Cleared from localStorage after the user generates or edits their own transcript.
-const DEMO_TRANSCRIPT =
-  "Okay so today I'm seeing Sarah Chen, 34 year old female coming in for her annual comprehensive exam. " +
-  "Chief complaint is blurry vision at near, she says it's been getting worse over the past six months, " +
-  "especially with reading and computer work. Her current glasses are about two years old. " +
-  "She also mentions some dryness and irritation, worse in the afternoon, no flashes or floaters. " +
-  "Uncorrected distance is 20/80 OD, 20/60 OS. With current glasses 20/40 OD, 20/30 OS. " +
-  "Near VA with current glasses J3 OD, J2 OS. IOP by iCare: 16 OD, 15 OS at 10:05 AM. " +
-  "Manifest refraction: OD -2.25 -0.75 axis 180, OS -2.00 -0.50 axis 175, add plus 1.50 OU. " +
-  "BCVA with new Rx 20/20 OD, 20/20 OS, J1 near OU. " +
-  "Anterior: trace punctate staining OU on NaFl, grade 1 nuclear sclerosis lens OU. " +
-  "Posterior: CDR 0.35 OU, healthy rim tissue, macula flat, vessels normal, periphery intact 360. " +
-  "Assessment: myopia with astigmatism OU, dry eye syndrome OU, early cataract OU — just monitoring for now. " +
-  "Plan: new glasses Rx dispensed, start preservative-free artificial tears four times a day, " +
-  "discuss blue light filters given screen time, follow up in 12 months.";
-
-// Refraction field mapping: AI JSON key -> RowKey (includes eye prefix)
+// Refraction field mapping (used for audit-trail revert)
 const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
   sphere:   { od: "od_sphere",   os: "os_sphere" },
   cylinder: { od: "od_cylinder", os: "os_cylinder" },
   axis:     { od: "od_axis",     os: "os_axis" },
   add:      { od: "od_add",      os: "os_add" },
 };
-
-// Final Rx column index in the refraction grid
 const FINAL_RX_COL = 3;
-
-function AiScribeWidget({ encounterId }: { encounterId: string }) {
-  const { has } = useEntitlements();
-  const hasAiScribe = has(Entitlement.AI_SCRIBE);
-  const [showUpsell, setShowUpsell] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [accepted, setAccepted] = useState(false);
-  const [acceptError, setAcceptError] = useState<string | null>(null);
-  const [validationStationOpen, setValidationStationOpen] = useState(false);
-
-  const isFinalized = useEncounterStore(
-    (s) => s.encounters[encounterId]?.isFinalized ?? false
-  );
-
-  // --- Dirty State Guard ---------------------------------------------------
-  // Don't flag the pre-populated demo transcript as unsaved work
-  const isDirty = transcript.trim().length > 0 && transcript !== DEMO_TRANSCRIPT && !isFinalized;
-
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
-
-  // --- localStorage Auto-Save ----------------------------------------------
-  const storageKey = `draft-transcript-${encounterId}`;
-
-  // Save or clear draft as they type (don't persist the pre-populated demo transcript)
-  useEffect(() => {
-    if (transcript.trim().length > 0 && transcript !== DEMO_TRANSCRIPT) {
-      localStorage.setItem(storageKey, transcript);
-    } else {
-      localStorage.removeItem(storageKey);
-    }
-  }, [transcript, storageKey]);
-
-  const { generate, soapText, structuredData, structuredDataV2, isStreaming, isDone, error, reset } =
-    useAiScribe(encounterId);
-
-  // Store actions for Accept dispatch
-  const setChiefComplaint = useEncounterStore((s) => s.setChiefComplaint);
-  const setAiSummary = useEncounterStore((s) => s.setAiSummary);
-  const aiSummaryText = useEncounterStore((s) => s.encounters[encounterId]?.aiSummaryText);
-
-  // Recover draft on mount; fall back to demo transcript if no draft and no existing summary
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      setTranscript(saved);
-    } else if (!aiSummaryText) {
-      setTranscript(DEMO_TRANSCRIPT);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const setVitalsField = useVitalsStore((s) => s.setField);
-  const setStructureField = useExamFindingsStore((s) => s.setStructureField);
-  const addDiagnosis = useDiagnosisStore((s) => s.addDiagnosis);
-  const setCellValue = useRefractionStore((s) => s.setCellValue);
-
-  const handleGenerate = useCallback(() => {
-    if (!hasAiScribe) {
-      setShowUpsell(true);
-      return;
-    }
-    if (!transcript.trim()) return;
-    setAccepted(false);
-    generate(transcript);
-  }, [hasAiScribe, transcript, generate]);
-
-  const handleAccept = useCallback(() => {
-    try {
-      if (!structuredData) throw new Error("No structured data available.");
-      const data = structuredData;
-      setAcceptError(null);
-
-      // Snapshot before/after diff for audit trail
-      const diff: Record<string, { old: unknown; new: unknown }> = {};
-
-      // 1. Chief complaint -- safe append with pipe separator
-      if (data.chief_complaint) {
-        const existing = useEncounterStore.getState().encounters[encounterId]?.chiefComplaint ?? "";
-        diff["chief_complaint"] = { old: existing, new: data.chief_complaint };
-        const updated = existing.trim() ? `${existing} | ${data.chief_complaint}` : data.chief_complaint;
-        setChiefComplaint(encounterId, updated);
-      }
-
-      // 2. Vitals -- skip nulls to avoid overwriting existing values
-      if (data.vitals) {
-        const vitalsDraft = useVitalsStore.getState().encounters[encounterId]?.draft;
-        for (const [field, value] of Object.entries(data.vitals)) {
-          if (value != null) {
-            const oldVal = vitalsDraft?.[field as keyof typeof vitalsDraft] ?? null;
-            diff[`vitals.${field}`] = { old: oldVal, new: value };
-            setVitalsField(encounterId, field as keyof ScribeStructuredData["vitals"] & string, value);
-          }
-        }
-      }
-
-      // 3. Exam findings -- dispatch per eye/structure/field
-      if (data.exam_findings) {
-        for (const [section, eyes] of Object.entries(data.exam_findings)) {
-          if (!eyes) continue;
-          for (const [eye, structures] of Object.entries(eyes)) {
-            if (!structures) continue;
-            const eyeLower = eye.toLowerCase() as "od" | "os";
-            const findingsKey = `${encounterId}:${section}` as FindingsStoreKey;
-            const sectionState = useExamFindingsStore.getState().findings[findingsKey];
-            const eyeFindings = eyeLower === "od" ? sectionState?.draft.findings_od : sectionState?.draft.findings_os;
-
-            for (const [structure, fields] of Object.entries(structures)) {
-              if (!fields) continue;
-              const aiFields = fields as Record<string, string | null>;
-              const existing = eyeFindings?.[structure];
-
-              if (aiFields.status != null) {
-                diff[`exam.${section}.${eyeLower}.${structure}.status`] = {
-                  old: existing?.status ?? null, new: aiFields.status,
-                };
-                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "status", aiFields.status);
-              }
-              if (aiFields.notes != null) {
-                diff[`exam.${section}.${eyeLower}.${structure}.finding`] = {
-                  old: existing?.finding ?? null, new: aiFields.notes,
-                };
-                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "finding", aiFields.notes);
-              }
-            }
-          }
-        }
-      }
-
-      // 4. Diagnoses
-      if (data.diagnoses) {
-        for (let i = 0; i < data.diagnoses.length; i++) {
-          const dx = data.diagnoses[i];
-          diff[`diagnoses.${i}`] = {
-            old: null,
-            new: { icdCode: dx.icdCode, description: dx.description, laterality: dx.laterality },
-          };
-          addDiagnosis(encounterId, {
-            icd10Code: dx.icdCode,
-            description: dx.description,
-            eyeAffected: (dx.laterality as EyeLaterality) ?? null,
-          });
-        }
-      }
-
-      // 5. Refraction -- map to Final Rx column (index 3), with eye-prefixed RowKeys
-      if (data.refraction) {
-        const rxDraft = useRefractionStore.getState().columns[FINAL_RX_COL]?.draft;
-        for (const [eye, rx] of Object.entries(data.refraction)) {
-          if (!rx) continue;
-          for (const [field, value] of Object.entries(rx as Record<string, string>)) {
-            const mapping = RX_FIELD_TO_ROW[field];
-            if (!mapping || value == null) continue;
-            const rowKey = eye === "OD" ? mapping.od : mapping.os;
-            const eyeKey = eye.toLowerCase() as "od" | "os";
-            const oldVal = rxDraft?.[eyeKey]?.[field as keyof (typeof rxDraft)["od"]] ?? null;
-            diff[`refraction.${eye}.${field}`] = { old: oldVal, new: value };
-            setCellValue(FINAL_RX_COL, rowKey, value);
-          }
-        }
-      }
-
-      // 6. Save SOAP narrative to encounter store
-      if (soapText) {
-        setAiSummary(encounterId, soapText);
-      }
-
-      setAccepted(true);
-
-      // Fire-and-forget audit log with before/after diff
-      fetch(`/api/encounters/${encounterId}/ai-scribe/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changes: diff }),
-      }).catch((e) => console.error("Audit log failed:", e));
-    } catch (err) {
-      console.error("AI Accept Error:", err);
-      // Fallback: save SOAP text so clinical data isn't lost
-      if (soapText) {
-        setAiSummary(encounterId, soapText);
-      }
-      setAcceptError("Failed to auto-fill grids. The SOAP note has been saved for manual review.");
-    }
-  }, [
-    structuredData, soapText, encounterId,
-    setChiefComplaint, setAiSummary, setVitalsField,
-    setStructureField, addDiagnosis, setCellValue,
-  ]);
-
-  const handleClearAndEdit = useCallback(() => {
-    reset();
-    setAiSummary(encounterId, "");
-    setAccepted(false);
-    setAcceptError(null);
-  }, [reset, encounterId, setAiSummary]);
-
-  // Accept from ValidationStation — converts V2 to V1 and dispatches
-  const handleAcceptV2 = useCallback((v2Data: ScribeStructuredDataV2) => {
-    try {
-      const data = v2ToV1(v2Data);
-      setAcceptError(null);
-      const diff: Record<string, { old: unknown; new: unknown }> = {};
-
-      if (data.chief_complaint) {
-        const existing = useEncounterStore.getState().encounters[encounterId]?.chiefComplaint ?? "";
-        diff["chief_complaint"] = { old: existing, new: data.chief_complaint };
-        const updated = existing.trim() ? `${existing} | ${data.chief_complaint}` : data.chief_complaint;
-        setChiefComplaint(encounterId, updated);
-      }
-
-      if (data.vitals) {
-        const vitalsDraft = useVitalsStore.getState().encounters[encounterId]?.draft;
-        for (const [field, value] of Object.entries(data.vitals)) {
-          if (value != null) {
-            const oldVal = vitalsDraft?.[field as keyof typeof vitalsDraft] ?? null;
-            diff[`vitals.${field}`] = { old: oldVal, new: value };
-            setVitalsField(encounterId, field as keyof ScribeStructuredData["vitals"] & string, value);
-          }
-        }
-      }
-
-      if (data.exam_findings) {
-        for (const [section, eyes] of Object.entries(data.exam_findings)) {
-          if (!eyes) continue;
-          for (const [eye, structures] of Object.entries(eyes)) {
-            if (!structures) continue;
-            const eyeLower = eye.toLowerCase() as "od" | "os";
-            const findingsKey = `${encounterId}:${section}` as FindingsStoreKey;
-            const sectionState = useExamFindingsStore.getState().findings[findingsKey];
-            const eyeFindings = eyeLower === "od" ? sectionState?.draft.findings_od : sectionState?.draft.findings_os;
-            for (const [structure, fields] of Object.entries(structures)) {
-              if (!fields) continue;
-              const aiFields = fields as Record<string, string | null>;
-              const existing = eyeFindings?.[structure];
-              if (aiFields.status != null) {
-                diff[`exam.${section}.${eyeLower}.${structure}.status`] = { old: existing?.status ?? null, new: aiFields.status };
-                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "status", aiFields.status);
-              }
-              if (aiFields.notes != null) {
-                diff[`exam.${section}.${eyeLower}.${structure}.finding`] = { old: existing?.finding ?? null, new: aiFields.notes };
-                setStructureField(encounterId, section as ExamSection, eyeLower, structure, "finding", aiFields.notes);
-              }
-            }
-          }
-        }
-      }
-
-      if (data.diagnoses) {
-        for (let i = 0; i < data.diagnoses.length; i++) {
-          const dx = data.diagnoses[i];
-          diff[`diagnoses.${i}`] = { old: null, new: { icdCode: dx.icdCode, description: dx.description, laterality: dx.laterality } };
-          addDiagnosis(encounterId, {
-            icd10Code: dx.icdCode,
-            description: dx.description,
-            eyeAffected: (dx.laterality as EyeLaterality) ?? null,
-          });
-        }
-      }
-
-      if (data.refraction) {
-        const rxDraft = useRefractionStore.getState().columns[FINAL_RX_COL]?.draft;
-        for (const [eye, rx] of Object.entries(data.refraction)) {
-          if (!rx) continue;
-          for (const [field, value] of Object.entries(rx as Record<string, string>)) {
-            const mapping = RX_FIELD_TO_ROW[field];
-            if (!mapping || value == null) continue;
-            const rowKey = eye === "OD" ? mapping.od : mapping.os;
-            const eyeKey = eye.toLowerCase() as "od" | "os";
-            const oldVal = rxDraft?.[eyeKey]?.[field as keyof (typeof rxDraft)["od"]] ?? null;
-            diff[`refraction.${eye}.${field}`] = { old: oldVal, new: value };
-            setCellValue(FINAL_RX_COL, rowKey, value);
-          }
-        }
-      }
-
-      // Save A&P from V2 data if present
-      if (v2Data.assessment_and_plan?.value) {
-        diff["assessment_and_plan"] = { old: null, new: v2Data.assessment_and_plan.value };
-      }
-
-      if (soapText) {
-        setAiSummary(encounterId, soapText);
-      }
-
-      setAccepted(true);
-      setValidationStationOpen(false);
-
-      fetch(`/api/encounters/${encounterId}/ai-scribe/accept`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changes: diff }),
-      }).catch((e) => console.error("Audit log failed:", e));
-    } catch (err) {
-      console.error("AI Accept Error (V2):", err);
-      if (soapText) setAiSummary(encounterId, soapText);
-      setAcceptError("Failed to auto-fill grids. The SOAP note has been saved for manual review.");
-    }
-  }, [
-    soapText, encounterId, setChiefComplaint, setAiSummary, setVitalsField,
-    setStructureField, addDiagnosis, setCellValue,
-  ]);
-
-  const handleDiscardScribe = useCallback(() => {
-    reset();
-    setValidationStationOpen(false);
-  }, [reset]);
-
-  // Show saved summary if already accepted in a previous session
-  const savedSummary = !soapText && !isStreaming && aiSummaryText;
-
-  return (
-    <>
-      <Card className={hasAiScribe ? "glass-card-accent" : ""}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>AI Scribe</CardTitle>
-            <CardDescription>
-              {hasAiScribe
-                ? "Paste or dictate a transcript to auto-fill encounter fields"
-                : "Premium feature \u2014 upgrade to unlock"}
-            </CardDescription>
-          </div>
-          <Badge variant={hasAiScribe ? "default" : "outline"}>
-            {hasAiScribe ? "Premium" : "Locked"}
-          </Badge>
-        </CardHeader>
-        <CardContent>
-          {/* Saved summary from previous accept */}
-          {savedSummary ? (
-            <div>
-              <pre className="text-xs leading-relaxed whitespace-pre-wrap p-5 rounded-xl font-mono bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
-                {aiSummaryText}
-              </pre>
-              <div className="flex items-center gap-2 mt-3">
-                <Badge variant="secondary" className="gap-1">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="opacity-70">
-                    <path d="M2 5.5l2 2 4-4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Accepted
-                </Badge>
-                <button
-                  onClick={handleClearAndEdit}
-                  title="Clears the generated note so you can edit your transcript and try again."
-                  className="text-xs px-3 py-1.5 rounded-xl font-medium text-[var(--text-muted)] border border-[var(--border-subtle)] hover-btn"
-                >
-                  Clear &amp; Edit
-                </button>
-              </div>
-            </div>
-          ) : !soapText && !isStreaming ? (
-            /* Initial state -- transcript input */
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="ai-transcript" className="text-overline">
-                  Clinical Transcript
-                </label>
-                <textarea
-                  id="ai-transcript"
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  rows={4}
-                  placeholder="Paste or dictate the clinical transcript here..."
-                  className="w-full px-4 py-3 rounded-xl text-sm resize-y min-h-[6rem] glass-input placeholder:text-[var(--text-muted)]"
-                />
-              </div>
-
-              {error && (
-                <div className="text-xs text-[var(--state-danger)] px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)]">
-                  {error}
-                </div>
-              )}
-
-              <button
-                onClick={handleGenerate}
-                disabled={isStreaming || !transcript.trim()}
-                className={`self-start px-6 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                  hasAiScribe
-                    ? "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
-                    : "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] hover-btn"
-                }`}
-              >
-                {hasAiScribe ? "Generate Note" : "Upgrade to Unlock"}
-              </button>
-            </div>
-          ) : (
-            /* Streaming / done state -- show SOAP text */
-            <div>
-              <pre className="text-xs leading-relaxed whitespace-pre-wrap p-5 rounded-xl font-mono bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)] min-h-[120px]">
-                {soapText}
-                {isStreaming && (
-                  <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 animate-pulse bg-[var(--accent)]" />
-                )}
-              </pre>
-
-              {isDone && !accepted && (
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    {structuredDataV2 && (
-                      <button
-                        onClick={() => setValidationStationOpen(true)}
-                        className="text-xs px-4 py-2 rounded-xl font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)] transition-all"
-                      >
-                        Review AI Note
-                      </button>
-                    )}
-                    <button
-                      onClick={handleAccept}
-                      disabled={!structuredData}
-                      className="text-xs px-4 py-2 rounded-xl font-medium text-[var(--text-secondary)] border border-[var(--glass-border)] hover-btn transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {"\u2713"} Quick Accept
-                    </button>
-                    <button
-                      onClick={handleClearAndEdit}
-                      title="Clears the generated note so you can edit your transcript and try again."
-                      className="text-xs px-4 py-2 rounded-xl font-medium text-[var(--text-muted)] border border-[var(--border-subtle)] hover-btn"
-                    >
-                      Clear &amp; Edit
-                    </button>
-                  </div>
-                  {acceptError && (
-                    <p className="text-xs text-[var(--state-critical)]">{acceptError}</p>
-                  )}
-                </div>
-              )}
-
-              {accepted && (
-                <div className="flex items-center gap-2 mt-4">
-                  <Badge variant="secondary" className="gap-1">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="opacity-70">
-                      <path d="M2 5.5l2 2 4-4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Fields auto-filled
-                  </Badge>
-                  <button
-                    onClick={handleClearAndEdit}
-                    title="Clears the generated note so you can edit your transcript and try again."
-                    className="text-xs px-3 py-1.5 rounded-xl font-medium text-[var(--text-secondary)] border border-[var(--glass-border)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)] hover-btn transition-colors"
-                  >
-                    Clear &amp; Edit
-                  </button>
-                </div>
-              )}
-
-              {isStreaming && (
-                <div className="flex items-center gap-2 mt-3 text-[11px] text-[var(--text-muted)]">
-                  <div className="w-3 h-3 rounded-full border-2 animate-spin border-[var(--accent)] border-t-transparent" />
-                  Generating SOAP note...
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {structuredDataV2 && (
-        <ValidationStationModal
-          open={validationStationOpen}
-          onClose={() => setValidationStationOpen(false)}
-          soapText={soapText}
-          structuredData={structuredDataV2}
-          generatedAt={new Date().toISOString()}
-          onAccept={handleAcceptV2}
-          onDiscard={handleDiscardScribe}
-        />
-      )}
-
-      {showUpsell && (
-        <UpsellModal
-          feature={Entitlement.AI_SCRIBE}
-          onClose={() => setShowUpsell(false)}
-        />
-      )}
-    </>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Encounter Workflow Header
@@ -829,6 +248,39 @@ export default function EncounterPage({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsavedClinical]);
+
+  // --- Status transition handlers ---
+  const handleAdvanceStatus = useCallback(async () => {
+    setStatusError(null);
+    if (encounterState?.status === "in_exam") {
+      setFinalizeModalOpen(true);
+    } else if (encounterState?.status === "pre_test") {
+      if (!encounterState?.appointmentId) {
+        setStatusError("Cannot advance status: this encounter has no linked appointment.");
+        return;
+      }
+      try {
+        await apiFetch(`/api/appointments/${encounterState.appointmentId}/start-exam-phase`, { method: "POST" });
+        await loadEncounter(params.encounterId);
+      } catch (e) {
+        setStatusError(e instanceof Error ? e.message : "Failed to start exam phase.");
+      }
+    }
+  }, [encounterState?.status, encounterState?.appointmentId, setFinalizeModalOpen, loadEncounter, params.encounterId]);
+
+  const handleRevertToPretest = useCallback(async () => {
+    setStatusError(null);
+    if (!encounterState?.appointmentId) {
+      setStatusError("Cannot revert: this encounter has no linked appointment.");
+      return;
+    }
+    try {
+      await apiFetch(`/api/appointments/${encounterState.appointmentId}/revert-to-pretest`, { method: "POST" });
+      await loadEncounter(params.encounterId);
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : "Failed to revert to pre-test.");
+    }
+  }, [encounterState?.appointmentId, loadEncounter, params.encounterId]);
 
   // Show full-page skeleton while encounter header is loading
   if (encounterLoadStatus === "loading" || encounterLoadStatus === "idle") {
@@ -1081,36 +533,8 @@ export default function EncounterPage({
         isFinalized={isFinalized}
         sidebarCollapsed={sidebarCollapsed}
         patientId={patientId ?? ""}
-        onAdvanceStatus={async () => {
-          setStatusError(null);
-          if (encounterState?.status === "in_exam") {
-            setFinalizeModalOpen(true);
-          } else if (encounterState?.status === "pre_test") {
-            if (!encounterState?.appointmentId) {
-              setStatusError("Cannot advance status: this encounter has no linked appointment.");
-              return;
-            }
-            try {
-              await apiFetch(`/api/appointments/${encounterState.appointmentId}/start-exam-phase`, { method: "POST" });
-              await loadEncounter(params.encounterId);
-            } catch (e) {
-              setStatusError(e instanceof Error ? e.message : "Failed to start exam phase.");
-            }
-          }
-        }}
-        onRevertToPretest={async () => {
-          setStatusError(null);
-          if (!encounterState?.appointmentId) {
-            setStatusError("Cannot revert: this encounter has no linked appointment.");
-            return;
-          }
-          try {
-            await apiFetch(`/api/appointments/${encounterState.appointmentId}/revert-to-pretest`, { method: "POST" });
-            await loadEncounter(params.encounterId);
-          } catch (e) {
-            setStatusError(e instanceof Error ? e.message : "Failed to revert to pre-test.");
-          }
-        }}
+        onAdvanceStatus={handleAdvanceStatus}
+        onRevertToPretest={handleRevertToPretest}
       />
 
       {/* Audit trail sidebar (admin/owner only) */}

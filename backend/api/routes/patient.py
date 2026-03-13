@@ -128,6 +128,26 @@ def _build_patient_summary(patient: Patient, last_visit: date | None = None) -> 
     )
 
 
+async def _get_patient_or_404(
+    patient_id: UUID, tenant_id: UUID, db: AsyncSession
+) -> Patient:
+    """Fetch a patient by ID scoped to tenant, or raise 404."""
+    patient = (
+        await db.execute(
+            select(Patient).where(
+                Patient.id == patient_id,
+                Patient.tenant_id == tenant_id,
+                Patient.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not patient:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+
+    return patient
+
+
 # ---------------------------------------------------------------------------
 # GET /api/patients — list + search
 # ---------------------------------------------------------------------------
@@ -277,18 +297,7 @@ async def get_patient(
 ):
     """Get full patient detail (demographics, contact, insurance, alerts)."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     await log_action(
         db, ctx, AuditAction.PHI_VIEWED, "patient", patient.id,
@@ -316,19 +325,7 @@ async def update_patient(
     """Update patient demographics, contact, or insurance info."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     staff = await resolve_staff(ctx, db)
-
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     updates = payload.model_dump(exclude_unset=True)
     changes: dict = {}
@@ -389,19 +386,7 @@ async def delete_patient(
     """Soft-delete a patient record."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
     staff = await resolve_staff(ctx, db)
-
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     patient.is_deleted = True
     patient.deleted_at = datetime.now(timezone.utc)
@@ -432,19 +417,7 @@ async def list_patient_encounters(
 ):
     """List encounters for a patient in reverse chronological order."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
-    # Verify patient exists and belongs to tenant
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     stmt = (
         select(Encounter)
@@ -498,19 +471,7 @@ async def get_patient_flowsheet(
 ):
     """Get IOP and refraction data across visits for clinical flowsheets."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
-    # Verify patient
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     # Get encounters with vitals and refractions
     stmt = (
@@ -578,20 +539,7 @@ async def get_rx_history(
 ):
     """Get finalized prescription history across encounters."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
-
-    # Verify patient
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     # Validate modality filter
     if modality and modality not in ("glasses", "contact_lens"):
@@ -674,19 +622,7 @@ async def prep_me(
             detail="AI Prep Me is not configured. Set ANTHROPIC_API_KEY in .env.",
         )
 
-    # Verify patient
-    patient = (
-        await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id,
-                Patient.tenant_id == ctx.tenant_id,
-                Patient.is_deleted == False,  # noqa: E712
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not patient:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     # Fetch last 3 finalized encounters with SOAP notes
     stmt = (
