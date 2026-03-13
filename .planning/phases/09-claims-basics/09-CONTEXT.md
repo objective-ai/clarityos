@@ -1,6 +1,7 @@
 # Phase 9: Claims Basics - Context
 
 **Gathered:** 2026-03-12
+**Updated:** 2026-03-12
 **Status:** Ready for planning
 
 <domain>
@@ -24,14 +25,17 @@ Enable real insurance billing with payer management, patient insurance records, 
 - New "Insurance" tab on the patient detail page (alongside Demographics, Encounters, Flowsheets)
 - Primary + secondary insurance slots (two records max)
 - Dedicated PatientInsurance DB table with FK to InsurancePayer (not JSONB)
+- **Plan type field:** Each insurance record has a Plan Type dropdown (Medical / Vision / Other) — powers the labeled payer selector on superbills
 - Standard billing fields per record:
   - Payer (dropdown from payer list)
+  - Plan type (Medical / Vision / Other)
   - Subscriber ID (member ID)
   - Group number
   - Plan name
   - Relationship to subscriber (self/spouse/child/other)
   - Subscriber name + DOB (if different from patient)
 - Sufficient for CMS-1500 Boxes 1a, 4, 7, 9, 11
+- No existing JSONB insurance data to migrate — greenfield implementation
 
 ### Fee Schedule Design
 - Per-payer fee overrides on top of a base fee catalog
@@ -41,6 +45,15 @@ Enable real insurance billing with payer management, patient insurance records, 
 - No effective dates — single active fee per payer-CPT pair; admin updates when rates change
 - Fee management nested under payer detail in admin panel (click payer → see/edit fee overrides)
 - Separate admin section for base fee catalog
+
+### Superbill-Insurance Billing Flow
+- **Payer selection at creation:** When staff clicks "Create Superbill," a prompt asks "Which insurance are we billing?" listing the patient's saved plans labeled by type (e.g., "Primary Medical: Aetna", "Vision: VSP", "Self-Pay")
+- **Self-pay always available:** Even if patient has no insurance on file, the prompt appears with "Self-Pay" as an option. Consistent flow regardless of insurance status.
+- **Instant fee lookup:** Once payer is selected, system pulls payer-specific fees for the encounter's CPT codes and pre-fills line item fees
+- **Missing payer fee fallback:** If a CPT code has no payer-specific rate, fall back to base fee catalog rate with a visual indicator (asterisk or yellow highlight) meaning "using base fee"
+- **Change payer with recalculation:** Staff can change the billed payer on an existing superbill; all line item fees recalculate to the new payer's rates
+- **Manual fee overrides are locked:** If staff manually edits a line item fee, that override is preserved during payer change recalculation. Visual indicator shows which fees are overridden vs payer-rate.
+- **Simple total only:** Superbill shows total billed amount. No copay/coinsurance/patient responsibility breakdown — deferred to V3 with ERA/EOB integration.
 
 ### CMS-1500 PDF Generation
 - Clean professional layout (NOT red government form replica) — clinic header, patient/insurance info, service lines table, totals
@@ -56,11 +69,11 @@ Enable real insurance billing with payer management, patient insurance records, 
 
 ### Claude's Discretion
 - Exact payer seed data (which CA payers to include)
-- PatientInsurance migration strategy (whether to migrate existing JSONB insurance data or start fresh)
 - Base fee catalog admin UI layout
 - CMS-1500 PDF visual design details (typography, spacing, clinic logo inclusion)
-- Whether superbill line items auto-populate fees on creation vs on-demand recalculation
 - Exact reportlab layout implementation details
+- Fee override visual indicator design (asterisk vs highlight vs icon)
+- Payer selection prompt UI design (modal vs inline dropdown vs popover)
 
 </decisions>
 
@@ -71,6 +84,8 @@ Enable real insurance billing with payer management, patient insurance records, 
 - Fee schedule editing should feel spreadsheet-like — CPT code, description, base fee, payer override fee in a table
 - Patient insurance tab should show primary/secondary as two distinct glass cards with clear visual hierarchy
 - CMS-1500 PDF should include the clinic's logo and NPI prominently
+- Insurance selection prompt at superbill creation should label plans by type: "Primary Medical: Aetna", "Vision: VSP", "Self-Pay"
+- Manual fee overrides should be visually distinct from payer-rate fees (staff needs to see at a glance what was adjusted)
 
 </specifics>
 
@@ -102,7 +117,7 @@ Enable real insurance billing with payer management, patient insurance records, 
 - `backend/api/main.py`: Register new payer, insurance, fee schedule routers
 - `backend/db/models/tenant/clinical.py`: Add InsurancePayer, PatientInsurance, FeeScheduleItem models
 - `backend/seed_db.py`: Add payer seed data
-- Superbill creation flow: Look up patient's primary insurance → resolve payer fee schedule → populate line item fees
+- Superbill creation flow: Prompt for payer → look up payer-specific fees → pre-fill line items
 - CMS-1500 PDF endpoint: Read superbill + patient insurance + payer info → generate PDF with reportlab
 
 </code_context>
@@ -110,7 +125,8 @@ Enable real insurance billing with payer management, patient insurance records, 
 <deferred>
 ## Deferred Ideas
 
-None — discussion stayed within phase scope
+- Copay/coinsurance/patient responsibility breakdown — V3 with ERA/EOB integration
+- Auto-suggest insurance based on visit type (medical vs routine eye exam) — future enhancement
 
 </deferred>
 
