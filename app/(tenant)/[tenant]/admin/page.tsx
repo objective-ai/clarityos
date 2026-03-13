@@ -1460,7 +1460,6 @@ function DemoDataSection() {
           const data = await res.json();
           const items = data.items || data.patients || data || [];
           const list: PatientOption[] = items.map(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (p: any) => ({
               id: p.id,
               first_name: p.firstName || p.first_name,

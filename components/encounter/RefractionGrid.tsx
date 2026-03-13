@@ -506,7 +506,7 @@ export function RefractionGrid({
 
   useEffect(() => {
     init(encounterId, initialRefractions, isReadOnly);
-  }, [encounterId]);
+  }, [encounterId, init, initialRefractions, isReadOnly]);
 
   // No auto-focus — let the user click into the field they want.
   // Auto-focusing Habitual/SPH was hiding the loaded value on first render.
