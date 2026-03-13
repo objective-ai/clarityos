@@ -430,20 +430,29 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
 
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
+          let lineBuffer = ""; // Buffer incomplete SSE lines across chunks
 
           while (true) {
             const { done: readerDone, value } = await reader.read();
             if (readerDone) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
+            lineBuffer += chunk;
+            const parts = lineBuffer.split("\n");
+            lineBuffer = parts.pop() ?? ""; // Keep incomplete last line in buffer
 
-            for (const line of lines) {
+            for (const line of parts) {
               if (!line.startsWith("data: ")) continue;
-              const data = JSON.parse(line.slice(6));
+
+              let data: Record<string, unknown>;
+              try {
+                data = JSON.parse(line.slice(6));
+              } catch {
+                continue; // Skip malformed SSE lines instead of crashing
+              }
 
               if (data.error) {
-                setError(data.error);
+                setError(data.error as string);
                 setIsStreaming(false);
                 return;
               }
@@ -451,6 +460,14 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
               if (data.done) {
                 if (jsonBuffer.trim()) {
                   handleParsedJson(jsonBuffer);
+                } else {
+                  // Fallback: extract JSON object from tail of fullBuffer
+                  const lastBrace = fullBuffer.lastIndexOf("}");
+                  const searchStart = Math.max(0, fullBuffer.length - 4000);
+                  const firstBrace = fullBuffer.indexOf("{", searchStart);
+                  if (lastBrace > firstBrace && firstBrace !== -1) {
+                    handleParsedJson(fullBuffer.slice(firstBrace, lastBrace + 1));
+                  }
                 }
                 setIsStreaming(false);
                 setIsDone(true);
@@ -458,7 +475,7 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
               }
 
               if (data.text) {
-                fullBuffer += data.text;
+                fullBuffer += data.text as string;
 
                 // Check for delimiter
                 if (!delimiterFound && fullBuffer.includes(JSON_DELIMITER)) {
@@ -467,7 +484,7 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
                   setSoapText(soapPart.trim());
                   jsonBuffer = jsonPart ?? "";
                 } else if (delimiterFound) {
-                  jsonBuffer += data.text;
+                  jsonBuffer += data.text as string;
                 } else {
                   setSoapText(fullBuffer);
                 }
@@ -500,6 +517,14 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
           // Parse the mock JSON
           if (jsonBuffer.trim()) {
             handleParsedJson(jsonBuffer);
+          } else {
+            // Fallback: extract JSON object from tail of fullBuffer
+            const lastBrace = fullBuffer.lastIndexOf("}");
+            const searchStart = Math.max(0, fullBuffer.length - 4000);
+            const firstBrace = fullBuffer.indexOf("{", searchStart);
+            if (lastBrace > firstBrace && firstBrace !== -1) {
+              handleParsedJson(fullBuffer.slice(firstBrace, lastBrace + 1));
+            }
           }
         }
 

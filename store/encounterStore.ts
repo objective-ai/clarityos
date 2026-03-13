@@ -33,6 +33,8 @@ export interface EncounterState {
   assessmentAndPlan?: string;
   aiSummaryText?: string;
   aiSummaryGeneratedAt?: string;
+  aiScribeTranscript?: string;
+  aiScribeStatus?: "draft" | "streaming" | "ai_ready" | "editing";
   /** Load status for this encounter from the API */
   loadStatus?: EncounterLoadStatus;
   loadError?: string;
@@ -74,6 +76,8 @@ interface EncounterStoreState {
   setFinalizeModalOpen: (open: boolean) => void;
   setAiSummary: (id: string, text: string) => void;
   setAssessmentAndPlan: (id: string, text: string) => void;
+  setAiScribeTranscript: (id: string, text: string) => void;
+  setAiScribeStatus: (id: string, status: "draft" | "streaming" | "ai_ready" | "editing") => void;
   getEncounter: (id: string) => EncounterState | undefined;
 }
 
@@ -152,6 +156,9 @@ export const useEncounterStore = create<EncounterStoreState>()(
                     signedAt: data.signedAt,
                     aiSummaryText: data.aiSummaryText,
                     aiSummaryGeneratedAt: data.aiSummaryGeneratedAt,
+                    // Preserve client-only AI Scribe state across API refreshes
+                    aiScribeTranscript: state.encounters[id]?.aiScribeTranscript,
+                    aiScribeStatus: state.encounters[id]?.aiScribeStatus,
                     loadStatus: "loaded",
                     loadError: undefined,
                   },
@@ -306,6 +313,32 @@ export const useEncounterStore = create<EncounterStoreState>()(
             }),
             false,
             "setAssessmentAndPlan"
+          );
+        },
+
+        setAiScribeTranscript: (id, text) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], aiScribeTranscript: text },
+              },
+            }),
+            false,
+            "setAiScribeTranscript"
+          );
+        },
+
+        setAiScribeStatus: (id, status) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], aiScribeStatus: status },
+              },
+            }),
+            false,
+            "setAiScribeStatus"
           );
         },
 
