@@ -91,6 +91,8 @@ interface EncounterBottomTabsProps {
   onRevertToPretest?: () => void;
   sidebarCollapsed: boolean;
   patientId: string;
+  /** When false, Finalize button is visually subdued to indicate missing required fields */
+  canFinalize?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +106,7 @@ export function EncounterBottomTabs({
   onRevertToPretest,
   sidebarCollapsed,
   patientId,
+  canFinalize,
 }: EncounterBottomTabsProps) {
   const [activeTab, setActiveTab] = useState(TABS[0].id);
   const [chartOpen, setChartOpen] = useState(false);
@@ -242,7 +245,12 @@ export function EncounterBottomTabs({
           <button
             type="button"
             onClick={onAdvanceStatus}
-            className="text-xs px-4 py-2 rounded-xl font-semibold transition-all bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
+            title={actionLabel === "Finalize" && !canFinalize ? "Complete required fields to finalize" : undefined}
+            className={`text-xs px-4 py-2 rounded-xl font-semibold transition-all ${
+              actionLabel === "Finalize" && canFinalize === false
+                ? "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] opacity-70 hover:opacity-90"
+                : "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
+            }`}
           >
             {actionLabel} &rarr;
           </button>

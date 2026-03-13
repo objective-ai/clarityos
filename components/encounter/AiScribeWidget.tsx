@@ -82,7 +82,7 @@ function UpsellModal({ feature, onClose }: { feature: EntitlementKey; onClose: (
                 "Streams directly into your text fields",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-2 text-caption text-[var(--text-secondary)]">
-                  <span className="text-[var(--state-normal)]">&check;</span>
+                  <span className="text-[var(--state-normal)]">✓</span>
                   {item}
                 </li>
               ))}
@@ -92,8 +92,9 @@ function UpsellModal({ feature, onClose }: { feature: EntitlementKey; onClose: (
             Upgrade to {meta.plan} &rarr;
           </button>
           <button
+            type="button"
             onClick={onClose}
-            className="w-full py-3 text-xs mt-2 hover-btn text-[var(--text-muted)]"
+            className="w-full py-3 text-xs mt-2 cursor-pointer underline-offset-2 hover:underline text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
             Not right now
           </button>
@@ -106,6 +107,59 @@ function UpsellModal({ feature, onClose }: { feature: EntitlementKey; onClose: (
 // ---------------------------------------------------------------------------
 // Sub-views
 // ---------------------------------------------------------------------------
+
+function ManualApView({
+  value,
+  onChange,
+  onSave,
+  onShowUpsell,
+  saved,
+}: {
+  value: string;
+  onChange: (text: string) => void;
+  onSave: () => void;
+  onShowUpsell: () => void;
+  saved: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={6}
+        placeholder="1. [Diagnosis] — [Clinical decision]&#10;2. [Next steps / follow-up]"
+        className="w-full px-4 py-3 rounded-xl text-sm resize-y min-h-[8rem] glass-input placeholder:text-[var(--text-muted)]"
+      />
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!value.trim()}
+          className="px-5 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
+        >
+          {saved ? "Saved ✓" : "Save"}
+        </button>
+        <span className="text-xs text-[var(--text-muted)]">Saved on finalize</span>
+      </div>
+      <div
+        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer hover:border-[var(--accent)] transition-colors"
+        style={{ background: "var(--accent-dim)", borderColor: "var(--mono-border)" }}
+        onClick={onShowUpsell}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && onShowUpsell()}
+      >
+        <svg width="14" height="14" viewBox="0 0 18 18" fill="none" className="flex-shrink-0">
+          <path d="M9 2L10.8 6.5H15.5L11.8 9.2L13.5 14L9 11L4.5 14L6.2 9.2L2.5 6.5H7.2L9 2Z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round" />
+        </svg>
+        <span className="text-xs text-[var(--text-secondary)]">
+          <span className="font-semibold text-[var(--accent)]">AI Scribe</span> can auto-fill this from a transcript — saves 12–15 min per encounter
+        </span>
+        <span className="ml-auto text-[10px] font-semibold text-[var(--accent)] whitespace-nowrap">Upgrade →</span>
+      </div>
+    </div>
+  );
+}
 
 function DraftView({
   transcript,
@@ -320,6 +374,8 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
   const hasAiScribe = has(Entitlement.AI_SCRIBE);
   const [showUpsell, setShowUpsell] = useState(false);
   const [editDraft, setEditDraft] = useState("");
+  const [manualApDraft, setManualApDraft] = useState("");
+  const [manualApSaved, setManualApSaved] = useState(false);
 
   // Store selectors
   const transcript = useEncounterStore((s) => s.encounters[encounterId]?.aiScribeTranscript ?? "");
@@ -365,9 +421,24 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
   // Store action for structured data
   const setAiStructuredData = useEncounterStore((s) => s.setAiStructuredData);
   const setAssessmentAndPlan = useEncounterStore((s) => s.setAssessmentAndPlan);
+  const storedAssessmentAndPlan = useEncounterStore((s) => s.encounters[encounterId]?.assessmentAndPlan ?? "");
   const storeStructuredData = useEncounterStore(
     (s) => s.encounters[encounterId]?.aiStructuredData ?? null
   );
+
+  // Hydrate manual A&P draft from store on mount
+  useEffect(() => {
+    if (storedAssessmentAndPlan && !manualApDraft) {
+      setManualApDraft(storedAssessmentAndPlan);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedAssessmentAndPlan]);
+
+  const handleManualApSave = useCallback(() => {
+    setAssessmentAndPlan(encounterId, manualApDraft);
+    setManualApSaved(true);
+    setTimeout(() => setManualApSaved(false), 2000);
+  }, [encounterId, manualApDraft, setAssessmentAndPlan]);
 
   // --- Transition: streaming → ai_ready on done ---
   useEffect(() => {
@@ -440,6 +511,19 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
 
   // --- Render ---
   const renderView = () => {
+    // Core plan users get a manual A&P editor instead of the AI Scribe draft view
+    if (!hasAiScribe && status === "draft") {
+      return (
+        <ManualApView
+          value={manualApDraft}
+          onChange={(text) => { setManualApDraft(text); setManualApSaved(false); }}
+          onSave={handleManualApSave}
+          onShowUpsell={() => setShowUpsell(true)}
+          saved={manualApSaved}
+        />
+      );
+    }
+
     switch (status) {
       case "draft":
         return (
@@ -494,16 +578,16 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
       <Card className={hasAiScribe ? "glass-card-accent" : ""}>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>AI Scribe</CardTitle>
+            <CardTitle>{hasAiScribe ? "AI Scribe" : "Assessment & Plan"}</CardTitle>
             <CardDescription>
               {hasAiScribe
                 ? "Paste or dictate a transcript to auto-fill encounter fields"
-                : "Premium feature \u2014 upgrade to unlock"}
+                : "Document your clinical decisions and next steps"}
             </CardDescription>
           </div>
-          <Badge variant={hasAiScribe ? "default" : "outline"}>
-            {hasAiScribe ? "Premium" : "Locked"}
-          </Badge>
+          {hasAiScribe && (
+            <Badge variant="default">Premium</Badge>
+          )}
         </CardHeader>
         <CardContent>{renderView()}</CardContent>
       </Card>
