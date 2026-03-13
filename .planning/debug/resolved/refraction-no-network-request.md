@@ -1,8 +1,8 @@
 ---
-status: investigating
+status: resolved
 trigger: "Refraction PATCH request never reaches network tab"
 created: 2026-03-13T15:00:00Z
-updated: 2026-03-13T15:00:00Z
+updated: 2026-03-13T15:30:00Z
 symptoms_prefilled: true
 goal: find_root_cause
 ---
