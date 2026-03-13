@@ -105,13 +105,16 @@ export function FinalizeModal({
   const chiefComplaint = useEncounterStore(
     (s) => s.encounters[encounterId]?.chiefComplaint ?? ""
   );
+  const savedAssessmentAndPlan = useEncounterStore(
+    (s) => s.encounters[encounterId]?.assessmentAndPlan ?? ""
+  );
   const finalizeEncounter = useEncounterStore((s) => s.finalizeEncounter);
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
   const updateBillingStatus = useBillingStore((s) => s.updateStatus);
 
   const vitalsDraft = useVitalsDraft(encounterId);
   const allDiagnoses = useDiagnoses(encounterId);
-  const activeDiagnoses = allDiagnoses.filter((dx) => dx.status === "Active");
+  const activeDiagnoses = allDiagnoses.filter((dx) => dx.status.toLowerCase() === "active");
   const finalRxDraft = useRefractionStore((s) => s.columns[3]?.draft);
 
   // ── Derived ─────────────────────────────────────────────────────────────
@@ -122,23 +125,32 @@ export function FinalizeModal({
   const hasRx =
     finalRxDraft?.od?.sphere != null ||
     finalRxDraft?.os?.sphere != null;
+  const hasChiefComplaint = chiefComplaint.trim().length > 0;
+  const hasVA = !!(
+    vitalsDraft?.ucva_od || vitalsDraft?.ucva_os ||
+    vitalsDraft?.bcva_od || vitalsDraft?.bcva_os
+  );
 
   const canSubmit =
     attested &&
+    hasChiefComplaint &&
+    hasVA &&
     assessmentPlan.trim().length >= 10 &&
     hasDiagnoses &&
     !isSubmitting;
 
-  // ── Reset on close ──────────────────────────────────────────────────────
+  // ── Sync on open / reset on close ───────────────────────────────────────
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setAssessmentPlan(savedAssessmentAndPlan);
+    } else {
       setAssessmentPlan("");
       setAttested(false);
       setIsSubmitting(false);
       setErrorMessage(null);
       setStep("clinical");
     }
-  }, [open]);
+  }, [open, savedAssessmentAndPlan]);
 
   // ── Submit handler ──────────────────────────────────────────────────────
   async function handleSubmit() {
@@ -257,6 +269,7 @@ export function FinalizeModal({
           <SummarySection
             title="Chief Complaint"
             icon={<FileText size={13} />}
+            warning={!hasChiefComplaint ? "Required" : undefined}
           >
             {chiefComplaint ? (
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>
@@ -273,7 +286,7 @@ export function FinalizeModal({
           <SummarySection
             title="Vitals"
             icon={<Stethoscope size={13} />}
-            warning={vitalsEmpty ? "Not Recorded" : undefined}
+            warning={!hasVA ? "Required — VA needed" : (!hasIop ? "IOP not recorded" : undefined)}
           >
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
@@ -391,6 +404,11 @@ export function FinalizeModal({
             title="Assessment & Plan"
             icon={<FileText size={13} />}
           >
+            {savedAssessmentAndPlan && (
+              <p className="text-[10px] mb-2 flex items-center gap-1" style={{ color: "var(--accent)" }}>
+                <span>✦</span> Pre-filled from AI Scribe — review and edit before signing
+              </p>
+            )}
             <textarea
               value={assessmentPlan}
               onChange={(e) => setAssessmentPlan(e.target.value)}
@@ -435,10 +453,12 @@ export function FinalizeModal({
             </p>
           )}
 
-          {/* Disabled reason hint */}
-          {!hasDiagnoses && attested && (
+          {/* Disabled reason hints */}
+          {attested && (!hasChiefComplaint || !hasVA || !hasDiagnoses) && (
             <p className="text-xs" style={{ color: "var(--state-caution)" }}>
-              Cannot finalize without at least one diagnosis.
+              {!hasChiefComplaint && "Chief complaint is required. "}
+              {!hasVA && "Visual acuity is required. "}
+              {!hasDiagnoses && "At least one diagnosis is required."}
             </p>
           )}
 

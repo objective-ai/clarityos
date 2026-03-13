@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --cache --cache-location .eslintcache",
+    "lint": "next lint",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch --preserveWatchOutput",
     "test": "vitest run",

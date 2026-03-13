@@ -285,6 +285,10 @@ async def get_analytics_dashboard(
         rx_optical_metrics=[
             RxOpticalItem(rx_modality=r.rx_modality, count=r.count) for r in rx_opt
         ],
-        actual_days=len(set(r.date for r in enc_vol)) if enc_vol else 0,
+        actual_days=len(
+            {r.date for r in enc_vol}
+            | {r.date for r in rev_trend}
+            | {r.date for r in pat_growth}
+        ),
         requested_days=period_days,
     )

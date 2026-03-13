@@ -273,9 +273,27 @@ async def generate_ai_scribe(
             yield f"data: {json.dumps({'done': True})}\n\n"
 
             # ── Save SOAP portion (before delimiter) to DB ─────────
-            soap_text = full_text.split("___JSON_START___")[0].strip()
+            parts = full_text.split("___JSON_START___")
+            soap_text = parts[0].strip()
             enc.ai_summary_text = soap_text
             enc.ai_summary_generated_at = datetime.now(timezone.utc)
+
+            # ── Also persist assessment_and_plan from the JSON ────
+            if len(parts) > 1:
+                try:
+                    raw_json = parts[1].strip().lstrip("`").lstrip("json").strip()
+                    if raw_json.endswith("```"):
+                        raw_json = raw_json[:-3].strip()
+                    parsed = json.loads(raw_json)
+                    ap = parsed.get("assessment_and_plan")
+                    if isinstance(ap, dict):
+                        ap_val = ap.get("value")
+                    else:
+                        ap_val = ap
+                    if ap_val and isinstance(ap_val, str):
+                        enc.assessment_and_plan = ap_val
+                except (json.JSONDecodeError, KeyError):
+                    pass  # JSON parse failed — A&P will be saved via accept call
 
             await log_action(
                 db, ctx, AuditAction.AI_SCRIBE_GENERATED, "encounter", enc.id,
@@ -330,6 +348,13 @@ async def accept_ai_scribe(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
 
     staff = await resolve_staff(ctx, db)
+
+    # Persist assessment_and_plan if included in the accepted changes
+    ap_change = payload.changes.get("assessment_and_plan")
+    if ap_change and isinstance(ap_change, dict):
+        ap_value = ap_change.get("new")
+        if ap_value and isinstance(ap_value, str):
+            enc.assessment_and_plan = ap_value
 
     from backend.core.ai_models import get_tenant_ai_model
 

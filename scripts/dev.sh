@@ -29,7 +29,7 @@ case "${1:-help}" in
     python -c "from backend.main import app; print('FastAPI imports OK')"
 
     echo "--- Starting uvicorn ---"
-    uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+    uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
     sleep 3
 
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs)

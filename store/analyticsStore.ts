@@ -63,6 +63,9 @@ interface AnalyticsState {
   loading: boolean;
   error: string | null;
   dateRange: DateRange;
+  /** ISO date strings for the current request boundaries */
+  dateFrom: string | null;
+  dateTo: string | null;
 }
 
 interface AnalyticsActions {
@@ -79,6 +82,8 @@ export const useAnalyticsStore = create<AnalyticsStore>()(
       loading: false,
       error: null,
       dateRange: "30d",
+      dateFrom: null,
+      dateTo: null,
 
       fetch: async (range) => {
         set({ loading: true, error: null }, false, "analytics/fetch/start");
@@ -87,7 +92,7 @@ export const useAnalyticsStore = create<AnalyticsStore>()(
           const data = await apiFetch<AnalyticsDashboardData>(
             `/api/analytics?date_from=${date_from}&date_to=${date_to}`
           );
-          set({ data, loading: false }, false, "analytics/fetch/success");
+          set({ data, loading: false, dateFrom: date_from, dateTo: date_to }, false, "analytics/fetch/success");
         } catch (err) {
           set(
             { loading: false, error: err instanceof Error ? err.message : "Failed to load analytics" },

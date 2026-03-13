@@ -21,6 +21,7 @@ export interface EncounterState {
   patientId?: string;
   patientChartNumber?: number;
   providerId?: string;
+  appointmentId?: string;
   patientName?: string;
   patientPreferredName?: string;
   patientDob?: string;
@@ -29,6 +30,7 @@ export interface EncounterState {
   chiefComplaint?: string;
   signedByName?: string;
   signedAt?: string;
+  assessmentAndPlan?: string;
   aiSummaryText?: string;
   aiSummaryGeneratedAt?: string;
   /** Load status for this encounter from the API */
@@ -43,6 +45,7 @@ interface EncounterApiResponse {
   patientId: string;
   patientChartNumber?: number;
   providerId: string;
+  appointmentId?: string;
   patientName?: string;
   patientPreferredName?: string;
   patientDob?: string;
@@ -53,6 +56,7 @@ interface EncounterApiResponse {
   encounterDate: string;
   signedByName?: string;
   signedAt?: string;
+  assessmentAndPlan?: string;
   aiSummaryText?: string;
   aiSummaryGeneratedAt?: string;
 }
@@ -69,6 +73,7 @@ interface EncounterStoreState {
   unlockEncounter: (id: string) => void;
   setFinalizeModalOpen: (open: boolean) => void;
   setAiSummary: (id: string, text: string) => void;
+  setAssessmentAndPlan: (id: string, text: string) => void;
   getEncounter: (id: string) => EncounterState | undefined;
 }
 
@@ -135,12 +140,14 @@ export const useEncounterStore = create<EncounterStoreState>()(
                     patientId: data.patientId,
                     patientChartNumber: data.patientChartNumber,
                     providerId: data.providerId,
+                    appointmentId: data.appointmentId,
                     patientName: data.patientName,
                     patientPreferredName: data.patientPreferredName,
                     patientDob: data.patientDob,
                     patientSex: data.patientSex,
                     providerName: data.providerName ?? "",
                     chiefComplaint: data.chiefComplaint,
+                    assessmentAndPlan: data.assessmentAndPlan ?? state.encounters[id]?.assessmentAndPlan,
                     signedByName: data.signedByName,
                     signedAt: data.signedAt,
                     aiSummaryText: data.aiSummaryText,
@@ -283,6 +290,22 @@ export const useEncounterStore = create<EncounterStoreState>()(
             }),
             false,
             "setAiSummary"
+          );
+        },
+
+        setAssessmentAndPlan: (id, text) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: {
+                  ...state.encounters[id],
+                  assessmentAndPlan: text,
+                },
+              },
+            }),
+            false,
+            "setAssessmentAndPlan"
           );
         },
 

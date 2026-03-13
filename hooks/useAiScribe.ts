@@ -388,7 +388,9 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
   // Parse and store both V1 and V2 representations
   const handleParsedJson = useCallback((jsonStr: string) => {
     try {
-      const raw = JSON.parse(jsonStr);
+      // Strip markdown code fences if Claude wraps JSON in ```json ... ```
+      const cleaned = jsonStr.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+      const raw = JSON.parse(cleaned);
       const v2 = normalizeToV2(raw);
       setStructuredDataV2(v2);
       setStructuredData(v2ToV1(v2));

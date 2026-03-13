@@ -166,7 +166,7 @@ export function SuperbillModal({
   );
 
   const allDiagnoses = useDiagnoses(encounterId);
-  const activeDiagnoses = allDiagnoses.filter((dx) => dx.status === "Active");
+  const activeDiagnoses = allDiagnoses.filter((dx) => dx.status.toLowerCase() === "active");
   const icdCodes = activeDiagnoses.map((dx) => dx.icd10Code);
 
   // Load or create superbill on open

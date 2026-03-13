@@ -68,6 +68,27 @@ function fmtDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/**
+ * Pad a time-series array with zero-value boundary points at dateFrom/dateTo
+ * so charts show the full requested range instead of starting mid-air.
+ */
+function padTimeSeries<T extends { date: string }>(
+  data: T[],
+  dateFrom: string | null,
+  dateTo: string | null,
+  zeroFactory: (date: string) => T,
+): T[] {
+  if (!dateFrom || !dateTo || data.length === 0) return data;
+  const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
+  const first = sorted[0].date;
+  const last = sorted[sorted.length - 1].date;
+  const result: T[] = [];
+  if (dateFrom < first) result.push(zeroFactory(dateFrom));
+  result.push(...sorted);
+  if (dateTo > last) result.push(zeroFactory(dateTo));
+  return result;
+}
+
 interface TooltipPayload {
   name: string;
   value: number | string;
@@ -216,6 +237,7 @@ function RevenueTrendChart({ data }: { data: { date: string; revenue: number }[]
           axisLine={false}
           tickLine={false}
           tickFormatter={(v) => `$${v}`}
+          domain={["auto", "auto"]}
         />
         <Tooltip content={<GlassTooltip valueFormatter={(v) => `$${Number(v).toFixed(2)}`} />} />
         <Line
@@ -224,8 +246,8 @@ function RevenueTrendChart({ data }: { data: { date: string; revenue: number }[]
           name="Revenue"
           stroke={CHART_COLORS.teal}
           strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 4, fill: CHART_COLORS.teal }}
+          dot={{ r: 3, fill: CHART_COLORS.teal }}
+          activeDot={{ r: 5, fill: CHART_COLORS.teal }}
         />
       </LineChart>
     </ResponsiveContainer>
@@ -250,7 +272,12 @@ function PatientGrowthChart({ data }: { data: { date: string; newPatients: numbe
           axisLine={false}
           tickLine={false}
         />
-        <YAxis tick={{ fill: CHART_COLORS.muted, fontSize: 11 }} axisLine={false} tickLine={false} />
+        <YAxis
+          tick={{ fill: CHART_COLORS.muted, fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          domain={["auto", "auto"]}
+        />
         <Tooltip content={<GlassTooltip />} />
         <Area
           type="monotone"
@@ -259,7 +286,7 @@ function PatientGrowthChart({ data }: { data: { date: string; newPatients: numbe
           stroke={CHART_COLORS.violet}
           strokeWidth={2}
           fill="url(#patientGrowthGrad)"
-          dot={false}
+          dot={{ r: 3, fill: CHART_COLORS.violet }}
         />
       </AreaChart>
     </ResponsiveContainer>
@@ -379,7 +406,7 @@ function UpsellCard() {
 
 export default function AnalyticsPage() {
   const { has } = useEntitlements();
-  const { data, loading, error, dateRange, fetch, setDateRange } = useAnalyticsStore();
+  const { data, loading, error, dateRange, dateFrom, dateTo, fetch, setDateRange } = useAnalyticsStore();
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
 
   useEffect(() => {
@@ -497,7 +524,16 @@ export default function AnalyticsPage() {
           error={error}
           onRetry={onRetry}
           height={280}
-          chart={<EncounterVolumeChart data={data?.encounterVolume ?? []} />}
+          chart={
+            <EncounterVolumeChart
+              data={padTimeSeries(
+                data?.encounterVolume ?? [],
+                dateFrom,
+                dateTo,
+                (d) => ({ date: d, count: 0 }),
+              )}
+            />
+          }
         />
         <ChartCard
           title="Revenue Trend"
@@ -505,7 +541,16 @@ export default function AnalyticsPage() {
           error={error}
           onRetry={onRetry}
           height={280}
-          chart={<RevenueTrendChart data={data?.revenueTrend ?? []} />}
+          chart={
+            <RevenueTrendChart
+              data={padTimeSeries(
+                data?.revenueTrend ?? [],
+                dateFrom,
+                dateTo,
+                (d) => ({ date: d, revenue: 0 }),
+              )}
+            />
+          }
         />
         <ChartCard
           title="Patient Growth"
@@ -513,7 +558,16 @@ export default function AnalyticsPage() {
           error={error}
           onRetry={onRetry}
           height={280}
-          chart={<PatientGrowthChart data={data?.patientGrowth ?? []} />}
+          chart={
+            <PatientGrowthChart
+              data={padTimeSeries(
+                data?.patientGrowth ?? [],
+                dateFrom,
+                dateTo,
+                (d) => ({ date: d, newPatients: 0 }),
+              )}
+            />
+          }
         />
       </div>
 
