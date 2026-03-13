@@ -6,18 +6,25 @@ import { ConfidenceBadge } from "../validation-station/ConfidenceBadge";
 interface ConflictRowItemProps {
   row: ConflictRow;
   onToggle: (fieldKey: string, resolution: "keep" | "use_ai") => void;
+  isFocused?: boolean;
+  id?: string;
 }
 
-export function ConflictRowItem({ row, onToggle }: ConflictRowItemProps) {
+export function ConflictRowItem({ row, onToggle, isFocused, id }: ConflictRowItemProps) {
   const isNew = !row.hasConflict && row.humanValue == null;
   const isConflict = row.hasConflict;
 
   return (
     <div
-      className={`grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 px-3 py-2 rounded-lg text-xs ${
-        isConflict
-          ? "border border-amber-500/30 bg-amber-500/5"
-          : "border border-transparent"
+      id={id}
+      role="option"
+      aria-selected={row.resolution === "use_ai"}
+      className={`grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all ${
+        isFocused
+          ? "ring-2 ring-[var(--accent)]/40 bg-[var(--bg-elevated)] border-l-2 border-l-[var(--accent)]"
+          : isConflict
+            ? "border border-amber-500/30 bg-amber-500/5"
+            : "border border-transparent"
       }`}
     >
       {/* Label */}
