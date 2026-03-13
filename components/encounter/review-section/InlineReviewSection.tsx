@@ -54,6 +54,8 @@ export function InlineReviewSection({
   const structuredData = useEncounterStore(
     (s) => s.encounters[encounterId]?.aiStructuredData ?? null,
   );
+  // Capture the structured data value at mount time for stale-data detection
+  const mountedStructuredDataRef = useRef(structuredData);
 
   // Snapshot store values once for conflict detection
   const storeSnapshots = useMemo<StoreSnapshots>(() => {
@@ -181,8 +183,6 @@ export function InlineReviewSection({
     setApplying(true);
     try {
       await onCommit(autoRows, reviewRows, soapText);
-    } catch (err) {
-      console.error("Commit failed:", err);
     } finally {
       setApplying(false);
     }
@@ -243,10 +243,8 @@ export function InlineReviewSection({
   }, [reviewRows, focusedIndex, handleToggle, handleCommit, onClose]);
 
   // Concurrent generation guard -- detect stale data
-  const liveStructuredData = useEncounterStore(
-    (s) => s.encounters[encounterId]?.aiStructuredData ?? null,
-  );
-  const hasStaleData = structuredData !== liveStructuredData && liveStructuredData !== null;
+  // structuredData is live; mountedStructuredDataRef holds the value at review open time
+  const hasStaleData = structuredData !== mountedStructuredDataRef.current && structuredData !== null;
 
   if (!structuredData) {
     return (

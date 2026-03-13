@@ -117,7 +117,8 @@ export async function applyResolutions(
 
     // --- Diagnoses (laterality update) ---
     if (row.fieldKey.startsWith("dx.") && row.fieldKey.endsWith(".laterality")) {
-      const icdCode = row.fieldKey.split(".")[1];
+      // ICD codes contain dots (e.g. "H52.13"), so can't use split — extract between "dx." and ".laterality"
+      const icdCode = row.fieldKey.slice("dx.".length, -".laterality".length);
       const dxStore = useDiagnosisStore.getState();
       const existing = dxStore.encounters[encounterId]?.diagnoses?.find(
         (d) => d.icd10Code === icdCode,

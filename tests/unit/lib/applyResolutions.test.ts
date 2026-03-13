@@ -75,4 +75,33 @@ describe("applyResolutions", () => {
     const count = await applyResolutions("enc-1", [], "SOAP text");
     expect(count).toBe(0);
   });
+
+  test("dx laterality: calls updateDiagnosis with correct eyeAffected when applying laterality row", async () => {
+    const { useDiagnosisStore } = await import("@/store/diagnosisStore");
+    const updateDiagnosis = vi.fn();
+    vi.mocked(useDiagnosisStore.getState).mockReturnValue({
+      addDiagnosis: vi.fn(),
+      encounters: {
+        "enc-1": {
+          diagnoses: [
+            { id: "dx-1", icd10Code: "H52.13", description: "Myopia", eyeAffected: "OD" },
+          ],
+        },
+      },
+      updateDiagnosis,
+    } as ReturnType<typeof useDiagnosisStore.getState>);
+
+    const row = makeRow({
+      section: "diagnoses",
+      fieldKey: "dx.H52.13.laterality",
+      label: "H52.13 Laterality",
+      aiValue: "OU",
+      resolution: "use_ai",
+    });
+
+    await applyResolutions("enc-1", [row], "SOAP text");
+
+    // updateDiagnosis signature: (encounterId, diagnosisId, updates)
+    expect(updateDiagnosis).toHaveBeenCalledWith("enc-1", "dx-1", { eyeAffected: "OU" });
+  });
 });

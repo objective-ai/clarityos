@@ -439,6 +439,13 @@ export default function EncounterPage({
     setReviewMode(true);
   }, [params.encounterId, undoToast]);
 
+  // Clear pending undo timer on unmount to prevent state updates after navigation
+  useEffect(() => {
+    return () => {
+      if (undoToast?.timer) clearTimeout(undoToast.timer);
+    };
+  }, [undoToast]);
+
   // Show full-page skeleton while encounter header is loading
   if (encounterLoadStatus === "loading" || encounterLoadStatus === "idle") {
     return (
