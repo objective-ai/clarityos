@@ -494,8 +494,10 @@ export function AiScribeWidget({
     const vitals = useVitalsStore.getState().encounters[encounterId]?.draft;
     const anteriorKey = `${encounterId}:anterior_segment` as FindingsStoreKey;
     const posteriorKey = `${encounterId}:posterior_segment` as FindingsStoreKey;
-    const examAnterior = useExamFindingsStore.getState().findings[anteriorKey]?.draft;
-    const examPosterior = useExamFindingsStore.getState().findings[posteriorKey]?.draft;
+    const anteriorSlice = useExamFindingsStore.getState().findings[anteriorKey];
+    const posteriorSlice = useExamFindingsStore.getState().findings[posteriorKey];
+    const examAnterior = anteriorSlice?.draft;
+    const examPosterior = posteriorSlice?.draft;
     const diagnoses = useDiagnosisStore.getState().encounters[encounterId]?.diagnoses ?? [];
     const refractionCol = useRefractionStore.getState().columns[MANIFEST_RX_COL];
 
@@ -520,6 +522,8 @@ export function AiScribeWidget({
         od: refractionCol.draft.od as unknown as Record<string, unknown>,
         os: refractionCol.draft.os as unknown as Record<string, unknown>,
       } : null,
+      examAnteriorSaved: anteriorSlice?.committed != null,
+      examPosteriorSaved: posteriorSlice?.committed != null,
     };
 
     const rows = buildConflicts(data, snapshots);
