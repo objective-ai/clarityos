@@ -1,0 +1,70 @@
+<h2>AI Scribe Validation Station — Architecture Approaches</h2>
+<p class="subtitle">Choose how to build the split-pane reviewer on top of the existing AI Scribe</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Extend Existing Architecture (Recommended)</h3>
+      <p><strong>Keep</strong> <code>useAiScribe.ts</code> hook + inline <code>AiScribeWidget</code> for generation.</p>
+      <p><strong>Add</strong> a new <code>ValidationStationModal</code> component that receives SOAP text + structured data.</p>
+      <p><strong>Upgrade</strong> the Anthropic system prompt with confidence scores + better optometry routing.</p>
+      <p><strong>Reuse</strong> existing store dispatch logic from the current accept handler.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Minimal code churn — extends, doesn't replace</li>
+          <li>Existing streaming + accept logic stays intact</li>
+          <li>One new component + prompt upgrade</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Field editing in modal needs new local state management</li>
+          <li>Must bridge between modal edits and store dispatch</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>New Dedicated Pipeline</h3>
+      <p><strong>New</strong> <code>useScribeReview.ts</code> hook managing validation state (editing, per-field accept/discard).</p>
+      <p><strong>New</strong> <code>ValidationStation/</code> component directory with specialized sub-components.</p>
+      <p><strong>Supports</strong> partial acceptance — accept some fields, discard others individually.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Clean separation of generation vs review concerns</li>
+          <li>Per-field accept/discard granularity</li>
+          <li>Purpose-built state management</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>More code to write and maintain</li>
+          <li>Duplicates some store dispatch logic</li>
+          <li>Higher complexity for v1</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Minimal Viable Upgrade</h3>
+      <p><strong>Only</strong> upgrade the Anthropic prompt (confidence + optometry routing).</p>
+      <p><strong>Simple</strong> modal: SOAP on left, raw JSON preview on right. No field-specific rendering.</p>
+      <p><strong>"Edit"</strong> just closes the modal and scrolls to the relevant encounter section.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Fastest to build — days not weeks</li>
+          <li>Prompt improvements ship immediately</li>
+          <li>Low risk, easy to iterate</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>No inline editing — doctor bounces between modal and encounter page</li>
+          <li>No refraction grid, ICD-10 pills, or confidence badges in UI</li>
+          <li>Doesn't deliver the "Validation Station" vision</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
