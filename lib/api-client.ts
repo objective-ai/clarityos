@@ -121,6 +121,7 @@ export async function apiFetch<T = unknown>(
       throw new HttpError(res.status, message);
     }
 
+    if (res.status === 204) return null as T;
     const json = await res.json();
     return camelizeKeys<T>(json);
   }, retries);

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -272,7 +272,7 @@ async def create_superbill(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{encounter_id}/superbill", response_model=SuperbillResponse)
+@router.get("/{encounter_id}/superbill", response_model=SuperbillResponse | None)
 async def get_superbill(
     encounter_id: str,
     request: Request,
@@ -281,7 +281,16 @@ async def get_superbill(
 ):
     """Retrieve the superbill for an encounter."""
     encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
-    sb = await _get_superbill_or_404(encounter_id, ctx.tenant_id, db, load_line_items=True)
+    sb = (
+        await db.execute(
+            select(Superbill)
+            .where(Superbill.encounter_id == encounter_id, Superbill.tenant_id == ctx.tenant_id)
+            .options(selectinload(Superbill.line_items))
+        )
+    ).scalar_one_or_none()
+    if not sb:
+        # No PHI accessed — audit log intentionally skipped
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # Fetch encounter diagnoses for validation
     enc = (

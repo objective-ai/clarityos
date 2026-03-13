@@ -16,7 +16,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
-import { apiFetch, HttpError } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
 import type {
   ClaimStatus,
   CptIcdWarning,
@@ -142,9 +142,25 @@ export const useBillingStore = create<BillingStore>()(
         );
 
         try {
-          const rawSuperbill = await apiFetch<Superbill>(
+          // 204 = no superbill created yet; apiFetch returns null in that case
+          const rawSuperbill = await apiFetch<Superbill | null>(
             `/api/encounters/${encounterId}/superbill`,
           );
+
+          if (rawSuperbill === null) {
+            set(
+              {
+                encounters: {
+                  ...get().encounters,
+                  [encounterId]: { ...defaultSlice, loadStatus: "loaded" },
+                },
+              },
+              false,
+              "loadSuperbill/empty",
+            );
+            return;
+          }
+
           const superbill = normalizeSuperBill(rawSuperbill);
 
           set(
@@ -174,22 +190,19 @@ export const useBillingStore = create<BillingStore>()(
             "loadSuperbill/success",
           );
         } catch (err) {
-          // 404 is expected when no superbill exists yet
-          const isNotFound = err instanceof HttpError && err.status === 404;
-
           set(
             {
               encounters: {
                 ...get().encounters,
                 [encounterId]: {
                   ...defaultSlice,
-                  loadStatus: isNotFound ? "loaded" : "error",
-                  error: isNotFound ? null : (err instanceof Error ? err.message : "Failed to load superbill"),
+                  loadStatus: "error",
+                  error: err instanceof Error ? err.message : "Failed to load superbill",
                 },
               },
             },
             false,
-            "loadSuperbill/done",
+            "loadSuperbill/error",
           );
         }
       },

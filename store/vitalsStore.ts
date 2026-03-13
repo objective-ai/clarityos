@@ -31,7 +31,7 @@ import {
   type VitalsSaveStatus,
   type VitalsState,
 } from "@/types/vitals";
-import { apiFetch, HttpError } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -175,10 +175,35 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
 
         try {
           // apiFetch returns camelCase keys — map to snake_case VitalsDraft fields
-          const data = await apiFetch<Record<string, unknown>>(
+          // 204 = no vitals recorded yet; apiFetch returns null in that case
+          const data = await apiFetch<Record<string, unknown> | null>(
             `/api/encounters/${encounterId}/vitals`,
             { retries: 2 },
           );
+
+          if (data === null) {
+            // 204: no vitals recorded yet — leave blank draft in place
+            set(
+              (state) => ({
+                encounters: {
+                  ...state.encounters,
+                  [encounterId]: {
+                    ...(state.encounters[encounterId] ?? {
+                      draft: blankVitalsDraft(encounterId),
+                      committed: null,
+                      errors: [],
+                      lastSavedAt: null,
+                    }),
+                    saveStatus: "idle" as VitalsSaveStatus,
+                  },
+                },
+              }),
+              false,
+              "loadVitals/empty"
+            );
+            return;
+          }
+
           const draft: VitalsDraft = {
             id: (data.id as string) ?? null,
             encounter_id: encounterId,
@@ -215,8 +240,6 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
             "loadVitals/loaded"
           );
         } catch (err) {
-          // 404 means no vitals recorded yet — use blank draft (not an error)
-          const isNotFound = err instanceof HttpError && err.status === 404;
           set(
             (state) => {
               const enc = state.encounters[encounterId];
@@ -226,14 +249,14 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
                   ...state.encounters,
                   [encounterId]: {
                     ...enc,
-                    saveStatus: isNotFound ? ("idle" as VitalsSaveStatus) : ("error" as VitalsSaveStatus),
-                    errors: isNotFound ? [] : [{ field: "_load", message: "Could not load vitals" }],
+                    saveStatus: "error" as VitalsSaveStatus,
+                    errors: [{ field: "_load", message: "Could not load vitals" }],
                   },
                 },
               };
             },
             false,
-            isNotFound ? "loadVitals/not-found" : "loadVitals/error"
+            "loadVitals/error"
           );
         }
       },
