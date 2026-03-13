@@ -29,6 +29,8 @@ export interface ConflictRow {
   confidence: ConfidenceLevel;
   hasConflict: boolean;
   resolution: "keep" | "use_ai";
+  /** Raw structured data for complex fields (e.g., diagnosis, pupils) */
+  aiRawData?: Record<string, unknown>;
 }
 
 // Store snapshots passed in (avoids coupling to Zustand hooks)
@@ -45,7 +47,7 @@ export interface StoreSnapshots {
     findings_os: Record<string, { status: string; finding?: string }>;
   } | null;
   diagnoses: Array<{ icd10Code: string; description: string; eyeAffected: string | null }>;
-  refractionFinalRx: {
+  refractionManifest: {
     od: Record<string, unknown>;
     os: Record<string, unknown>;
   } | null;
@@ -109,28 +111,8 @@ const VITALS_MAP: Array<{
   { aiKey: "va_od_near", storeKey: "near_va_od", label: "VA OD (Near)" },
   { aiKey: "va_os_near", storeKey: "near_va_os", label: "VA OS (Near)" },
   // BP handled separately — store has combined "120/80" field
-  { aiKey: "pupils_od", storeKey: "pupils_od", label: "Pupils OD" },
-  { aiKey: "pupils_os", storeKey: "pupils_os", label: "Pupils OS" },
+  // Pupils handled separately — AI sends text, store has booleans
 ];
-
-/**
- * Split conflicts into exam (handled by inline merge panel) and non-exam (modal).
- */
-export function splitConflicts(rows: ConflictRow[]): {
-  exam: ConflictRow[];
-  other: ConflictRow[];
-} {
-  const exam: ConflictRow[] = [];
-  const other: ConflictRow[] = [];
-  for (const row of rows) {
-    if (row.section === "exam_anterior" || row.section === "exam_posterior") {
-      exam.push(row);
-    } else {
-      other.push(row);
-    }
-  }
-  return { exam, other };
-}
 
 export function buildConflicts(
   aiData: ScribeStructuredDataV2,
@@ -168,6 +150,58 @@ export function buildConflicts(
       const confidence = sys?.confidence ?? dia?.confidence ?? "low";
       const humanVal = str(stores.vitals?.["blood_pressure"]);
       addRow(rows, "vitals", "vitals.blood_pressure", "Blood Pressure", humanVal, aiVal, confidence);
+    }
+
+    // Pupils: AI sends free text, store has booleans
+    const pupilOd = aiData.vitals.pupils_od?.value;
+    const pupilOs = aiData.vitals.pupils_os?.value;
+    const rawPupilText = [pupilOd, pupilOs].filter(Boolean).join("; ");
+    if (rawPupilText) {
+      const lower = rawPupilText.toLowerCase();
+      const pupilConfidence = aiData.vitals.pupils_od?.confidence ?? aiData.vitals.pupils_os?.confidence ?? "medium";
+
+      // Parse PERRL/PERRLA → pupils_equal_round_reactive
+      const isPerrl = /perrl|perrla/.test(lower);
+      const isSluggish = /sluggish|irregular|unequal|anisocoria/.test(lower);
+      const perrlValue = isPerrl && !isSluggish;
+
+      const humanPerrl = stores.vitals?.["pupils_equal_round_reactive"];
+      const perrlRow: ConflictRow = {
+        section: "vitals",
+        fieldKey: "vitals.pupils_equal_round_reactive",
+        label: "Pupils Equal/Round/Reactive",
+        humanValue: humanPerrl != null ? (humanPerrl ? "Yes" : "No") : null,
+        aiValue: perrlValue ? "Yes" : "No",
+        confidence: pupilConfidence,
+        hasConflict: humanPerrl != null && (!!humanPerrl) !== perrlValue,
+        resolution: humanPerrl != null && (!!humanPerrl) !== perrlValue ? "keep" : "use_ai",
+        aiRawData: { rawPupilText },
+      };
+      if (humanPerrl == null || (!!humanPerrl) !== perrlValue) {
+        rows.push(perrlRow);
+      }
+
+      // Parse APD/RAPD
+      const hasApd = /\+apd|positive apd|rapd present|apd present/.test(lower);
+      const noApd = /no apd|-apd|rapd absent|apd absent|no rapd/.test(lower);
+      if (hasApd || noApd) {
+        const rapdValue = hasApd;
+        const humanRapd = stores.vitals?.["relative_afferent_pupillary_defect"];
+        const rapdRow: ConflictRow = {
+          section: "vitals",
+          fieldKey: "vitals.relative_afferent_pupillary_defect",
+          label: "RAPD",
+          humanValue: humanRapd != null ? (humanRapd ? "Yes" : "No") : null,
+          aiValue: rapdValue ? "Yes" : "No",
+          confidence: pupilConfidence,
+          hasConflict: humanRapd != null && (!!humanRapd) !== rapdValue,
+          resolution: humanRapd != null && (!!humanRapd) !== rapdValue ? "keep" : "use_ai",
+          aiRawData: { rawPupilText },
+        };
+        if (humanRapd == null || (!!humanRapd) !== rapdValue) {
+          rows.push(rapdRow);
+        }
+      }
     }
   }
 
@@ -247,27 +281,34 @@ export function buildConflicts(
           );
         }
       } else {
-        // New diagnosis — show as addition
-        addRow(
-          rows,
-          "diagnoses",
-          `dx.${aiDx.icdCode}.new`,
-          `${aiDx.icdCode} ${aiDx.description}`,
-          null,
-          `${aiDx.icdCode} — ${aiDx.description} (${aiDx.laterality})`,
-          aiDx.confidence,
-        );
+        // New diagnosis — show as addition, defaulting to Skip (clinical safety)
+        const aiDisplayVal = `${aiDx.icdCode} — ${aiDx.description} (${aiDx.laterality})`;
+        rows.push({
+          section: "diagnoses",
+          fieldKey: `dx.${aiDx.icdCode}.new`,
+          label: `${aiDx.icdCode} ${aiDx.description}`,
+          humanValue: null,
+          aiValue: aiDisplayVal,
+          confidence: aiDx.confidence,
+          hasConflict: false,
+          resolution: "keep", // Doctor must explicitly confirm new ICD-10 codes
+          aiRawData: {
+            icdCode: aiDx.icdCode,
+            description: aiDx.description,
+            laterality: aiDx.laterality,
+          },
+        });
       }
     }
   }
 
-  // --- Refraction (Final Rx column) ---
+  // --- Refraction (Manifest column) ---
   if (aiData.refraction) {
     for (const eye of ["OD", "OS"] as const) {
       const aiRx = aiData.refraction[eye];
       if (!aiRx) continue;
       const eyeLower = eye.toLowerCase() as "od" | "os";
-      const humanRx = stores.refractionFinalRx?.[eyeLower];
+      const humanRx = stores.refractionManifest?.[eyeLower];
 
       for (const field of ["sphere", "cylinder", "axis", "add"] as const) {
         const aiVal = aiRx[field];

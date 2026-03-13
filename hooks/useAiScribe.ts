@@ -6,244 +6,14 @@
  * Dual-stream protocol:
  *   1. SOAP narrative text streams visibly to the UI
  *   2. After ___JSON_START___ delimiter, JSON is silently buffered
- *   3. On "done", JSON is parsed → structuredData ready for Accept
+ *   3. On "done", JSON is parsed → structuredDataV2 ready for review
  *
  * Falls back to mock streaming when backend is unreachable (Vercel / no backend).
  */
 
 import { useCallback, useRef, useState } from "react";
-import type {
-  ScribeStructuredDataV2,
-  ScribeVitalsV2,
-  ScribeStructureFindingV2,
-  ConfidenceLevel,
-} from "@/types/scribe";
-
-// ---------------------------------------------------------------------------
-// Legacy V1 types (kept for backwards-compat with existing accept handler)
-// ---------------------------------------------------------------------------
-
-export interface ScribeVitals {
-  iop_od?: number | null;
-  iop_os?: number | null;
-  va_od_distance?: string | null;
-  va_os_distance?: string | null;
-  va_od_near?: string | null;
-  va_os_near?: string | null;
-  bp_systolic?: number | null;
-  bp_diastolic?: number | null;
-  pupils_od?: string | null;
-  pupils_os?: string | null;
-}
-
-export interface ScribeStructureFinding {
-  status: string;
-  notes?: string;
-}
-
-export interface ScribeExamFindings {
-  anterior?: {
-    OD?: Record<string, ScribeStructureFinding>;
-    OS?: Record<string, ScribeStructureFinding>;
-  };
-  posterior?: {
-    OD?: Record<string, ScribeStructureFinding>;
-    OS?: Record<string, ScribeStructureFinding>;
-  };
-}
-
-export interface ScribeDiagnosis {
-  icdCode: string;
-  description: string;
-  laterality?: "OD" | "OS" | "OU";
-}
-
-export interface ScribeRefraction {
-  OD?: { sphere?: string; cylinder?: string; axis?: string; add?: string };
-  OS?: { sphere?: string; cylinder?: string; axis?: string; add?: string };
-}
-
-export interface ScribeStructuredData {
-  chief_complaint?: string;
-  vitals?: ScribeVitals;
-  exam_findings?: ScribeExamFindings;
-  diagnoses?: ScribeDiagnosis[];
-  refraction?: ScribeRefraction;
-}
-
-// ---------------------------------------------------------------------------
-// V2 → V1 converter (for existing accept handler)
-// ---------------------------------------------------------------------------
-
-export function v2ToV1(data: ScribeStructuredDataV2): ScribeStructuredData {
-  const result: ScribeStructuredData = {};
-
-  if (data.chief_complaint?.value) {
-    result.chief_complaint = data.chief_complaint.value;
-  }
-
-  if (data.vitals) {
-    const v: ScribeVitals = {};
-    const vitals = data.vitals;
-    const keys: (keyof ScribeVitalsV2)[] = [
-      "iop_od", "iop_os", "va_od_distance", "va_os_distance",
-      "va_od_near", "va_os_near", "bp_systolic", "bp_diastolic",
-      "pupils_od", "pupils_os",
-    ];
-    for (const k of keys) {
-      const field = vitals[k];
-      if (field) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (v as any)[k] = field.value;
-      }
-    }
-    result.vitals = v;
-  }
-
-  if (data.exam_findings) {
-    const ef: ScribeExamFindings = {};
-    for (const section of ["anterior", "posterior"] as const) {
-      const sectionData = data.exam_findings[section];
-      if (!sectionData) continue;
-      const converted: Record<string, Record<string, ScribeStructureFinding>> = {};
-      for (const eye of ["OD", "OS"] as const) {
-        const eyeData = sectionData[eye];
-        if (!eyeData) continue;
-        converted[eye] = {};
-        for (const [structure, finding] of Object.entries(eyeData)) {
-          converted[eye][structure] = {
-            status: finding.status,
-            notes: finding.notes || undefined,
-          };
-        }
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (ef as any)[section] = converted;
-    }
-    result.exam_findings = ef;
-  }
-
-  if (data.diagnoses) {
-    result.diagnoses = data.diagnoses.map((d) => ({
-      icdCode: d.icdCode,
-      description: d.description,
-      laterality: d.laterality,
-    }));
-  }
-
-  if (data.refraction) {
-    const rx: ScribeRefraction = {};
-    for (const eye of ["OD", "OS"] as const) {
-      const eyeData = data.refraction[eye];
-      if (eyeData) {
-        rx[eye] = {
-          sphere: eyeData.sphere,
-          cylinder: eyeData.cylinder,
-          axis: eyeData.axis,
-          add: eyeData.add,
-        };
-      }
-    }
-    result.refraction = rx;
-  }
-
-  return result;
-}
-
-// ---------------------------------------------------------------------------
-// Normalizer: handles both V1 (legacy backend) and V2 (new backend) JSON
-// ---------------------------------------------------------------------------
-
-function isV2(obj: Record<string, unknown>): boolean {
-  // V2 format has chief_complaint as { value, confidence } object
-  const cc = obj.chief_complaint;
-  return cc != null && typeof cc === "object" && "confidence" in (cc as object);
-}
-
-function wrapConfidence<T>(value: T | null | undefined, confidence: ConfidenceLevel = "high"): { value: T | null; confidence: ConfidenceLevel } {
-  return { value: value ?? null, confidence };
-}
-
-function normalizeToV2(raw: Record<string, unknown>): ScribeStructuredDataV2 {
-  if (isV2(raw)) {
-    return raw as unknown as ScribeStructuredDataV2;
-  }
-
-  // V1 → V2 normalization
-  const v1 = raw as unknown as ScribeStructuredData;
-  const result: ScribeStructuredDataV2 = {
-    chief_complaint: wrapConfidence(v1.chief_complaint ?? null),
-    assessment_and_plan: wrapConfidence(null),
-  };
-
-  if (v1.vitals) {
-    const v = v1.vitals;
-    result.vitals = {
-      iop_od: wrapConfidence(v.iop_od),
-      iop_os: wrapConfidence(v.iop_os),
-      va_od_distance: wrapConfidence(v.va_od_distance),
-      va_os_distance: wrapConfidence(v.va_os_distance),
-      va_od_near: wrapConfidence(v.va_od_near),
-      va_os_near: wrapConfidence(v.va_os_near),
-      bp_systolic: wrapConfidence(v.bp_systolic),
-      bp_diastolic: wrapConfidence(v.bp_diastolic),
-      pupils_od: wrapConfidence(v.pupils_od),
-      pupils_os: wrapConfidence(v.pupils_os),
-    };
-  }
-
-  if (v1.exam_findings) {
-    const ef: ScribeStructuredDataV2["exam_findings"] = {};
-    for (const section of ["anterior", "posterior"] as const) {
-      const sectionData = v1.exam_findings[section];
-      if (!sectionData) continue;
-      const converted: Record<string, Record<string, ScribeStructureFindingV2>> = {};
-      for (const eye of ["OD", "OS"] as const) {
-        const eyeData = sectionData[eye];
-        if (!eyeData) continue;
-        converted[eye] = {};
-        for (const [structure, finding] of Object.entries(eyeData)) {
-          converted[eye][structure] = {
-            status: finding.status,
-            notes: finding.notes ?? "",
-            confidence: "high",
-          };
-        }
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (ef as any)[section] = converted;
-    }
-    result.exam_findings = ef;
-  }
-
-  if (v1.diagnoses) {
-    result.diagnoses = v1.diagnoses.map((d) => ({
-      icdCode: d.icdCode,
-      description: d.description,
-      laterality: (d.laterality ?? "OU") as "OD" | "OS" | "OU",
-      confidence: "high" as ConfidenceLevel,
-    }));
-  }
-
-  if (v1.refraction) {
-    const rx: ScribeStructuredDataV2["refraction"] = {};
-    for (const eye of ["OD", "OS"] as const) {
-      const eyeData = v1.refraction[eye];
-      if (eyeData) {
-        rx[eye] = {
-          sphere: eyeData.sphere ?? "",
-          cylinder: eyeData.cylinder ?? "",
-          axis: eyeData.axis ?? "",
-          add: eyeData.add ?? "",
-          confidence: "high",
-        };
-      }
-    }
-    result.refraction = rx;
-  }
-
-  return result;
-}
+import type { ScribeStructuredDataV2 } from "@/types/scribe";
+import { normalizeScribeData } from "@/lib/scribe-normalizer";
 
 // ---------------------------------------------------------------------------
 // Hook return type
@@ -252,7 +22,6 @@ function normalizeToV2(raw: Record<string, unknown>): ScribeStructuredDataV2 {
 export interface UseAiScribeReturn {
   generate: (transcript: string) => void;
   soapText: string;
-  structuredData: ScribeStructuredData | null;
   structuredDataV2: ScribeStructuredDataV2 | null;
   isStreaming: boolean;
   isDone: boolean;
@@ -368,7 +137,6 @@ async function* mockStream(): AsyncGenerator<string> {
 
 export function useAiScribe(encounterId: string): UseAiScribeReturn {
   const [soapText, setSoapText] = useState("");
-  const [structuredData, setStructuredData] = useState<ScribeStructuredData | null>(null);
   const [structuredDataV2, setStructuredDataV2] = useState<ScribeStructuredDataV2 | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDone, setIsDone] = useState(false);
@@ -378,22 +146,18 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setSoapText("");
-    setStructuredData(null);
     setStructuredDataV2(null);
     setIsStreaming(false);
     setIsDone(false);
     setError(null);
   }, []);
 
-  // Parse and store both V1 and V2 representations
   const handleParsedJson = useCallback((jsonStr: string) => {
     try {
       // Strip markdown code fences if Claude wraps JSON in ```json ... ```
       const cleaned = jsonStr.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
-      const raw = JSON.parse(cleaned);
-      const v2 = normalizeToV2(raw);
-      setStructuredDataV2(v2);
-      setStructuredData(v2ToV1(v2));
+      const parsed = JSON.parse(cleaned) as ScribeStructuredDataV2;
+      setStructuredDataV2(normalizeScribeData(parsed));
     } catch (e) {
       console.error("AI Scribe JSON parse error:", e);
       setError("AI output was malformed. SOAP note is available but auto-fill data could not be parsed.");
@@ -537,5 +301,5 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
     [encounterId, reset, handleParsedJson],
   );
 
-  return { generate, soapText, structuredData, structuredDataV2, isStreaming, isDone, error, reset };
+  return { generate, soapText, structuredDataV2, isStreaming, isDone, error, reset };
 }

@@ -9,7 +9,7 @@ const SECTION_LABELS: Record<ConflictSection, string> = {
   exam_anterior: "Anterior Segment",
   exam_posterior: "Posterior Segment",
   diagnoses: "Diagnoses",
-  refraction: "Refraction (Final Rx)",
+  refraction: "Refraction (Manifest)",
   assessment: "Assessment & Plan",
 };
 
@@ -63,7 +63,10 @@ export function ConflictTable({ rows, onToggle }: ConflictTableProps) {
 
           return (
             <div key={section}>
-              <div className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-3 mb-1">
+              <div
+                data-section={section}
+                className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-3 mb-1"
+              >
                 {SECTION_LABELS[section]}
               </div>
               <div className="space-y-0.5">

@@ -4,9 +4,15 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useAiScribe } from "@/hooks/useAiScribe";
 import type { ScribeStructuredDataV2 } from "@/types/scribe";
+import type { FindingsStoreKey } from "@/types/exam-findings";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import type { EntitlementKey } from "@/types/session";
 import { useEncounterStore } from "@/store/encounterStore";
+import { useVitalsStore } from "@/store/vitalsStore";
+import { useExamFindingsStore } from "@/store/examFindingsStore";
+import { useDiagnosisStore } from "@/store/diagnosisStore";
+import { useRefractionStore } from "@/store/refractionStore";
+import { buildConflicts, type StoreSnapshots } from "./conflict-resolver/buildConflicts";
 import { formatClinicTime, useClinicTimezone } from "@/lib/timezone";
 import { SCRIBE_SCENARIOS } from "@/lib/scribe-scenarios";
 import {
@@ -246,6 +252,7 @@ function AiReadyView({
   onRedo,
   onReviewMerge,
   error,
+  hasConflicts,
 }: {
   soapText: string;
   generatedAt?: string;
@@ -254,6 +261,7 @@ function AiReadyView({
   onRedo: () => void;
   onReviewMerge: () => void;
   error: string | null;
+  hasConflicts?: boolean;
 }) {
   const tz = useClinicTimezone();
   const formattedTime = generatedAt
@@ -283,7 +291,11 @@ function AiReadyView({
         {suggestionsCount > 0 && (
           <button
             onClick={onReviewMerge}
-            className="text-xs px-4 py-2 rounded-xl font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)] transition-all"
+            className={`text-xs px-4 py-2 rounded-xl font-semibold hover:brightness-110 shadow-[var(--shadow-sm)] transition-all ${
+              hasConflicts
+                ? "bg-amber-500 text-white"
+                : "bg-[var(--accent)] text-[var(--text-inverse)]"
+            }`}
           >
             Review & Merge
             <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/20 text-[10px] font-bold">
@@ -352,7 +364,13 @@ function EditingView({
 // Main AiScribeWidget
 // ---------------------------------------------------------------------------
 
-export function AiScribeWidget({ encounterId }: { encounterId: string }) {
+export function AiScribeWidget({
+  encounterId,
+  onReviewMerge,
+}: {
+  encounterId: string;
+  onReviewMerge?: () => void;
+}) {
   const { has } = useEntitlements();
   const hasAiScribe = has(Entitlement.AI_SCRIBE);
   const [showUpsell, setShowUpsell] = useState(false);
@@ -465,22 +483,51 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
     setAiScribeStatus(encounterId, "draft");
   }, [reset, encounterId, setAiSummary, setAiStructuredData, setAssessmentAndPlan, setAiScribeStatus]);
 
-  // Count exam finding fields from AI structured data for the suggestions badge.
+  // Count ALL AI suggestions (not just exam) by running buildConflicts against store snapshots.
   // Falls back to store's persisted aiStructuredData so the button survives page reloads.
-  const examCount = useMemo(() => {
+  const MANIFEST_RX_COL = 2;
+  const { suggestionsCount, hasConflicts } = useMemo(() => {
     const data = structuredDataV2 ?? storeStructuredData;
-    if (!data?.exam_findings) return 0;
-    let count = 0;
-    const ef = data.exam_findings;
-    for (const section of ["anterior", "posterior"] as const) {
-      const s = ef[section];
-      if (!s) continue;
-      for (const eye of ["OD", "OS"] as const) {
-        if (s[eye]) count += Object.keys(s[eye]).length;
-      }
-    }
-    return count;
-  }, [structuredDataV2, storeStructuredData]);
+    if (!data) return { suggestionsCount: 0, hasConflicts: false };
+
+    const encounter = useEncounterStore.getState().encounters[encounterId];
+    const vitals = useVitalsStore.getState().encounters[encounterId]?.draft;
+    const anteriorKey = `${encounterId}:anterior_segment` as FindingsStoreKey;
+    const posteriorKey = `${encounterId}:posterior_segment` as FindingsStoreKey;
+    const examAnterior = useExamFindingsStore.getState().findings[anteriorKey]?.draft;
+    const examPosterior = useExamFindingsStore.getState().findings[posteriorKey]?.draft;
+    const diagnoses = useDiagnosisStore.getState().encounters[encounterId]?.diagnoses ?? [];
+    const refractionCol = useRefractionStore.getState().columns[MANIFEST_RX_COL];
+
+    const snapshots: StoreSnapshots = {
+      chiefComplaint: encounter?.chiefComplaint ?? null,
+      assessmentAndPlan: encounter?.assessmentAndPlan ?? null,
+      vitals: vitals ? (vitals as unknown as Record<string, unknown>) : null,
+      examAnterior: examAnterior ? {
+        findings_od: examAnterior.findings_od as Record<string, { status: string; finding?: string }>,
+        findings_os: examAnterior.findings_os as Record<string, { status: string; finding?: string }>,
+      } : null,
+      examPosterior: examPosterior ? {
+        findings_od: examPosterior.findings_od as Record<string, { status: string; finding?: string }>,
+        findings_os: examPosterior.findings_os as Record<string, { status: string; finding?: string }>,
+      } : null,
+      diagnoses: diagnoses.map((d) => ({
+        icd10Code: d.icd10Code,
+        description: d.description,
+        eyeAffected: d.eyeAffected,
+      })),
+      refractionManifest: refractionCol?.draft ? {
+        od: refractionCol.draft.od as unknown as Record<string, unknown>,
+        os: refractionCol.draft.os as unknown as Record<string, unknown>,
+      } : null,
+    };
+
+    const rows = buildConflicts(data, snapshots);
+    return {
+      suggestionsCount: rows.length,
+      hasConflicts: rows.some((r) => r.hasConflict),
+    };
+  }, [structuredDataV2, storeStructuredData, encounterId]);
 
   // --- Render ---
   const renderView = () => {
@@ -518,16 +565,12 @@ export function AiScribeWidget({ encounterId }: { encounterId: string }) {
           <AiReadyView
             soapText={aiText}
             generatedAt={generatedAt}
-            suggestionsCount={examCount}
+            suggestionsCount={suggestionsCount}
             onEdit={handleEdit}
             onRedo={handleRedo}
-            onReviewMerge={() => {
-              const examSection = document.getElementById("section-exam");
-              if (examSection) {
-                examSection.scrollIntoView({ behavior: "smooth", block: "start" });
-              }
-            }}
+            onReviewMerge={() => onReviewMerge?.()}
             error={error}
+            hasConflicts={hasConflicts}
           />
         );
 

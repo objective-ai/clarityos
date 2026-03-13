@@ -9,6 +9,7 @@ import type { ConflictRow } from "./buildConflicts";
 import type { RowKey } from "@/types/refraction";
 import type { ExamSection, StructureFinding } from "@/types/exam-findings";
 import type { EyeLaterality } from "@/types/diagnosis";
+import { mapAiStatus } from "@/lib/ai-status-mapper";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useVitalsStore } from "@/store/vitalsStore";
 import { useExamFindingsStore } from "@/store/examFindingsStore";
@@ -22,7 +23,7 @@ const RX_FIELD_TO_ROW: Record<string, { od: RowKey; os: RowKey }> = {
   axis:     { od: "od_axis",     os: "os_axis" },
   add:      { od: "od_add",      os: "os_add" },
 };
-const FINAL_RX_COL = 3;
+const MANIFEST_RX_COL = 2;
 
 // Vitals: AI key → store key mapping
 const VITALS_AI_TO_STORE: Record<string, string> = {
@@ -33,8 +34,8 @@ const VITALS_AI_TO_STORE: Record<string, string> = {
   "vitals.near_va_od": "near_va_od",
   "vitals.near_va_os": "near_va_os",
   "vitals.blood_pressure": "blood_pressure",
-  "vitals.pupils_od": "pupils_od",
-  "vitals.pupils_os": "pupils_os",
+  "vitals.pupils_equal_round_reactive": "pupils_equal_round_reactive",
+  "vitals.relative_afferent_pupillary_defect": "relative_afferent_pupillary_defect",
 };
 
 export async function applyResolutions(
@@ -76,7 +77,12 @@ export async function applyResolutions(
     if (row.fieldKey.startsWith("vitals.")) {
       const storeKey = VITALS_AI_TO_STORE[row.fieldKey];
       if (storeKey) {
-        setVitalsField(encounterId, storeKey as never, row.aiValue);
+        // Boolean fields stored as "Yes"/"No" display strings
+        if (storeKey === "pupils_equal_round_reactive" || storeKey === "relative_afferent_pupillary_defect") {
+          setVitalsField(encounterId, storeKey as never, row.aiValue === "Yes");
+        } else {
+          setVitalsField(encounterId, storeKey as never, row.aiValue);
+        }
       }
       continue;
     }
@@ -87,14 +93,24 @@ export async function applyResolutions(
       const parts = row.fieldKey.split(".");
       if (parts.length >= 5) {
         const [, sectionShort, eye, structure, fieldName] = parts;
-        const section = sectionShort === "anterior" ? "anterior_segment" : "posterior_segment";
+        const section = (sectionShort === "anterior" ? "anterior_segment" : "posterior_segment") as ExamSection;
+
+        // Map AI status through the fuzzy mapper for dropdown compliance
+        let value = row.aiValue;
+        if (fieldName === "status") {
+          const mapped = mapAiStatus(section, structure, row.aiValue, "");
+          // If mapper returns "Other" for ambiguous input, default to "Abnormal"
+          // (false positive > missed finding)
+          value = mapped.status === "Other" ? "Abnormal" : mapped.status;
+        }
+
         setStructureField(
           encounterId,
-          section as ExamSection,
+          section,
           eye as "od" | "os",
           structure,
           fieldName as keyof StructureFinding,
-          row.aiValue,
+          value,
         );
       }
       continue;
@@ -102,15 +118,12 @@ export async function applyResolutions(
 
     // --- Diagnoses (new additions) ---
     if (row.fieldKey.startsWith("dx.") && row.fieldKey.endsWith(".new")) {
-      // Extract ICD code from fieldKey: dx.H52.03.new
-      // The aiValue format: "H52.03 — Description (Laterality)"
-      const match = row.aiValue.match(/^(.+?)\s*—\s*(.+?)\s*\((\w+)\)$/);
-      if (match) {
-        const [, icdCode, description, laterality] = match;
+      // Use aiRawData for reliable extraction (no regex parsing of display strings)
+      if (row.aiRawData) {
         await addDiagnosis(encounterId, {
-          icd10Code: icdCode,
-          description,
-          eyeAffected: laterality as EyeLaterality,
+          icd10Code: row.aiRawData.icdCode as string,
+          description: row.aiRawData.description as string,
+          eyeAffected: row.aiRawData.laterality as EyeLaterality,
         });
       }
       continue;
@@ -122,7 +135,7 @@ export async function applyResolutions(
       const mapping = RX_FIELD_TO_ROW[field];
       if (mapping) {
         const rowKey = eye === "OD" ? mapping.od : mapping.os;
-        setCellValue(FINAL_RX_COL, rowKey, row.aiValue);
+        setCellValue(MANIFEST_RX_COL, rowKey, row.aiValue);
       }
       continue;
     }

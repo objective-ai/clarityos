@@ -36,11 +36,19 @@ export function ConflictRowItem({ row, onToggle }: ConflictRowItemProps) {
       </div>
 
       {/* AI value + confidence */}
-      <div className="flex items-center gap-1.5 truncate">
-        <span className="text-[var(--text-primary)] truncate" title={row.aiValue}>
-          {row.aiValue}
-        </span>
-        <ConfidenceBadge level={row.confidence} />
+      <div className="flex flex-col gap-0.5 truncate">
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="text-[var(--text-primary)] truncate" title={row.aiValue}>
+            {row.aiValue}
+          </span>
+          <ConfidenceBadge level={row.confidence} />
+        </div>
+        {/* Show raw pupil text so doctor sees context behind boolean */}
+        {typeof row.aiRawData?.rawPupilText === "string" && (
+          <span className="text-[9px] italic text-[var(--text-muted)] truncate" title={row.aiRawData.rawPupilText}>
+            AI heard: &ldquo;{row.aiRawData.rawPupilText}&rdquo;
+          </span>
+        )}
       </div>
 
       {/* Toggle buttons */}
