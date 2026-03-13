@@ -30,9 +30,12 @@ What this script provisions
 
 Run instructions
 ────────────────
-  cd backend/
-  python seed_db.py           # first-time seed
-  RESEED=true python seed_db.py  # wipe + reseed
+  npm run db:seed             # first-time seed (auto-loads .env)
+  npm run db:reseed           # wipe + reseed
+
+  Or directly from project root:
+  python backend/seed_db.py           # first-time seed
+  RESEED=true python backend/seed_db.py  # wipe + reseed
 """
 
 from __future__ import annotations
@@ -48,6 +51,13 @@ from decimal import Decimal
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
+
+# ── Auto-load .env (works from project root or backend/) ───────────────────
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(os.path.join(_SCRIPT_DIR, "..", ".env"), override=False)
+except ImportError:
+    pass  # dotenv optional — env vars may already be set in shell
 
 # ── SQLAlchemy ─────────────────────────────────────────────────────────────
 from sqlalchemy import create_engine, text
@@ -170,8 +180,8 @@ IT_IDS = [uuid.UUID(f"10000000-0009-0000-0000-{str(i).zfill(12)}") for i in rang
 # Addon
 ADDON_ID = uuid.UUID("00000000-0007-0007-0007-000000000001")
 
-# Date constants (hardcoded for reproducibility)
-TODAY = datetime.date(2026, 3, 7)
+# Use today's actual date so schedule appointments always land on the current day
+TODAY = datetime.date.today()
 
 # Clinic timezone — seed times are specified in local clinic time and converted to UTC
 from zoneinfo import ZoneInfo

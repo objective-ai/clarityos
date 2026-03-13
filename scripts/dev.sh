@@ -61,6 +61,18 @@ case "${1:-help}" in
     echo "OK: FastAPI ($API) + Next.js ($NEXT)"
     ;;
 
+  seed)
+    cd "$PROJECT_DIR"
+    source "$VENV"
+    PYTHONPATH="$PROJECT_DIR" PYTHONIOENCODING=utf-8 python backend/seed_db.py
+    ;;
+
+  reseed)
+    cd "$PROJECT_DIR"
+    source "$VENV"
+    RESEED=true PYTHONPATH="$PROJECT_DIR" PYTHONIOENCODING=utf-8 python backend/seed_db.py
+    ;;
+
   verify)
     SCRIPT="${2:?Usage: dev.sh verify /tmp/script.js}"
     cd "$PROJECT_DIR"
@@ -74,13 +86,15 @@ case "${1:-help}" in
     ;;
 
   help)
-    echo "Usage: scripts/dev.sh {ensure-api|restart-api|check-api|pre-test|verify <script>|smoke}"
+    echo "Usage: scripts/dev.sh {ensure-api|restart-api|check-api|pre-test|seed|reseed|verify <script>|smoke}"
     echo ""
     echo "Commands:"
     echo "  ensure-api    Start FastAPI only if not already running (idempotent)"
     echo "  restart-api   Kill uvicorn, verify imports, start fresh, health-check"
     echo "  check-api     Quick health-check of FastAPI + Next.js"
     echo "  pre-test      Gate: verify both servers up before tests (exits 1 if not)"
+    echo "  seed          Populate DB with seed data (skips existing rows)"
+    echo "  reseed        Wipe + repopulate DB with fresh seed data"
     echo "  verify <js>   Run a Playwright test script"
     echo "  smoke         Run smoke test (login + schedule + patients)"
     ;;
