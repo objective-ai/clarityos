@@ -210,7 +210,6 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
           );
         } catch (err) {
           // 404 means no findings saved yet — initialize with blank draft (not an error)
-          const msg = err instanceof Error ? err.message : "";
           if (err instanceof HttpError && err.status === 404) {
             set(
               (state) => ({

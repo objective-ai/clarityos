@@ -580,12 +580,14 @@ export function RefractionGrid({
 
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Initialize store ONLY when encountering a new encounter (mount or navigate).
-  // Never include isReadOnly in deps — it changes often (on parent re-renders) and would
-  // wipe user input by calling init() with empty initialRefractions.
+  // Initialize store ONLY when the encounter changes (mount or navigate to new encounter).
+  // Never include isReadOnly or initialRefractions — both create new references on every
+  // parent re-render, so including them would call init() again and wipe in-progress input.
+  // isReadOnly is handled separately below; initialRefractions is always [] (parent never passes it).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     init(encounterId, initialRefractions, isReadOnly);
-  }, [encounterId, init, initialRefractions]);
+  }, [encounterId]);
 
   // Update read-only flag independently when it changes (e.g., encounter finalized)
   useEffect(() => {
