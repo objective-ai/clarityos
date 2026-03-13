@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { ScribeStructuredDataV2 } from "@/types/scribe";
 import type { FindingsStoreKey } from "@/types/exam-findings";
 import { useEncounterStore } from "@/store/encounterStore";
@@ -33,7 +33,7 @@ const SCROLL_CONTAINER_ID = "review-conflict-scroll";
 interface InlineReviewSectionProps {
   encounterId: string;
   onClose: () => void;
-  onApply: () => void;
+  onCommit: (autoRows: ConflictRow[], reviewRows: ConflictRow[], soapText: string) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ interface InlineReviewSectionProps {
 export function InlineReviewSection({
   encounterId,
   onClose,
-  onApply,
+  onCommit,
 }: InlineReviewSectionProps) {
   const soapText = useEncounterStore(
     (s) => s.encounters[encounterId]?.aiSummaryText ?? "",
@@ -126,12 +126,36 @@ export function InlineReviewSection({
   const [conflicts, setConflicts] = useState<ConflictRow[]>(initialConflicts);
   const [applying, setApplying] = useState(false);
 
+  // Split conflicts by tier
+  const autoRows = useMemo(
+    () => conflicts.filter((r) => r.tier === "auto"),
+    [conflicts],
+  );
+  const reviewRows = useMemo(
+    () => conflicts.filter((r) => r.tier === "review"),
+    [conflicts],
+  );
+
+  // Banner counts
+  const confirmedCount = autoRows.filter((r) => r.humanValue != null).length;
+  const autoStagedCount = autoRows.length - confirmedCount;
+  const newDxCount = reviewRows.filter(
+    (r) => r.section === "diagnoses" && r.fieldKey.endsWith(".new"),
+  ).length;
+  const reviewConflictCount = reviewRows.filter((r) => r.hasConflict).length;
+
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-focus container on mount
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
+
   // Derive counts
   const selectedCount = conflicts.filter(
     (r) => r.resolution === "use_ai",
   ).length;
-  const conflictCount = conflicts.filter((r) => r.hasConflict).length;
-  const hasConflicts = conflictCount > 0;
 
   // Sections that have at least one suggestion
   const activeSections = useMemo(() => {
@@ -152,41 +176,77 @@ export function InlineReviewSection({
     [],
   );
 
-  // Apply selected resolutions to stores
-  const handleApply = useCallback(async () => {
+  // Commit handler -- calls parent with auto + review rows
+  const handleCommit = useCallback(async () => {
     setApplying(true);
     try {
-      await applyResolutions(encounterId, conflicts, soapText);
-      onApply();
+      await onCommit(autoRows, reviewRows, soapText);
     } catch (err) {
-      console.error("Apply resolutions failed:", err);
+      console.error("Commit failed:", err);
     } finally {
       setApplying(false);
     }
-  }, [encounterId, conflicts, soapText, onApply]);
+  }, [autoRows, reviewRows, soapText, onCommit]);
 
-  // Approve all safe (non-conflict, non-diagnosis) rows then apply
-  const handleApproveAllSafe = useCallback(async () => {
-    // Auto-select all non-conflict rows that aren't diagnoses
-    const updated = conflicts.map((row) => {
-      if (!row.hasConflict && row.section !== "diagnoses") {
-        return { ...row, resolution: "use_ai" as const };
+  // Keyboard handler -- scoped to container
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Input guard
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
       }
-      return row;
-    });
-    setConflicts(updated);
 
-    // Apply immediately
-    setApplying(true);
-    try {
-      await applyResolutions(encounterId, updated, soapText);
-      onApply();
-    } catch (err) {
-      console.error("Approve all safe failed:", err);
-    } finally {
-      setApplying(false);
-    }
-  }, [conflicts, encounterId, soapText, onApply]);
+      switch (e.key) {
+        case "j":
+        case "ArrowDown":
+          e.preventDefault();
+          setFocusedIndex((prev) => Math.min(prev + 1, reviewRows.length - 1));
+          break;
+        case "k":
+        case "ArrowUp":
+          e.preventDefault();
+          setFocusedIndex((prev) => Math.max(prev - 1, 0));
+          break;
+        case "a":
+          e.preventDefault();
+          if (reviewRows[focusedIndex]) {
+            handleToggle(reviewRows[focusedIndex].fieldKey, "use_ai");
+            setFocusedIndex((prev) => Math.min(prev + 1, reviewRows.length - 1));
+          }
+          break;
+        case "i":
+          e.preventDefault();
+          if (reviewRows[focusedIndex]) {
+            handleToggle(reviewRows[focusedIndex].fieldKey, "keep");
+            setFocusedIndex((prev) => Math.min(prev + 1, reviewRows.length - 1));
+          }
+          break;
+        case "Enter":
+          e.preventDefault();
+          handleCommit();
+          break;
+        case "Escape":
+          e.preventDefault();
+          onClose();
+          break;
+      }
+    };
+
+    container.addEventListener("keydown", handleKeyDown);
+    return () => container.removeEventListener("keydown", handleKeyDown);
+  }, [reviewRows, focusedIndex, handleToggle, handleCommit, onClose]);
+
+  // Concurrent generation guard -- detect stale data
+  const liveStructuredData = useEncounterStore(
+    (s) => s.encounters[encounterId]?.aiStructuredData ?? null,
+  );
+  const hasStaleData = structuredData !== liveStructuredData && liveStructuredData !== null;
 
   if (!structuredData) {
     return (
@@ -196,12 +256,8 @@ export function InlineReviewSection({
     );
   }
 
-  const safeCount = conflicts.filter(
-    (r) => !r.hasConflict && r.section !== "diagnoses",
-  ).length;
-
   return (
-    <div className="flex flex-col gap-0 animate-fade-in">
+    <div ref={containerRef} tabIndex={0} className="flex flex-col gap-0 animate-fade-in outline-none">
       {/* Header bar */}
       <div className="flex items-center justify-between px-6 py-3 rounded-t-xl border border-[var(--glass-border)] bg-[var(--bg-glass)]">
         <div className="flex items-center gap-3">
@@ -210,13 +266,13 @@ export function InlineReviewSection({
           </h2>
           <span
             className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-              hasConflicts
+              reviewConflictCount > 0
                 ? "bg-amber-500/10 text-amber-400"
                 : "bg-[var(--accent)]/10 text-[var(--accent)]"
             }`}
           >
-            {conflicts.length} suggestion{conflicts.length !== 1 ? "s" : ""}
-            {hasConflicts ? ` · ${conflictCount} conflict${conflictCount !== 1 ? "s" : ""}` : ""}
+            {reviewRows.length} to review
+            {reviewConflictCount > 0 ? ` · ${reviewConflictCount} conflict${reviewConflictCount !== 1 ? "s" : ""}` : ""}
           </span>
         </div>
         <button
@@ -250,16 +306,30 @@ export function InlineReviewSection({
           id={SCROLL_CONTAINER_ID}
           className="w-3/5 overflow-y-auto max-h-[calc(100vh-160px)]"
         >
-          <ConflictTable rows={conflicts} onToggle={handleToggle} />
+          <ConflictTable
+            rows={reviewRows}
+            onToggle={handleToggle}
+            focusedIndex={focusedIndex}
+            autoCount={autoStagedCount}
+            confirmedCount={confirmedCount}
+            conflictCount={reviewConflictCount}
+            newDxCount={newDxCount}
+          />
         </div>
       </div>
+
+      {hasStaleData && (
+        <div className="px-4 py-2 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/20 rounded-lg mx-6">
+          New AI data available — close and re-open review.
+        </div>
+      )}
 
       {/* Action bar */}
       <div className="flex items-center justify-between px-6 py-3 rounded-b-xl border border-[var(--glass-border)] bg-[var(--bg-glass)]">
         <div className="text-xs text-[var(--text-muted)]">
-          {hasConflicts && (
+          {reviewConflictCount > 0 && (
             <span className="text-amber-400">
-              {conflictCount} conflict{conflictCount !== 1 ? "s" : ""} detected
+              {reviewConflictCount} conflict{reviewConflictCount !== 1 ? "s" : ""} detected
               — defaulting to &quot;Keep Mine&quot;
             </span>
           )}
@@ -274,26 +344,15 @@ export function InlineReviewSection({
             Cancel
           </button>
 
-          {safeCount > 0 && (
-            <button
-              type="button"
-              onClick={handleApproveAllSafe}
-              disabled={applying}
-              className="text-xs px-4 py-2 rounded-xl font-medium text-[var(--text-secondary)] border border-[var(--glass-border)] hover-btn disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {applying
-                ? "Applying..."
-                : `Approve All Safe (${safeCount})`}
-            </button>
-          )}
-
           <button
             type="button"
-            onClick={handleApply}
-            disabled={applying || selectedCount === 0}
+            onClick={handleCommit}
+            disabled={applying}
             className="text-xs px-5 py-2 rounded-xl font-semibold bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {applying ? "Applying..." : `Apply ${selectedCount} Selected`}
+            {applying
+              ? "Committing..."
+              : `Commit (${autoRows.filter((r) => r.resolution === "use_ai").length + reviewRows.filter((r) => r.resolution === "use_ai").length})`}
           </button>
         </div>
       </div>
