@@ -8,12 +8,13 @@ Covers:
   2. SuperbillLineItem — individual CPT codes with diagnosis pointers
   3. MDM calculation — AI Medical Decision Making complexity assessment
   4. CPT-ICD validation — pointer validation warnings
+  5. Payer, Fee Schedule, Patient Insurance (Phase 9)
 """
 
 from __future__ import annotations
 
 import re
-import uuid
+import uuid as _uuid
 from datetime import datetime
 from decimal import Decimal
 
@@ -100,14 +101,16 @@ class LineItemUpdateRequest(AppBaseModel):
 class LineItemResponse(AppBaseModel):
     """Response schema for a single superbill line item."""
 
-    id: uuid.UUID
-    superbill_id: uuid.UUID
+    id: _uuid.UUID
+    superbill_id: _uuid.UUID
     cpt_code: str
     description: str
     fee: float
     units: int
     diagnosis_pointers: list[str]
     modifiers: list[str]
+    is_fee_overridden: bool = False
+    fee_source: str = "base_rate"
     created_at: datetime
     updated_at: datetime
 
@@ -146,6 +149,14 @@ class SuperbillCreateRequest(AppBaseModel):
         max_length=2000,
         description="Optional billing notes.",
     )
+    billed_payer_id: _uuid.UUID | None = Field(
+        default=None,
+        description="Insurance payer to bill. None = self-pay or unassigned.",
+    )
+    is_self_pay: bool = Field(
+        default=False,
+        description="True if patient is paying out of pocket.",
+    )
 
 
 class SuperbillUpdateRequest(AppBaseModel):
@@ -170,17 +181,19 @@ class SuperbillUpdateRequest(AppBaseModel):
 class SuperbillResponse(AppBaseModel):
     """Full superbill response with line items."""
 
-    id: uuid.UUID
-    encounter_id: uuid.UUID
-    patient_id: uuid.UUID
-    provider_id: uuid.UUID
+    id: _uuid.UUID
+    encounter_id: _uuid.UUID
+    patient_id: _uuid.UUID
+    provider_id: _uuid.UUID
     claim_status: str
     mdm_level: str | None = None
     mdm_reasoning: str | None = None
     suggested_em_code: str | None = None
     total_fee: float
     notes: str | None = None
-    created_by_id: uuid.UUID | None = None
+    created_by_id: _uuid.UUID | None = None
+    billed_payer_id: _uuid.UUID | None = None
+    is_self_pay: bool = False
     line_items: list[LineItemResponse] = Field(default_factory=list)
     warnings: list[CptIcdWarning] = Field(default_factory=list)
     created_at: datetime
@@ -229,12 +242,135 @@ class MdmCalculationResult(AppBaseModel):
 class SuperbillListItem(AppBaseModel):
     """Lightweight superbill for dashboard list view."""
 
-    id: uuid.UUID
-    encounter_id: uuid.UUID
-    patient_id: uuid.UUID
+    id: _uuid.UUID
+    encounter_id: _uuid.UUID
+    patient_id: _uuid.UUID
     patient_name: str
     provider_name: str
     claim_status: str
     cpt_codes: list[str]
     total_fee: float
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Payer schemas (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+class PayerCreate(AppBaseModel):
+    name: str
+    payer_id: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    is_active: bool = True
+
+
+class PayerUpdate(AppBaseModel):
+    name: str | None = None
+    payer_id: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    is_active: bool | None = None
+
+
+class PayerResponse(AppBaseModel):
+    id: _uuid.UUID
+    name: str
+    payer_id: str | None
+    phone: str | None
+    address: str | None
+    is_active: bool
+
+
+# ---------------------------------------------------------------------------
+# Fee Schedule schemas (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+class FeeScheduleItemResponse(AppBaseModel):
+    id: _uuid.UUID
+    payer_id: _uuid.UUID | None
+    cpt_code: str
+    description: str
+    fee: float
+
+
+class FeeScheduleItemUpdate(AppBaseModel):
+    cpt_code: str
+    description: str = ""
+    fee: float
+
+
+# ---------------------------------------------------------------------------
+# Patient Insurance schemas (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+class PatientInsuranceCreate(AppBaseModel):
+    payer_id: _uuid.UUID
+    priority: str  # "primary" | "secondary"
+    plan_type: str  # "medical" | "vision" | "other"
+    subscriber_id: str | None = None
+    group_number: str | None = None
+    plan_name: str | None = None
+    relationship_to_subscriber: str = "self"
+    subscriber_name: str | None = None
+    subscriber_dob: str | None = None  # ISO date string
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str) -> str:
+        if v not in ("primary", "secondary"):
+            raise ValueError("priority must be 'primary' or 'secondary'")
+        return v
+
+    @field_validator("plan_type")
+    @classmethod
+    def validate_plan_type(cls, v: str) -> str:
+        if v not in ("medical", "vision", "other"):
+            raise ValueError("plan_type must be 'medical', 'vision', or 'other'")
+        return v
+
+
+class PatientInsuranceUpdate(AppBaseModel):
+    payer_id: _uuid.UUID | None = None
+    priority: str | None = None
+    plan_type: str | None = None
+    subscriber_id: str | None = None
+    group_number: str | None = None
+    plan_name: str | None = None
+    relationship_to_subscriber: str | None = None
+    subscriber_name: str | None = None
+    subscriber_dob: str | None = None
+
+
+class PatientInsuranceResponse(AppBaseModel):
+    id: _uuid.UUID
+    patient_id: _uuid.UUID
+    payer_id: _uuid.UUID
+    payer_name: str  # denormalized for display
+    priority: str
+    plan_type: str
+    subscriber_id: str | None
+    group_number: str | None
+    plan_name: str | None
+    relationship_to_subscriber: str
+    subscriber_name: str | None
+    subscriber_dob: str | None
+
+
+# ---------------------------------------------------------------------------
+# Patient Superbill Summary (Phase 9)
+# ---------------------------------------------------------------------------
+
+
+class PatientSuperbillSummary(AppBaseModel):
+    id: _uuid.UUID
+    encounter_id: _uuid.UUID
+    encounter_date: str
+    claim_status: str
+    total_fee: float
+    mdm_level: str | None = None
+    suggested_em_code: str | None = None
+    cpt_codes: list[str]

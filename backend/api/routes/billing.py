@@ -45,6 +45,7 @@ from backend.services.billing_service import (
     suggest_line_items,
     validate_cpt_icd_pointers,
 )
+from backend.services.fee_service import resolve_line_item_fee
 
 router = APIRouter()
 
@@ -92,6 +93,8 @@ def _build_superbill_response(
         total_fee=sb.total_fee,
         notes=sb.notes,
         created_by_id=sb.created_by_id,
+        billed_payer_id=sb.billed_payer_id,
+        is_self_pay=sb.is_self_pay,
         line_items=[
             LineItemResponse(
                 id=li.id,
@@ -102,6 +105,8 @@ def _build_superbill_response(
                 units=li.units,
                 diagnosis_pointers=li.diagnosis_pointers or [],
                 modifiers=li.modifiers or [],
+                is_fee_overridden=li.is_fee_overridden,
+                fee_source=li.fee_source,
                 created_at=li.created_at,
                 updated_at=li.updated_at,
             )
@@ -211,6 +216,8 @@ async def create_superbill(
         suggested_em_code=mdm_result.suggested_em_code,
         notes=payload.notes,
         created_by_id=staff.id if staff else None,
+        billed_payer_id=payload.billed_payer_id,
+        is_self_pay=payload.is_self_pay,
     )
     db.add(sb)
     await db.flush()
@@ -226,15 +233,23 @@ async def create_superbill(
 
     total_fee = Decimal("0.00")
     for item_data in raw_items:
+        # Resolve fee from payer/base catalog (overwrites suggestion fee)
+        resolved_fee, fee_source = await resolve_line_item_fee(
+            item_data["cpt_code"], payload.billed_payer_id, ctx.tenant_id, db
+        )
+        # Use resolved fee if > 0, otherwise keep the suggested fee
+        final_fee = resolved_fee if resolved_fee > 0 else Decimal(str(item_data["fee"]))
         li = SuperbillLineItem(
             tenant_id=ctx.tenant_id,
             superbill_id=sb.id,
             cpt_code=item_data["cpt_code"],
             description=item_data["description"],
-            fee=Decimal(str(item_data["fee"])),
+            fee=final_fee,
             units=item_data["units"],
             diagnosis_pointers=item_data["diagnosis_pointers"],
             modifiers=item_data.get("modifiers", []),
+            fee_source=fee_source,
+            is_fee_overridden=False,
         )
         db.add(li)
         total_fee += li.fee * li.units
