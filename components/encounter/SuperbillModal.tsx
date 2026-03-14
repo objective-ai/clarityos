@@ -263,7 +263,7 @@ export function SuperbillModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl flex flex-col"
+        className="max-w-[70vw] flex flex-col"
         style={{ maxHeight: "85vh" }}
       >
         <DialogHeader className="px-6 pt-6 pb-0 flex-shrink-0">

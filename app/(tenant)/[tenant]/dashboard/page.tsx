@@ -8,6 +8,7 @@ import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useAppointmentStore } from "@/store/appointmentStore";
 import { clinicToday, formatClinicTime } from "@/lib/timezone";
+import type { AppointmentStatus } from "@/types/appointment";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -136,16 +137,16 @@ export default function DashboardPage({
   }, [user?.fullName, setSubtitle]);
 
   const stats = useMemo(() => {
-    const now = new Date();
-    const today = now.toDateString();
-    const todayEncounters = Object.values(encounters).filter(
-      (e) => new Date(e.encounterDate).toDateString() === today
-    );
-    const total = todayEncounters.length;
-    const finalized = todayEncounters.filter((e) => e.isFinalized).length;
+    // Map appointment status → encounter state.
+    // fetchAppointments already scopes to today, so no date filter needed here.
+    // "completed" included for legacy seed-data compatibility; live workflow skips it.
+    const ACTIVE: AppointmentStatus[] = ["in_pretest", "in_exam", "completed", "finalized"];
+    const active = appointments.filter((a) => ACTIVE.includes(a.status));
+    const total = active.length;
+    const finalized = active.filter((a) => a.status === "finalized").length;
     const pending = total - finalized;
     return { total, finalized, pending };
-  }, [encounters]);
+  }, [appointments]);
 
   const recentEncounters = useMemo(() => {
     const entries = Object.entries(encounters);
@@ -201,7 +202,7 @@ export default function DashboardPage({
         <StatCard
           label="Next Patient"
           value={nextPatient?.name ?? "—"}
-          trend={nextPatient ? `at ${nextPatient.time}` : "No upcoming"}
+          trend={nextPatient ? `at ${nextPatient.time}` : "All done for today!"}
         />
       </div>
 
@@ -239,8 +240,8 @@ export default function DashboardPage({
           <CardContent>
             {recentEncounters.length === 0 ? (
               <div className="py-8 text-center text-[var(--text-muted)]">
-                <p className="text-sm">No encounters yet</p>
-                <p className="text-xs mt-1">Encounters will appear here once patients are seen</p>
+                <p className="text-sm">No encounters today</p>
+                <p className="text-xs mt-1">Start an exam from the schedule to see encounters here</p>
               </div>
             ) : (
               <div className="flex flex-col">
