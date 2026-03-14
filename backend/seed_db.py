@@ -96,6 +96,11 @@ from backend.db.models.tenant.clinical import (
 
 from backend.db.models.tenant.intake import IntakeToken
 
+from backend.db.models.tenant.clinical import (
+    InsurancePayer,
+    FeeScheduleItem,
+)
+
 from backend.core.entitlements import Entitlement
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -332,6 +337,7 @@ def seed_tenant_schema(session: Session) -> None:
     _seed_encounters(session)
     _seed_superbills(session)
     _seed_intake_tokens(session)
+    _seed_insurance_payers(session)
 
     session.commit()
     ok("Tenant schema committed.")
@@ -1487,6 +1493,58 @@ def _seed_intake_tokens(session: Session) -> None:
     session.flush()
 
 
+# ── Insurance Payers + Fee Catalog ─────────────────────────────────────────
+
+def _seed_insurance_payers(session: Session) -> None:
+    step("Seeding Insurance Payers + Base Fee Catalog")
+
+    from sqlalchemy import select as _select
+    existing = session.execute(
+        _select(InsurancePayer).where(InsurancePayer.tenant_id == TENANT_ID)
+    ).first()
+    if existing:
+        warn("Insurance payers already exist — skipping")
+        return
+
+    CA_PAYERS = [
+        {"name": "VSP Vision Care", "payer_id": "VSP001"},
+        {"name": "EyeMed Vision Care", "payer_id": "EYEMED"},
+        {"name": "Davis Vision", "payer_id": "DAVIS"},
+        {"name": "Medicare Part B", "payer_id": "MEDICAREB"},
+        {"name": "Medi-Cal", "payer_id": "MEDCAL"},
+        {"name": "Aetna", "payer_id": "AETNA"},
+        {"name": "Blue Shield of California", "payer_id": "BLUESHIELD"},
+        {"name": "Anthem Blue Cross CA", "payer_id": "ANTHEM"},
+        {"name": "United Healthcare", "payer_id": "UHC"},
+        {"name": "Humana", "payer_id": "HUMANA"},
+    ]
+    for p_data in CA_PAYERS:
+        session.add(InsurancePayer(id=uuid.uuid4(), tenant_id=TENANT_ID, **p_data))
+    session.flush()
+    ok(f"Created {len(CA_PAYERS)} insurance payers")
+
+    CPT_CATALOG_SEED = [
+        ("92002", "Medical examination new patient, intermediate", Decimal("120.00")),
+        ("92004", "Medical examination new patient, comprehensive", Decimal("175.00")),
+        ("92012", "Medical examination established patient, intermediate", Decimal("95.00")),
+        ("92014", "Medical examination established patient, comprehensive", Decimal("150.00")),
+        ("92015", "Determination of refractive state", Decimal("45.00")),
+        ("92025", "Computerized corneal topography", Decimal("65.00")),
+        ("92081", "Visual field examination, limited", Decimal("55.00")),
+        ("92082", "Visual field examination, intermediate", Decimal("75.00")),
+        ("92083", "Visual field examination, extended", Decimal("95.00")),
+        ("92134", "Scanning computerized ophthalmic imaging (OCT)", Decimal("120.00")),
+        ("92250", "Fundus photography", Decimal("85.00")),
+    ]
+    for cpt, desc, fee in CPT_CATALOG_SEED:
+        session.add(FeeScheduleItem(
+            id=uuid.uuid4(), tenant_id=TENANT_ID, payer_id=None,
+            cpt_code=cpt, description=desc, fee=fee
+        ))
+    session.flush()
+    ok(f"Created {len(CPT_CATALOG_SEED)} base fee catalog entries")
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Orchestrator
 # ══════════════════════════════════════════════════════════════════════════
@@ -1575,7 +1633,9 @@ def main() -> None:
   ├── Appointments      : 13 (3 past + 8 today + 2 next week)
   ├── Encounters        : 8  (5 finalized + 2 in-progress + 1 glaucoma series)
   ├── Superbills        : 3  (with CPT line items)
-  └── IntakeTokens      : 2  (pending)
+  ├── IntakeTokens      : 2  (pending)
+  ├── InsurancePayers   : 10 (CA payers — VSP, EyeMed, Medicare, etc.)
+  └── FeeScheduleItems  : 11 (base CPT fee catalog)
 
   Login: duytran@yahoo.com / 123456 (via Supabase Auth)
 

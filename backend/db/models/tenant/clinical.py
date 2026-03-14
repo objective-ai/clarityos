@@ -11,6 +11,7 @@ Tenant isolation is enforced at the Python level — every query MUST include
 import enum
 import secrets
 import uuid
+import datetime as _dt_mod
 from datetime import datetime
 from decimal import Decimal
 
@@ -156,6 +157,11 @@ class AuditAction(str, enum.Enum):
     INTAKE_SUBMITTED = "intake_submitted"
     # Addendum actions (added in Sprint 4.2 — encounter addenda)
     CREATE_ADDENDUM = "create_addendum"
+    # Insurance / claims actions (added in Phase 9 — migration 0008_claims_basics)
+    CREATE_INSURANCE = "create_insurance"
+    UPDATE_INSURANCE = "update_insurance"
+    DELETE_INSURANCE = "delete_insurance"
+    GENERATE_PDF = "generate_pdf"
 
 
 # ---------------------------------------------------------------------------
@@ -1033,12 +1039,25 @@ class Superbill(TimestampMixin, TenantBase):
         nullable=True,
     )
 
+    # Phase 9 — Insurance / claims extensions
+    billed_payer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("insurance_payers.id", ondelete="SET NULL"), nullable=True
+    )
+    is_self_pay: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_pdf_generated_at: Mapped[DateTime | None] = mapped_column(  # type: ignore[assignment]
+        DateTime(timezone=True), nullable=True
+    )
+    pdf_generation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     # --- Relationships ---
     encounter: Mapped["Encounter"] = relationship("Encounter")
     patient: Mapped["Patient"] = relationship("Patient")
     provider: Mapped["Staff"] = relationship("Staff", foreign_keys=[provider_id])
     created_by: Mapped["Staff | None"] = relationship(
         "Staff", foreign_keys=[created_by_id]
+    )
+    billed_payer: Mapped["InsurancePayer | None"] = relationship(
+        "InsurancePayer", foreign_keys=[billed_payer_id]
     )
     line_items: Mapped[list["SuperbillLineItem"]] = relationship(
         "SuperbillLineItem", back_populates="superbill",
@@ -1095,6 +1114,11 @@ class SuperbillLineItem(TimestampMixin, SoftDeleteMixin, TenantBase):
         JSONB, nullable=False, default=list
     )
 
+    # Phase 9 — Fee source tracking
+    is_fee_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    fee_source: Mapped[str] = mapped_column(String(20), nullable=False, default="base_rate")
+    # fee_source values: "payer_rate" | "base_rate" | "manual"
+
     # --- Relationships ---
     superbill: Mapped["Superbill"] = relationship(
         "Superbill", back_populates="line_items"
@@ -1104,4 +1128,124 @@ class SuperbillLineItem(TimestampMixin, SoftDeleteMixin, TenantBase):
         return (
             f"<SuperbillLineItem cpt={self.cpt_code} "
             f"fee={self.fee} dx={self.diagnosis_pointers}>"
+        )
+
+
+# ---------------------------------------------------------------------------
+# InsurancePayer  (Phase 9 — claims basics)
+# ---------------------------------------------------------------------------
+
+
+class InsurancePayer(TimestampMixin, TenantBase):
+    """An insurance company / payer that the clinic bills."""
+
+    __tablename__ = "insurance_payers"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    payer_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    metadata_jsonb: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # metadata_jsonb: junk drawer for clearinghouse IDs, EDI fields, etc.
+    # e.g. {"electronic_payer_id": "12345", "clearinghouse": "availity"}
+
+    # --- Relationships ---
+    fee_items: Mapped[list["FeeScheduleItem"]] = relationship(
+        "FeeScheduleItem", back_populates="payer", cascade="all, delete-orphan",
+        foreign_keys="FeeScheduleItem.payer_id",
+    )
+
+    def __repr__(self) -> str:
+        return f"<InsurancePayer {self.name!r} payer_id={self.payer_id}>"
+
+
+# ---------------------------------------------------------------------------
+# FeeScheduleItem  (Phase 9 — claims basics)
+# ---------------------------------------------------------------------------
+
+
+class FeeScheduleItem(TimestampMixin, TenantBase):
+    """A CPT fee entry — either base catalog (payer_id=NULL) or payer-specific override."""
+
+    __tablename__ = "fee_schedule_items"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "payer_id", "cpt_code", name="uq_fee_payer_cpt"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    payer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("insurance_payers.id", ondelete="CASCADE"), nullable=True
+    )
+    cpt_code: Mapped[str] = mapped_column(String(10), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    fee: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+    # --- Relationships ---
+    payer: Mapped["InsurancePayer | None"] = relationship(
+        "InsurancePayer", back_populates="fee_items", foreign_keys=[payer_id]
+    )
+
+    def __repr__(self) -> str:
+        return f"<FeeScheduleItem cpt={self.cpt_code} fee={self.fee} payer_id={self.payer_id}>"
+
+
+# ---------------------------------------------------------------------------
+# PatientInsurance  (Phase 9 — claims basics)
+# ---------------------------------------------------------------------------
+
+
+class PatientInsurance(TimestampMixin, TenantBase):
+    """Links a patient to an insurance payer (primary or secondary)."""
+
+    __tablename__ = "patient_insurance"
+    __table_args__ = (
+        CheckConstraint("priority IN ('primary', 'secondary')", name="ck_insurance_priority"),
+        UniqueConstraint("patient_id", "priority", name="uq_patient_insurance_priority"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("patients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    payer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("insurance_payers.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    priority: Mapped[str] = mapped_column(String(10), nullable=False)  # "primary" | "secondary"
+    plan_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "medical" | "vision" | "other"
+    subscriber_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    group_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    plan_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    relationship_to_subscriber: Mapped[str] = mapped_column(String(20), nullable=False, default="self")
+    subscriber_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    subscriber_dob: Mapped[Date | None] = mapped_column(Date, nullable=True)  # type: ignore[assignment]
+
+    # --- Relationships ---
+    payer: Mapped["InsurancePayer"] = relationship("InsurancePayer", foreign_keys=[payer_id])
+
+    def __repr__(self) -> str:
+        return (
+            f"<PatientInsurance patient_id={self.patient_id} "
+            f"payer_id={self.payer_id} priority={self.priority}>"
         )

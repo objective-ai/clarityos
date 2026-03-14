@@ -28,6 +28,8 @@ export interface SuperbillLineItem {
   units: number;
   diagnosisPointers: string[];
   modifiers: string[];
+  isFeeOverridden: boolean;
+  feeSource: "payer_rate" | "base_rate" | "manual";
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +76,11 @@ export interface Superbill {
   totalFee: number;
   notes: string | null;
   createdById: string | null;
+  billedPayerId: string | null;
+  isSelfPay: boolean;
+  billedPayer?: InsurancePayer;
+  lastPdfGeneratedAt: string | null;
+  pdfGenerationCount: number;
   lineItems: SuperbillLineItem[];
   warnings: CptIcdWarning[];
   createdAt: string;
@@ -142,4 +149,64 @@ export interface SuperbillListItem {
   cptCodes: string[];
   totalFee: number;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Insurance Payer (Phase 9)
+// ---------------------------------------------------------------------------
+
+export interface InsurancePayer {
+  id: string;
+  name: string;
+  payer_id: string | null;
+  phone: string | null;
+  address: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Patient Insurance (Phase 9)
+// ---------------------------------------------------------------------------
+
+export interface PatientInsurance {
+  id: string;
+  patient_id: string;
+  payer_id: string;
+  payer?: InsurancePayer;
+  priority: "primary" | "secondary";
+  plan_type: "medical" | "vision" | "other";
+  subscriber_id: string | null;
+  group_number: string | null;
+  plan_name: string | null;
+  relationship_to_subscriber: "self" | "spouse" | "child" | "other";
+  subscriber_name: string | null;
+  subscriber_dob: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fee Schedule Item (Phase 9)
+// ---------------------------------------------------------------------------
+
+export interface FeeScheduleItem {
+  id: string;
+  payer_id: string | null; // null = base catalog
+  cpt_code: string;
+  description: string;
+  fee: number;
+}
+
+// ---------------------------------------------------------------------------
+// Patient Superbill Summary (Phase 9)
+// ---------------------------------------------------------------------------
+
+export interface PatientSuperbillSummary {
+  id: string;
+  encounter_id: string;
+  encounter_date: string;
+  claim_status: ClaimStatus;
+  total_fee: number;
+  mdm_level: string | null;
+  suggested_em_code: string | null;
+  cpt_codes: string[];
 }
