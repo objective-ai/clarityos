@@ -410,6 +410,40 @@ async def finalize_encounter(
             problem.status = "resolved"
             problem.resolved_date = enc.encounter_date
 
+    # ── Post-finalization: promote new diagnoses to master problem list ──
+    # For diagnoses not yet linked to a problem, create one (or link to existing).
+    for dx in enc.diagnoses:
+        if dx.is_deleted or dx.problem_id:
+            continue
+
+        existing = (
+            await db.execute(
+                select(PatientProblem).where(
+                    PatientProblem.patient_id == enc.patient_id,
+                    PatientProblem.tenant_id == ctx.tenant_id,
+                    PatientProblem.icd10_code == dx.icd10_code,
+                    PatientProblem.is_deleted == False,  # noqa: E712
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            dx.problem_id = existing.id
+        else:
+            new_problem = PatientProblem(
+                tenant_id=ctx.tenant_id,
+                patient_id=enc.patient_id,
+                icd10_code=dx.icd10_code,
+                description=dx.description,
+                eye_affected=dx.eye_affected,
+                severity=dx.severity,
+                status="active",
+                source_encounter_id=enc.id,
+            )
+            db.add(new_problem)
+            await db.flush()
+            dx.problem_id = new_problem.id
+
     await db.flush()
     enc = await _refetch_encounter(db, enc.id)
     return _build_encounter_response(enc)

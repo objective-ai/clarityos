@@ -257,8 +257,14 @@ async def create_superbill(
 
     await db.commit()
 
-    # Reload with line items
-    await db.refresh(sb, attribute_names=["line_items"])
+    # Re-fetch with line items (db.refresh is unsafe in async context — use selectinload)
+    sb = (
+        await db.execute(
+            select(Superbill)
+            .where(Superbill.id == sb.id)
+            .options(selectinload(Superbill.line_items))
+        )
+    ).scalar_one()
 
     # Validate pointers
     active_items = [li for li in sb.line_items if not li.is_deleted]
@@ -352,7 +358,15 @@ async def update_superbill(
     )
 
     await db.commit()
-    await db.refresh(sb, attribute_names=["line_items"])
+
+    # Re-fetch with line items (db.refresh is unsafe in async context — use selectinload)
+    sb = (
+        await db.execute(
+            select(Superbill)
+            .where(Superbill.id == sb.id)
+            .options(selectinload(Superbill.line_items))
+        )
+    ).scalar_one()
 
     return _build_superbill_response(sb)
 
