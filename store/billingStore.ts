@@ -16,7 +16,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
-import { apiFetch, HttpError } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
 import type {
   ClaimStatus,
   CptIcdWarning,
@@ -191,7 +191,7 @@ export const useBillingStore = create<BillingStore>()(
           );
         } catch (err) {
           // 404 means no superbill exists yet — treat same as 204 so auto-create can proceed
-          if (err instanceof HttpError && err.status === 404) {
+          if ((err as { status?: number }).status === 404) {
             set(
               {
                 encounters: {
