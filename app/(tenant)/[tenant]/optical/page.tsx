@@ -187,7 +187,7 @@ export default function OpticalPage() {
 
       {/* Optical future features marketing banner */}
       <div
-        className="relative overflow-hidden rounded-2xl flex items-center gap-6 px-6 py-5"
+        className="relative overflow-hidden rounded-2xl px-8 pt-12 pb-14 mt-8 mb-2 text-center"
         style={{
           background: "var(--bg-glass)",
           border: "1px solid var(--glass-border)",
@@ -226,8 +226,8 @@ export default function OpticalPage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 pl-2">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="relative">
+          <div className="flex items-center justify-center gap-2 mb-4">
             <span
               className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
               style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
@@ -235,11 +235,11 @@ export default function OpticalPage() {
               ⚡ COMING SOON
             </span>
           </div>
-          <p className="text-subhead mb-1">Optical inventory &amp; ordering — next</p>
-          <p className="text-caption text-[var(--text-muted)] mb-3 max-w-md">
+          <p className="text-xl font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Optical inventory &amp; ordering — next</p>
+          <p className="text-sm leading-relaxed text-[var(--text-muted)] mb-6 max-w-lg mx-auto">
             Frame catalog management, lens ordering with supplier integration, and real-time inventory tracking.
           </p>
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap justify-center gap-2">
             {["Frame Catalog", "Lens Ordering", "Inventory Sync"].map((pill) => (
               <span
                 key={pill}
@@ -250,9 +250,6 @@ export default function OpticalPage() {
               </span>
             ))}
           </div>
-          <a href="#" className="text-xs font-semibold text-[var(--accent)] hover:underline underline-offset-2 transition-colors">
-            Join the waitlist →
-          </a>
         </div>
       </div>
 
