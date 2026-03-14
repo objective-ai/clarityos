@@ -148,7 +148,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 
 Build order: Phase 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 
-- [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
+- [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
 - [ ] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
@@ -185,6 +185,17 @@ Plans:
   4. Posted superbills can generate downloadable CMS-1500 PDF forms
   5. Claims track status: Draft → Posted → Submitted → Accepted/Rejected
   6. Patient detail has a Billing/Claims tab listing all superbills for that patient with status, E&M code, CPT codes, and total
+**Plans:** 8 plans
+
+Plans:
+- [ ] 09-00-PLAN.md — Wave 0: test stubs (feeService.test.ts, payerStore.test.ts, test_fee_service.py, 3 E2E stubs) (INS-01 through INS-07)
+- [ ] 09-01-PLAN.md — DB models: InsurancePayer, FeeScheduleItem, PatientInsurance; Alembic 0008; seed 10 CA payers + base fee catalog; TS types (INS-01, INS-02)
+- [ ] 09-02-PLAN.md — Backend routes: payer CRUD, patient insurance CRUD, fee schedule, patient superbills; fee_service.py; extend create_superbill (INS-03, INS-04, INS-05, INS-07)
+- [ ] 09-03-PLAN.md — CMS-1500 PDF: reportlab endpoint in billing.py; binary BFF route at /api/encounters/[id]/superbill/pdf (INS-06)
+- [ ] 09-04-PLAN.md — Admin Payers tab: payerStore, 4 BFF routes, glass-card CRUD + fee schedule editor in admin/page.tsx (INS-03)
+- [ ] 09-05-PLAN.md — Patient Insurance + Billing tabs: InsuranceTab, PatientBillingTab components, 3 BFF routes, patient detail page extension (INS-04, INS-07)
+- [ ] 09-06-PLAN.md — Payer selection flow: PayerSelectionModal, billingStore extension, fee_source indicators in SuperbillEditor (INS-05)
+- [ ] 09-07-PLAN.md — Download PDF buttons on billing dashboard + SuperbillEditor; human verification checkpoint (INS-06)
 
 ### Phase 10: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
@@ -220,7 +231,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
-| 9. Claims Basics | 0/? | Not started | — |
+| 9. Claims Basics | 0/8 | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
 | 12. Mobile/Tablet UX | 0/? | Not started | — |
