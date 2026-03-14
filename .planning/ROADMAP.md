@@ -149,7 +149,7 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 Build order: Phase 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 
 - [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
-- [ ] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
+- [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking (completed 2026-03-14)
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
 - [ ] **Phase 12: Mobile/Tablet UX** - Responsive pass on Schedule, Optical, Patients, Dashboard, Encounter; bottom nav on mobile
@@ -185,7 +185,7 @@ Plans:
   4. Posted superbills can generate downloadable CMS-1500 PDF forms
   5. Claims track status: Draft → Posted → Submitted → Accepted/Rejected
   6. Patient detail has a Billing/Claims tab listing all superbills for that patient with status, E&M code, CPT codes, and total
-**Plans:** 7/8 plans executed
+**Plans:** 8/8 plans complete
 
 Plans:
 - [ ] 09-00-PLAN.md — Wave 0: test stubs (feeService.test.ts, payerStore.test.ts, test_fee_service.py, 3 E2E stubs) (INS-01 through INS-07)
@@ -231,7 +231,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
-| 9. Claims Basics | 7/8 | In Progress|  |
+| 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
 | 12. Mobile/Tablet UX | 0/? | Not started | — |

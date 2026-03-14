@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 09-06-PLAN.md (Payer selection flow)
-last_updated: "2026-03-14T17:15:34.594Z"
+stopped_at: "Completed 09-07-PLAN.md (Download PDF buttons) - checkpoint:human-verify pending"
+last_updated: "2026-03-14T17:22:37.229Z"
 last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 progress:
   total_phases: 16
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 19
-  completed_plans: 21
+  completed_plans: 22
   percent: 100
 ---
 
@@ -103,6 +103,7 @@ Progress: [======    ] 67%
 | Phase 09-claims-basics P05 | 6 | 2 tasks | 8 files |
 | Phase 09-claims-basics P04 | 6 | 2 tasks | 7 files |
 | Phase 09-claims-basics P06 | 4 | 2 tasks | 6 files |
+| Phase 09-claims-basics P07 | 20 | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -161,6 +162,7 @@ Recent decisions affecting current work:
 - [Phase 09-04]: Payers tab role-gated via session.user.role (AppSession nests role inside user sub-object)
 - [Phase 09-claims-basics]: PayerSelectionModal reads open/encounterId from billingStore directly (no props) — only patientId needed at call site
 - [Phase 09-claims-basics]: openPayerSelection intercepts auto-superbill-create path in SuperbillEditor — user must pick payer first
+- [Phase 09-claims-basics]: 09-07: Per-row PDF loading state uses Record<string, boolean> so multiple rows can download PDFs in parallel without blocking each other
 
 ### Pending Todos
 
@@ -172,8 +174,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-14T17:15:34.591Z
-Stopped at: Completed 09-06-PLAN.md (Payer selection flow)
+Last session: 2026-03-14T17:22:29.368Z
+Stopped at: Completed 09-07-PLAN.md (Download PDF buttons) - checkpoint:human-verify pending
 Resume file: None
 
 **Phase 9 Overview:**
