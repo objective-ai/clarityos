@@ -63,6 +63,10 @@ interface BillingSlice {
 
 interface BillingStoreState {
   encounters: Record<string, BillingSlice>;
+  /** Is the payer selection modal open? */
+  payerSelectionOpen: boolean;
+  /** The encounterId that triggered payer selection */
+  pendingEncounterId: string | null;
 }
 
 interface BillingStoreActions {
@@ -92,6 +96,27 @@ interface BillingStoreActions {
 
   /** Reset billing state for an encounter */
   reset: (encounterId: string) => void;
+
+  /** Open payer selection modal for a given encounter */
+  openPayerSelection: (encounterId: string) => void;
+
+  /** Close payer selection modal and clear pending encounter */
+  closePayerSelection: () => void;
+
+  /** Create superbill with a selected payer (called after payer selection modal confirms) */
+  createSuperbillWithPayer: (
+    encounterId: string,
+    payerId: string | null,
+    isSelfPay: boolean,
+  ) => Promise<void>;
+
+  /** Change the billed payer on an existing superbill; recalculates non-overridden fees */
+  changeBilledPayer: (
+    superbillId: string,
+    encounterId: string,
+    newPayerId: string | null,
+    isSelfPay: boolean,
+  ) => Promise<void>;
 }
 
 type BillingStore = BillingStoreState & BillingStoreActions;
@@ -124,6 +149,8 @@ export const useBillingStore = create<BillingStore>()(
   devtools(
     (set, get) => ({
       encounters: {},
+      payerSelectionOpen: false,
+      pendingEncounterId: null,
 
       // ── Load ──────────────────────────────────────────────────────────
       loadSuperbill: async (encounterId: string) => {
@@ -483,6 +510,165 @@ export const useBillingStore = create<BillingStore>()(
           return result;
         } catch {
           return null;
+        }
+      },
+
+      // ── Payer Selection ───────────────────────────────────────────────
+      openPayerSelection: (encounterId) => {
+        set(
+          { payerSelectionOpen: true, pendingEncounterId: encounterId },
+          false,
+          "openPayerSelection",
+        );
+      },
+
+      closePayerSelection: () => {
+        set(
+          { payerSelectionOpen: false, pendingEncounterId: null },
+          false,
+          "closePayerSelection",
+        );
+      },
+
+      // ── Create Superbill With Payer ────────────────────────────────────
+      createSuperbillWithPayer: async (encounterId, payerId, isSelfPay) => {
+        const current = getSlice(get(), encounterId);
+
+        set(
+          {
+            encounters: {
+              ...get().encounters,
+              [encounterId]: { ...current, isSaving: true, error: null },
+            },
+          },
+          false,
+          "createSuperbillWithPayer/start",
+        );
+
+        try {
+          const rawSuperbill = await apiFetch<Superbill>(
+            `/api/encounters/${encounterId}/superbill`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                billed_payer_id: payerId,
+                is_self_pay: isSelfPay,
+              }),
+            },
+          );
+          const superbill = normalizeSuperBill(rawSuperbill);
+
+          set(
+            {
+              encounters: {
+                ...get().encounters,
+                [encounterId]: {
+                  superbill,
+                  loadStatus: "loaded",
+                  error: null,
+                  mdm: superbill.mdmLevel
+                    ? {
+                        mdmLevel: superbill.mdmLevel,
+                        suggestedEmCode: superbill.suggestedEmCode ?? "99213",
+                        reasoning: superbill.mdmReasoning ?? "",
+                        problemPoints: 0,
+                        dataPoints: 0,
+                        riskLevel: "minimal",
+                      }
+                    : null,
+                  warnings: superbill.warnings ?? [],
+                  isSaving: false,
+                },
+              },
+            },
+            false,
+            "createSuperbillWithPayer/success",
+          );
+
+          get().closePayerSelection();
+        } catch (err) {
+          set(
+            {
+              encounters: {
+                ...get().encounters,
+                [encounterId]: {
+                  ...current,
+                  isSaving: false,
+                  error:
+                    err instanceof Error
+                      ? err.message
+                      : "Failed to create superbill",
+                },
+              },
+            },
+            false,
+            "createSuperbillWithPayer/error",
+          );
+        }
+      },
+
+      // ── Change Billed Payer ────────────────────────────────────────────
+      changeBilledPayer: async (superbillId, encounterId, newPayerId, isSelfPay) => {
+        const current = getSlice(get(), encounterId);
+        if (!current.superbill) return;
+
+        set(
+          {
+            encounters: {
+              ...get().encounters,
+              [encounterId]: { ...current, isSaving: true, error: null },
+            },
+          },
+          false,
+          "changeBilledPayer/start",
+        );
+
+        try {
+          const rawSuperbill = await apiFetch<Superbill>(
+            `/api/encounters/${encounterId}/superbill`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                billed_payer_id: newPayerId,
+                is_self_pay: isSelfPay,
+              }),
+            },
+          );
+          const superbill = normalizeSuperBill(rawSuperbill);
+
+          set(
+            {
+              encounters: {
+                ...get().encounters,
+                [encounterId]: {
+                  ...current,
+                  superbill,
+                  warnings: superbill.warnings ?? current.warnings,
+                  isSaving: false,
+                },
+              },
+            },
+            false,
+            "changeBilledPayer/success",
+          );
+        } catch (err) {
+          set(
+            {
+              encounters: {
+                ...get().encounters,
+                [encounterId]: {
+                  ...current,
+                  isSaving: false,
+                  error:
+                    err instanceof Error
+                      ? err.message
+                      : "Failed to change billed payer",
+                },
+              },
+            },
+            false,
+            "changeBilledPayer/error",
+          );
         }
       },
 
