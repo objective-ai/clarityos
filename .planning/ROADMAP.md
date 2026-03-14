@@ -185,7 +185,7 @@ Plans:
   4. Posted superbills can generate downloadable CMS-1500 PDF forms
   5. Claims track status: Draft → Posted → Submitted → Accepted/Rejected
   6. Patient detail has a Billing/Claims tab listing all superbills for that patient with status, E&M code, CPT codes, and total
-**Plans:** 8 plans
+**Plans:** 6/8 plans executed
 
 Plans:
 - [ ] 09-00-PLAN.md — Wave 0: test stubs (feeService.test.ts, payerStore.test.ts, test_fee_service.py, 3 E2E stubs) (INS-01 through INS-07)
@@ -231,7 +231,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
-| 9. Claims Basics | 0/8 | Not started | — |
+| 9. Claims Basics | 6/8 | In Progress|  |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
 | 12. Mobile/Tablet UX | 0/? | Not started | — |

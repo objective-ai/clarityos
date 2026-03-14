@@ -3,11 +3,27 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
+stopped_at: Completed 09-claims-basics-09-05-PLAN.md
+last_updated: "2026-03-14T17:08:04.127Z"
+last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
+progress:
+  total_phases: 16
+  completed_phases: 4
+  total_plans: 19
+  completed_plans: 20
+  percent: 100
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: in_progress
 stopped_at: Phase 9 context updated with billing flow decisions
 last_updated: "2026-03-13T00:04:00.451Z"
 last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 progress:
-  total_phases: 12
+  [██████████] 100%
   completed_phases: 4
   total_plans: 11
   completed_plans: 14
@@ -84,6 +100,7 @@ Progress: [======    ] 67%
 - Trend: Improving — parallel execution of 3 phases completed in ~10min wall time
 | Phase 08-analytics-dashboard P00 | 12 | 2 tasks | 5 files |
 | Phase 08-analytics-dashboard P02 | 25 | 1 tasks | 1 files |
+| Phase 09-claims-basics P05 | 6 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -136,6 +153,8 @@ Recent decisions affecting current work:
 - [AI Scribe V2]: ConfidenceBadge color-codes suspect fields; FieldReviewer allows field-by-field approval/edit
 - [AI Scribe V2]: RefractionMiniGrid shows OD/OS sphere/cylinder/axis with confidence coloring
 - [AI Scribe V2]: PATCH `/encounters/{id}/ai-findings` endpoint finalizes validated AI-populated fields
+- [Phase 09-claims-basics]: STATUS_STYLES copied inline in PatientBillingTab (not imported from billing page) to avoid cross-component coupling
+- [Phase 09-claims-basics]: Old JSONB InsuranceCard removed from DemographicsTab; Insurance tab is the sole insurance surface on patient detail page
 
 ### Pending Todos
 
@@ -147,9 +166,9 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-13T00:04:00.446Z
-Stopped at: Phase 9 context updated with billing flow decisions
-Resume file: .planning/phases/09-claims-basics/09-CONTEXT.md
+Last session: 2026-03-14T17:08:04.124Z
+Stopped at: Completed 09-claims-basics-09-05-PLAN.md
+Resume file: None
 
 **Phase 9 Overview:**
 - Extends Phase 4 (Superbill) with insurance infrastructure: payer CRUD, patient insurance records, per-payer fee schedules
