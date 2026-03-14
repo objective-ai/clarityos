@@ -18,7 +18,7 @@ import { isIopElevated } from "@/types/vitals";
 import { useDiagnoses } from "@/store/diagnosisStore";
 import { useRefractionStore } from "@/store/refractionStore";
 import { formatDiopter, formatAxis, formatAdd } from "@/lib/rx-format";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, HttpError } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -174,8 +174,11 @@ export function FinalizeModal({
       );
       setStep("billing");
     } catch (err) {
-      // Dev fallback — finalize locally when backend is unreachable
-      if (process.env.NODE_ENV === "development") {
+      // Dev fallback — finalize locally only for network failures, NOT for legitimate API errors.
+      // 4xx errors mean the server responded with a business error (e.g. 409 "Already finalized")
+      // and should be shown to the user, not silently swallowed.
+      const isApiError = err instanceof HttpError && err.status >= 400 && err.status < 500;
+      if (process.env.NODE_ENV === "development" && !isApiError) {
         finalizeEncounter(
           encounterId,
           providerName,

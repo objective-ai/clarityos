@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Download, MoreHorizontal, ChevronRight } from "lucide-react";
+import { Download, MoreHorizontal, ChevronRight, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
   return (
     <Badge
-      className="text-[10px] cursor-help"
+      className="text-[10px]"
       style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}` }}
       title={STATUS_DESCRIPTIONS[status] ?? ""}
     >
@@ -275,6 +275,7 @@ export default function BillingPage() {
                 <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Provider</th>
                 <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">CPT Codes</th>
                 <th className="px-4 py-3 text-right text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Total</th>
+                <th className="px-4 py-3 w-16"></th>
                 <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Status</th>
                 <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-12"></th>
               </tr>
@@ -312,6 +313,14 @@ export default function BillingPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-sm text-[var(--text-primary)]">
                     ${sb.totalFee.toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Link
+                      href={`/${tenant}/encounter/${sb.encounterId}`}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
+                    >
+                      View <ExternalLink size={11} />
+                    </Link>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <StatusBadge status={sb.claimStatus} />

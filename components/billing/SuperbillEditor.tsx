@@ -145,6 +145,7 @@ export default function SuperbillEditor({
   const createSuperbill = useBillingStore((s) => s.createSuperbill);
   const calculateMdm = useBillingStore((s) => s.calculateMdm);
   const removeLineItem = useBillingStore((s) => s.removeLineItem);
+  const reset = useBillingStore((s) => s.reset);
 
   const loadStatus = slice?.loadStatus ?? "idle";
   const superbill = slice?.superbill ?? null;
@@ -156,12 +157,11 @@ export default function SuperbillEditor({
   // Track whether we already triggered create to avoid double-fire
   const createdRef = useRef(false);
 
-  // On mount: load superbill if idle
+  // On mount: reset any stale state then load
   useEffect(() => {
-    if (loadStatus === "idle") {
-      loadSuperbill(encounterId);
-    }
-  }, [encounterId, loadStatus, loadSuperbill]);
+    reset(encounterId);
+    loadSuperbill(encounterId);
+  }, [encounterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // After load: if no superbill exists, create one with auto-suggested CPTs
   useEffect(() => {
