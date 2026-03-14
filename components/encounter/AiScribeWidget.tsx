@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useAiScribe } from "@/hooks/useAiScribe";
 import type { FindingsStoreKey } from "@/types/exam-findings";
@@ -29,14 +30,23 @@ import { Badge } from "@/components/ui/badge";
 // ---------------------------------------------------------------------------
 
 function DictationComingSoonModal({ onClose }: { onClose: () => void }) {
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(10px)" }}
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in"
+      style={{ background: "rgba(15, 25, 40, 0.65)" }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm glass-card animate-slide-down overflow-hidden"
+        className="w-full max-w-sm animate-slide-down overflow-hidden"
+        style={{
+          background: "rgba(15, 19, 28, 0.92)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "16px",
+          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+          zIndex: 61,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Hero section */}
@@ -44,7 +54,7 @@ function DictationComingSoonModal({ onClose }: { onClose: () => void }) {
           className="relative flex flex-col items-center justify-center py-8 px-5 overflow-hidden"
           style={{
             background: "linear-gradient(135deg, rgba(45,212,191,0.18) 0%, rgba(139,92,246,0.18) 100%)",
-            borderBottom: "1px solid var(--border-subtle)",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
           }}
         >
           {/* Decorative blobs */}
@@ -54,7 +64,10 @@ function DictationComingSoonModal({ onClose }: { onClose: () => void }) {
           {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors z-10"
+            className="absolute top-3 right-3 transition-colors z-10"
+            style={{ color: "rgba(255,255,255,0.5)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
           >
             &times;
           </button>
@@ -96,41 +109,45 @@ function DictationComingSoonModal({ onClose }: { onClose: () => void }) {
 
         {/* Body */}
         <div className="px-5 py-5">
-          <div className="text-overline text-[var(--accent)] mb-1">COMING SOON</div>
-          <h3 className="text-subhead mb-3">Live Dictation</h3>
-          <p className="text-body text-[var(--text-secondary)] mb-4">
+          <div className="text-overline mb-1" style={{ color: "#2DD4BF" }}>COMING SOON</div>
+          <h3 className="text-subhead mb-3" style={{ color: "rgba(255,255,255,0.95)" }}>Live Dictation</h3>
+          <p className="text-body mb-4" style={{ color: "rgba(255,255,255,0.65)" }}>
             Speak directly to ClarityOS. Our AI transcribes your clinical encounter in real time — keeping you focused on the patient.
           </p>
 
-          <div className="rounded-xl p-4 mb-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="text-overline mb-2">What&apos;s coming:</div>
+          <div className="rounded-xl p-4 mb-5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            <div className="text-overline mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>What&apos;s coming:</div>
             <ul className="space-y-2">
               {[
                 "Real-time transcription",
                 "Hands-free SOAP generation",
                 "Works with any microphone",
               ].map((item) => (
-                <li key={item} className="flex items-center gap-2 text-caption text-[var(--text-secondary)]">
-                  <span className="text-[var(--accent)]">✓</span>
+                <li key={item} className="flex items-center gap-2 text-caption" style={{ color: "rgba(255,255,255,0.7)" }}>
+                  <span style={{ color: "#2DD4BF" }}>✓</span>
                   {item}
                 </li>
               ))}
             </ul>
           </div>
 
-          <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110">
+          <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all hover:brightness-110" style={{ background: "#2DD4BF", color: "#0F1729" }}>
             Notify Me When It&apos;s Ready
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 text-xs mt-2 cursor-pointer underline-offset-2 hover:underline text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+            className="w-full py-3 text-xs mt-2 cursor-pointer underline-offset-2 hover:underline transition-colors"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
           >
             Not right now
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -141,37 +158,52 @@ function DictationComingSoonModal({ onClose }: { onClose: () => void }) {
 function UpsellModal({ feature, onClose }: { feature: EntitlementKey; onClose: () => void }) {
   const meta = ENTITLEMENT_META[feature];
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in"
+      style={{ background: "rgba(15, 25, 40, 0.65)" }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm glass-card animate-slide-down overflow-hidden"
+        className="w-full max-w-sm animate-slide-down overflow-hidden"
+        style={{
+          background: "rgba(15, 19, 28, 0.92)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "16px",
+          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+          zIndex: 61,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 pt-5 pb-4 border-b border-[var(--border-subtle)]">
+        <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <div className="flex items-start justify-between gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-[var(--accent-dim)] border border-[var(--mono-border)]">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(45,212,191,0.15)", border: "1px solid rgba(45,212,191,0.25)" }}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M9 2L10.8 6.5H15.5L11.8 9.2L13.5 14L9 11L4.5 14L6.2 9.2L2.5 6.5H7.2L9 2Z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round" />
+                <path d="M9 2L10.8 6.5H15.5L11.8 9.2L13.5 14L9 11L4.5 14L6.2 9.2L2.5 6.5H7.2L9 2Z" stroke="#2DD4BF" strokeWidth="1.3" strokeLinejoin="round" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-overline text-[var(--accent)] mb-1">{meta.plan} Feature</div>
-              <h3 className="text-subhead">{meta.label}</h3>
+              <div className="text-overline mb-1" style={{ color: "#2DD4BF" }}>{meta.plan} Feature</div>
+              <h3 className="text-subhead" style={{ color: "rgba(255,255,255,0.95)" }}>{meta.label}</h3>
             </div>
-            <button onClick={onClose} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <button
+              onClick={onClose}
+              className="text-sm transition-colors"
+              style={{ color: "rgba(255,255,255,0.5)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.9)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
+            >
               &times;
             </button>
           </div>
         </div>
 
         <div className="px-5 py-5">
-          <p className="text-body mb-4">{meta.description}</p>
-          <div className="rounded-xl p-4 mb-4 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="text-overline mb-2">What you unlock:</div>
+          <p className="text-body mb-4" style={{ color: "rgba(255,255,255,0.65)" }}>{meta.description}</p>
+          <div className="rounded-xl p-4 mb-4" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            <div className="text-overline mb-2" style={{ color: "rgba(255,255,255,0.5)" }}>What you unlock:</div>
             <ul className="space-y-2">
               {[
                 "AI-generated SOAP notes in seconds",
@@ -179,26 +211,30 @@ function UpsellModal({ feature, onClose }: { feature: EntitlementKey; onClose: (
                 "Learns your documentation style",
                 "Streams directly into your text fields",
               ].map((item) => (
-                <li key={item} className="flex items-center gap-2 text-caption text-[var(--text-secondary)]">
-                  <span className="text-[var(--state-normal)]">✓</span>
+                <li key={item} className="flex items-center gap-2 text-caption" style={{ color: "rgba(255,255,255,0.7)" }}>
+                  <span style={{ color: "#2DD4BF" }}>✓</span>
                   {item}
                 </li>
               ))}
             </ul>
           </div>
-          <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110">
+          <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all hover:brightness-110" style={{ background: "#2DD4BF", color: "#0F1729" }}>
             Upgrade to {meta.plan} &rarr;
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 text-xs mt-2 cursor-pointer underline-offset-2 hover:underline text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+            className="w-full py-3 text-xs mt-2 cursor-pointer underline-offset-2 hover:underline transition-colors"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
           >
             Not right now
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
