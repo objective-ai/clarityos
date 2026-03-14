@@ -334,6 +334,77 @@ export default function BillingPage() {
           </table>
         </div>
       )}
+
+      {/* Billing future features marketing banner */}
+      <div
+        className="relative overflow-hidden rounded-2xl flex items-center gap-6 px-6 py-5"
+        style={{
+          background: "var(--bg-glass)",
+          border: "1px solid var(--glass-border)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        {/* Left accent bar */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+          style={{ background: "linear-gradient(to bottom, #2DD4BF, #8B5CF6)" }}
+        />
+
+        {/* Radial glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 80% 50%, rgba(45,212,191,0.07) 0%, transparent 60%)" }}
+        />
+
+        {/* Decorative SVG — claim routing illustration */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.12] pointer-events-none hidden sm:block">
+          <svg width="140" height="100" viewBox="0 0 140 100" fill="none">
+            {/* Document */}
+            <rect x="8" y="10" width="60" height="76" rx="6" stroke="var(--accent)" strokeWidth="1.5" />
+            <line x1="20" y1="28" x2="56" y2="28" stroke="var(--accent)" strokeWidth="1.2" />
+            <line x1="20" y1="38" x2="56" y2="38" stroke="var(--accent)" strokeWidth="1.2" />
+            <line x1="20" y1="48" x2="44" y2="48" stroke="var(--accent)" strokeWidth="1.2" />
+            <polyline points="20,68 28,76 44,60" stroke="#8B5CF6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Routing nodes */}
+            <circle cx="100" cy="22" r="10" stroke="var(--accent)" strokeWidth="1.3" />
+            <circle cx="128" cy="50" r="10" stroke="#8B5CF6" strokeWidth="1.3" />
+            <circle cx="100" cy="78" r="10" stroke="var(--accent)" strokeWidth="1.3" />
+            <line x1="78" y1="38" x2="91" y2="28" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="110" y1="28" x2="120" y2="42" stroke="#8B5CF6" strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="120" y1="58" x2="110" y2="70" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 2" />
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0 pl-2">
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
+            >
+              ⚡ COMING SOON
+            </span>
+          </div>
+          <p className="text-subhead mb-1">The future of billing is automated</p>
+          <p className="text-caption text-[var(--text-muted)] mb-3 max-w-md">
+            Direct clearinghouse submission, ERA/EOB auto-posting, and denial management — all inside ClarityOS.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {["Direct Claim Submission", "ERA/EOB Auto-posting", "Denial Workflow"].map((pill) => (
+              <span
+                key={pill}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
+                style={{ background: "var(--bg-elevated)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)" }}
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
+          <a href="#" className="text-xs font-semibold text-[var(--accent)] hover:underline underline-offset-2 transition-colors">
+            Join the waitlist →
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
