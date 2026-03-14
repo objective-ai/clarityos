@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 09-04-PLAN.md (Payers admin tab + BFF routes)
-last_updated: "2026-03-14T17:08:34.221Z"
+stopped_at: Completed 09-06-PLAN.md (Payer selection flow)
+last_updated: "2026-03-14T17:15:34.594Z"
 last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 progress:
   total_phases: 16
   completed_phases: 4
   total_plans: 19
-  completed_plans: 20
+  completed_plans: 21
   percent: 100
 ---
 
@@ -102,6 +102,7 @@ Progress: [======    ] 67%
 | Phase 08-analytics-dashboard P02 | 25 | 1 tasks | 1 files |
 | Phase 09-claims-basics P05 | 6 | 2 tasks | 8 files |
 | Phase 09-claims-basics P04 | 6 | 2 tasks | 7 files |
+| Phase 09-claims-basics P06 | 4 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -158,6 +159,8 @@ Recent decisions affecting current work:
 - [Phase 09-claims-basics]: Old JSONB InsuranceCard removed from DemographicsTab; Insurance tab is the sole insurance surface on patient detail page
 - [Phase 09-04]: CreatePayerModal onSave prop typed as Promise<InsurancePayer | void> — avoids TS error when store returns InsurancePayer
 - [Phase 09-04]: Payers tab role-gated via session.user.role (AppSession nests role inside user sub-object)
+- [Phase 09-claims-basics]: PayerSelectionModal reads open/encounterId from billingStore directly (no props) — only patientId needed at call site
+- [Phase 09-claims-basics]: openPayerSelection intercepts auto-superbill-create path in SuperbillEditor — user must pick payer first
 
 ### Pending Todos
 
@@ -169,8 +172,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-14T17:08:34.218Z
-Stopped at: Completed 09-04-PLAN.md (Payers admin tab + BFF routes)
+Last session: 2026-03-14T17:15:34.591Z
+Stopped at: Completed 09-06-PLAN.md (Payer selection flow)
 Resume file: None
 
 **Phase 9 Overview:**
