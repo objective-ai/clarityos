@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { CreditCard } from "lucide-react";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import { useCurrentTenant } from "@/store/sessionStore";
+import { useCurrentTenant, useSession } from "@/store/sessionStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
+import { usePayerStore } from "@/store/payerStore";
+import type { InsurancePayer, FeeScheduleItem } from "@/types/billing";
 import { useThemeStore } from "@/store/themeStore";
 import {
   useTenantCustomizationStore,
@@ -45,7 +48,7 @@ import {
 // Section definitions
 // ---------------------------------------------------------------------------
 
-type SectionKey = "general" | "staff" | "compliance" | "demo";
+type SectionKey = "general" | "staff" | "payers" | "compliance" | "demo";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -69,6 +72,11 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
         <path d="M10 13c0-2.21 1.343-3.5 3-3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       </svg>
     ),
+  },
+  {
+    key: "payers",
+    label: "Payers",
+    icon: <CreditCard className="w-4 h-4" />,
   },
   {
     key: "compliance",
@@ -1856,13 +1864,508 @@ function DemoDataSection() {
 }
 
 // ---------------------------------------------------------------------------
+// Payers Section
+// ---------------------------------------------------------------------------
+
+interface FeeScheduleItemUpdate {
+  cpt_code: string;
+  fee: number;
+}
+
+function CreatePayerModal({
+  open,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: Partial<InsurancePayer>) => Promise<InsurancePayer | void>;
+}) {
+  const [name, setName] = useState("");
+  const [payerId, setPayerId] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setName("");
+    setPayerId("");
+    setPhone("");
+    setAddress("");
+    setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("Name is required");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        payer_id: payerId.trim() || null,
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+      });
+      reset();
+      onClose();
+    } catch {
+      setError("Failed to create payer. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Insurance Payer</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+              Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. VSP Vision"
+              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+              Payer ID
+            </label>
+            <input
+              type="text"
+              value={payerId}
+              onChange={(e) => setPayerId(e.target.value)}
+              placeholder="e.g. VSP001"
+              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+              Phone
+            </label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 800-555-0100"
+              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+              Address
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="e.g. 123 Main St, Sacramento, CA"
+              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
+            />
+          </div>
+          {error && (
+            <p className="text-xs text-red-400">{error}</p>
+          )}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => { reset(); onClose(); }}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={saving || !name.trim()}
+              style={{ background: "var(--accent)", color: "#0f1a1a" }}
+            >
+              {saving ? "Creating…" : "Create Payer"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PayerFeeScheduleView({
+  payer,
+  onBack,
+}: {
+  payer: InsurancePayer;
+  onBack: () => void;
+}) {
+  const { loadPayerFeeSchedule, updatePayerFeeSchedule } = usePayerStore();
+  const [items, setItems] = useState<FeeScheduleItem[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    loadPayerFeeSchedule(payer.id)
+      .then((data) => {
+        setItems(data);
+        const init: Record<string, string> = {};
+        data.forEach((item) => { init[item.cpt_code] = String(item.fee); });
+        setOverrides(init);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [payer.id, loadPayerFeeSchedule]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSavedMsg(null);
+    try {
+      const updates: FeeScheduleItemUpdate[] = Object.entries(overrides)
+        .map(([cpt_code, fee]) => ({ cpt_code, fee: parseFloat(fee) || 0 }));
+      await updatePayerFeeSchedule(payer.id, updates);
+      setSavedMsg("Saved");
+      setTimeout(() => setSavedMsg(null), 2000);
+    } catch {
+      setSavedMsg("Error saving");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Back to Payers
+        </button>
+        <span className="text-[var(--border-subtle)]">/</span>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{payer.name}</h3>
+      </div>
+
+      <Card className="glass-card">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+              Fee Schedule Overrides
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {savedMsg && (
+                <span className="text-xs text-[var(--accent)]">{savedMsg}</span>
+              )}
+              <Button
+                size="sm"
+                disabled={saving || loading}
+                onClick={handleSave}
+                style={{ background: "var(--accent)", color: "#0f1a1a" }}
+              >
+                {saving ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-[var(--text-muted)]">
+            Override base catalog fees for this specific payer. Leave unchanged to use the base rate.
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">Loading fee schedule…</div>
+          ) : items.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">
+              No fee schedule configured for this payer. Fees default to the base catalog.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border-subtle)]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">CPT Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Description</th>
+                    <th className="px-4 pr-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Payer Fee ($)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.cpt_code} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-white/5 transition-colors">
+                      <td className="px-5 py-3 font-mono text-[var(--accent)] text-xs">{item.cpt_code}</td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{item.description}</td>
+                      <td className="px-4 pr-5 py-3">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={overrides[item.cpt_code] ?? String(item.fee)}
+                          onChange={(e) =>
+                            setOverrides((prev) => ({ ...prev, [item.cpt_code]: e.target.value }))
+                          }
+                          className="w-24 px-2 py-1 rounded-lg text-sm text-right glass-input ml-auto block"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function PayersSection() {
+  const { payers, feeCatalog, loading, error, loadPayers, loadFeeCatalog, createPayer, updateFeeCatalog } = usePayerStore();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedPayer, setSelectedPayer] = useState<InsurancePayer | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogOverrides, setCatalogOverrides] = useState<Record<string, string>>({});
+  const [catalogSaving, setCatalogSaving] = useState(false);
+  const [catalogMsg, setCatalogMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadPayers();
+    loadFeeCatalog();
+  }, [loadPayers, loadFeeCatalog]);
+
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    feeCatalog.forEach((item) => { init[item.cpt_code] = String(item.fee); });
+    setCatalogOverrides(init);
+  }, [feeCatalog]);
+
+  const handleCatalogSave = async () => {
+    setCatalogSaving(true);
+    setCatalogMsg(null);
+    try {
+      const updates: FeeScheduleItemUpdate[] = Object.entries(catalogOverrides)
+        .map(([cpt_code, fee]) => ({ cpt_code, fee: parseFloat(fee) || 0 }));
+      await updateFeeCatalog(updates);
+      setCatalogMsg("Saved");
+      setTimeout(() => setCatalogMsg(null), 2000);
+    } catch {
+      setCatalogMsg("Error saving");
+    } finally {
+      setCatalogSaving(false);
+    }
+  };
+
+  if (selectedPayer) {
+    return (
+      <PayerFeeScheduleView
+        payer={selectedPayer}
+        onBack={() => setSelectedPayer(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Payers table */}
+      <Card className="glass-card">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+                Insurance Payers
+              </CardTitle>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Manage insurance payers and per-payer fee schedules.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+              style={{ background: "var(--accent)", color: "#0f1a1a" }}
+            >
+              + Add Payer
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {error && (
+            <div className="px-5 py-3 text-sm text-red-400">{error}</div>
+          )}
+          {loading && payers.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">Loading payers…</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border-subtle)]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Payer ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Phone</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Status</th>
+                    <th className="px-4 pr-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Fee Schedule</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payers.map((payer) => (
+                    <tr
+                      key={payer.id}
+                      className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-white/5 transition-colors"
+                    >
+                      <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{payer.name}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
+                        {payer.payer_id ?? <span className="text-[var(--text-muted)]">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">
+                        {payer.phone ?? <span className="text-[var(--text-muted)]">—</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            payer.is_active
+                              ? "bg-[rgba(45,212,191,0.15)] text-[var(--accent)]"
+                              : "bg-[var(--bg-glass)] text-[var(--text-muted)]"
+                          }`}
+                        >
+                          {payer.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 pr-5 py-3 text-right">
+                        <button
+                          onClick={() => setSelectedPayer(payer)}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium border transition-colors text-[var(--accent)] border-[var(--accent)] hover:bg-[var(--accent-dim)]"
+                        >
+                          Edit Fees
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {payers.length === 0 && !loading && (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-12 text-center text-caption text-[var(--text-muted)]">
+                        No payers configured yet. Add your first payer to get started.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Base Fee Catalog (collapsible) */}
+      <Card className="glass-card">
+        <CardHeader
+          className="pb-3 cursor-pointer"
+          onClick={() => setCatalogOpen((o) => !o)}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+                Base Fee Catalog
+              </CardTitle>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Default fees applied when no payer-specific override exists.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {catalogOpen && (
+                <>
+                  {catalogMsg && <span className="text-xs text-[var(--accent)]">{catalogMsg}</span>}
+                  <Button
+                    size="sm"
+                    disabled={catalogSaving}
+                    onClick={(e) => { e.stopPropagation(); handleCatalogSave(); }}
+                    style={{ background: "var(--accent)", color: "#0f1a1a" }}
+                  >
+                    {catalogSaving ? "Saving…" : "Save Changes"}
+                  </Button>
+                </>
+              )}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                className={`text-[var(--text-muted)] transition-transform ${catalogOpen ? "rotate-180" : ""}`}
+              >
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+        </CardHeader>
+        {catalogOpen && (
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border-subtle)]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">CPT Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Description</th>
+                    <th className="px-4 pr-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Base Fee ($)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feeCatalog.map((item) => (
+                    <tr key={item.cpt_code} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-white/5 transition-colors">
+                      <td className="px-5 py-3 font-mono text-[var(--accent)] text-xs">{item.cpt_code}</td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{item.description}</td>
+                      <td className="px-4 pr-5 py-3">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={catalogOverrides[item.cpt_code] ?? String(item.fee)}
+                          onChange={(e) =>
+                            setCatalogOverrides((prev) => ({ ...prev, [item.cpt_code]: e.target.value }))
+                          }
+                          className="w-24 px-2 py-1 rounded-lg text-sm text-right glass-input ml-auto block"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                  {feeCatalog.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">
+                        No fee catalog entries yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <CreatePayerModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSave={createPayer}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Admin Page
 // ---------------------------------------------------------------------------
 
 export default function AdminPage() {
   const { requireRole } = useEntitlements();
+  const session = useSession();
   const [activeSection, setActiveSection] = useState<SectionKey>("general");
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
+  const isAdminOrOwner = session?.user.role === "admin" || session?.user.role === "owner";
 
   useEffect(() => {
     setSubtitle("Clinic settings");
@@ -1894,7 +2397,9 @@ export default function AdminPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:gap-8">
         {/* Section nav */}
         <nav className="flex flex-row flex-wrap gap-1 lg:flex-col lg:w-44 lg:flex-shrink-0">
-          {SECTIONS.map((section) => {
+          {SECTIONS.filter(
+            (section) => section.key !== "payers" || isAdminOrOwner
+          ).map((section) => {
             const active = activeSection === section.key;
             return (
               <button
@@ -1917,6 +2422,7 @@ export default function AdminPage() {
         <div className="flex-1 min-w-0">
           {activeSection === "general" && <GeneralSettingsSection />}
           {activeSection === "staff" && <StaffManagementSection />}
+          {activeSection === "payers" && <PayersSection />}
           {activeSection === "compliance" && <ComplianceSection />}
           {activeSection === "demo" && <DemoDataSection />}
         </div>
