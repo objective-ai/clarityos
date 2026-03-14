@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 09-claims-basics-09-05-PLAN.md
-last_updated: "2026-03-14T17:08:04.127Z"
+stopped_at: Completed 09-04-PLAN.md (Payers admin tab + BFF routes)
+last_updated: "2026-03-14T17:08:34.221Z"
 last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 progress:
   total_phases: 16
@@ -101,6 +101,7 @@ Progress: [======    ] 67%
 | Phase 08-analytics-dashboard P00 | 12 | 2 tasks | 5 files |
 | Phase 08-analytics-dashboard P02 | 25 | 1 tasks | 1 files |
 | Phase 09-claims-basics P05 | 6 | 2 tasks | 8 files |
+| Phase 09-claims-basics P04 | 6 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,8 @@ Recent decisions affecting current work:
 - [AI Scribe V2]: PATCH `/encounters/{id}/ai-findings` endpoint finalizes validated AI-populated fields
 - [Phase 09-claims-basics]: STATUS_STYLES copied inline in PatientBillingTab (not imported from billing page) to avoid cross-component coupling
 - [Phase 09-claims-basics]: Old JSONB InsuranceCard removed from DemographicsTab; Insurance tab is the sole insurance surface on patient detail page
+- [Phase 09-04]: CreatePayerModal onSave prop typed as Promise<InsurancePayer | void> — avoids TS error when store returns InsurancePayer
+- [Phase 09-04]: Payers tab role-gated via session.user.role (AppSession nests role inside user sub-object)
 
 ### Pending Todos
 
@@ -166,8 +169,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-14T17:08:04.124Z
-Stopped at: Completed 09-claims-basics-09-05-PLAN.md
+Last session: 2026-03-14T17:08:34.218Z
+Stopped at: Completed 09-04-PLAN.md (Payers admin tab + BFF routes)
 Resume file: None
 
 **Phase 9 Overview:**
