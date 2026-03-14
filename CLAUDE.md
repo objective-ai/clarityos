@@ -23,7 +23,6 @@
 - `npm run test` — vitest | `npx tsc --noEmit` — type-check
 
 ## Project Rules
-- **Servers:** User manages servers. Don't restart unless connection error. FastAPI `--reload` handles changes.
 - **BFF:** Always use `lib/bff.ts` `proxyToFastAPI()`. Upstream FastAPI URLs need trailing slashes.
 - **SQLAlchemy:** After `db.flush()`, re-fetch with `selectinload` (never `db.refresh` — MissingGreenlet). Enums as VARCHAR (`native_enum=False`).
 - **DB:** Seed into `public` schema only. `clinic_sunview` unused (future v2/v3).

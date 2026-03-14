@@ -105,7 +105,7 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+            <CardTitle className="text-base font-semibold">
               {item.patientLastName}, {item.patientFirstName}
             </CardTitle>
             <div className="text-caption text-[var(--text-secondary)] mt-0.5">

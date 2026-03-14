@@ -22,7 +22,7 @@ Enable real insurance billing with payer management, patient insurance records, 
 - Admin + Owner roles only (matches staff management pattern)
 
 ### Patient Insurance Capture
-- New "Insurance" tab on the patient detail page (alongside Demographics, Encounters, Flowsheets)
+- New "Insurance" tab on the patient detail page (moves existing single-insurance card out of Demographics; full primary/secondary support replaces it)
 - Primary + secondary insurance slots (two records max)
 - Dedicated PatientInsurance DB table with FK to InsurancePayer (not JSONB)
 - **Plan type field:** Each insurance record has a Plan Type dropdown (Medical / Vision / Other) — powers the labeled payer selector on superbills
@@ -61,6 +61,15 @@ Enable real insurance billing with payer management, patient insurance records, 
 - Download button available from both billing dashboard row AND encounter superbill view
 - Downloading PDF does NOT auto-transition claim status — separate manual action for status changes
 - Superbill must be in "ready_to_bill" or later status to generate PDF
+
+### Patient Billing/Claims Tab
+- New "Billing" tab on the patient detail page (alongside Insurance, Demographics, Encounters, Flowsheets, Rx History)
+- Fetches superbills for this patient via a new `GET /api/patients/{id}/superbills` endpoint (Superbill already has `patient_id` FK)
+- Table view: Date | Status badge | E&M code | CPT codes | Total amount
+- Status badge colors: draft=gray, submitted=blue, accepted=green, rejected=red, paid=teal
+- Empty state: "No superbills on file"
+- New BFF route: `app/api/patients/[patientId]/superbills/route.ts`
+- New Pydantic schema `PatientSuperbillSummary` in `backend/schemas/billing.py` (id, encounter_id, encounter_date, claim_status, total_fee, mdm_level, suggested_em_code, cpt_codes list)
 
 ### Claim Status Tracking
 - Existing ClaimStatus enum already covers: draft → ready_to_bill → submitted → accepted → rejected
