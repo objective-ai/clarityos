@@ -3,10 +3,12 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import { useCurrentTenant, useCurrentUser } from "@/store/sessionStore";
+import { useCurrentUser } from "@/store/sessionStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useEncounterStore } from "@/store/encounterStore";
-import { useAppointmentStore, localDateISO } from "@/store/appointmentStore";
+import { useAppointmentStore } from "@/store/appointmentStore";
+import { clinicToday, formatClinicTime } from "@/lib/timezone";
+import type { AppointmentStatus } from "@/types/appointment";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -68,18 +70,24 @@ const BASE_ACTIONS = [
 ];
 
 
-function formatEncounterDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = d.toDateString() === yesterday.toDateString();
-
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  if (isToday) return `Today, ${time}`;
-  if (isYesterday) return `Yesterday, ${time}`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + `, ${time}`;
+function formatEncounterDate(iso: string, tz: string): string {
+  // encounter_date is a DATE-only field ("YYYY-MM-DD") — no time component.
+  // Parsing it with new Date() would yield UTC midnight, which shifts the
+  // displayed "time" by the clinic's UTC offset (e.g. 5:00 PM PDT). Instead,
+  // we compare the date string directly and show only relative date labels.
+  const today = clinicToday(tz);
+  const dateOnly = iso.slice(0, 10);
+  if (dateOnly === today) return "Today";
+  // Yesterday check
+  const d = new Date(today + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  const yesterday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (dateOnly === yesterday) return "Yesterday";
+  // Older: format as "Mar 13" using noon-anchored date to avoid UTC shift
+  return new Date(dateOnly + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function DashboardPage({
@@ -87,8 +95,7 @@ export default function DashboardPage({
 }: {
   params: { tenant: string };
 }) {
-  const { planName, requireRole } = useEntitlements();
-  const tenant = useCurrentTenant();
+  const { requireRole } = useEntitlements();
   const user = useCurrentUser();
   const isAdmin = requireRole("admin", "owner");
   const base = `/${params.tenant}`;
@@ -97,11 +104,12 @@ export default function DashboardPage({
   const encounters = useEncounterStore((s) => s.encounters);
   const appointments = useAppointmentStore((s) => s.appointments);
   const fetchAppointments = useAppointmentStore((s) => s.fetchAppointments);
+  const clinicTimezone = useAppointmentStore((s) => s.clinicTimezone);
 
   // Fetch today's appointments for "Next Patient" stat
   useEffect(() => {
-    fetchAppointments(localDateISO());
-  }, [fetchAppointments]);
+    fetchAppointments(clinicToday(clinicTimezone));
+  }, [fetchAppointments, clinicTimezone]);
 
   // Compute next upcoming patient
   const nextPatient = useMemo(() => {
@@ -114,9 +122,9 @@ export default function DashboardPage({
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     if (upcoming.length === 0) return null;
     const next = upcoming[0];
-    const time = new Date(next.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const time = formatClinicTime(next.startTime, clinicTimezone);
     return { name: next.patientName ?? "Patient", time };
-  }, [appointments]);
+  }, [appointments, clinicTimezone]);
 
   useEffect(() => {
     const firstName = (() => {
@@ -129,16 +137,16 @@ export default function DashboardPage({
   }, [user?.fullName, setSubtitle]);
 
   const stats = useMemo(() => {
-    const now = new Date();
-    const today = now.toDateString();
-    const todayEncounters = Object.values(encounters).filter(
-      (e) => new Date(e.encounterDate).toDateString() === today
-    );
-    const total = todayEncounters.length;
-    const finalized = todayEncounters.filter((e) => e.isFinalized).length;
+    // Map appointment status → encounter state.
+    // fetchAppointments already scopes to today, so no date filter needed here.
+    // "completed" included for legacy seed-data compatibility; live workflow skips it.
+    const ACTIVE: AppointmentStatus[] = ["in_pretest", "in_exam", "completed", "finalized"];
+    const active = appointments.filter((a) => ACTIVE.includes(a.status));
+    const total = active.length;
+    const finalized = active.filter((a) => a.status === "finalized").length;
     const pending = total - finalized;
     return { total, finalized, pending };
-  }, [encounters]);
+  }, [appointments]);
 
   const recentEncounters = useMemo(() => {
     const entries = Object.entries(encounters);
@@ -148,7 +156,7 @@ export default function DashboardPage({
         id,
         shortId: enc.shortId ?? id,
         name: enc.patientName ?? "Unknown Patient",
-        date: formatEncounterDate(enc.encounterDate),
+        date: formatEncounterDate(enc.encounterDate, clinicTimezone),
         status: enc.status,
       }))
       .sort((a, b) => {
@@ -194,7 +202,7 @@ export default function DashboardPage({
         <StatCard
           label="Next Patient"
           value={nextPatient?.name ?? "—"}
-          trend={nextPatient ? `at ${nextPatient.time}` : "No upcoming"}
+          trend={nextPatient ? `at ${nextPatient.time}` : "All done for today!"}
         />
       </div>
 
@@ -206,7 +214,7 @@ export default function DashboardPage({
           <div className="flex flex-col gap-3">
             {[...BASE_ACTIONS, isAdmin ? ADMIN_ACTION : INTAKE_ACTION].map((action) => (
               <Link
-                key={action.href}
+                key={action.title}
                 href={"absolute" in action && action.absolute ? action.href : `${base}/${action.href}`}
                 className="glass-card glass-card-hover p-4 flex items-center gap-4 no-underline"
               >
@@ -232,8 +240,8 @@ export default function DashboardPage({
           <CardContent>
             {recentEncounters.length === 0 ? (
               <div className="py-8 text-center text-[var(--text-muted)]">
-                <p className="text-sm">No encounters yet</p>
-                <p className="text-xs mt-1">Encounters will appear here once patients are seen</p>
+                <p className="text-sm">No encounters today</p>
+                <p className="text-xs mt-1">Start an exam from the schedule to see encounters here</p>
               </div>
             ) : (
               <div className="flex flex-col">

@@ -7,35 +7,14 @@ import { OpticalQueueCard } from "@/components/optical/OpticalQueueCard";
 import { RxPrintView } from "@/components/optical/RxPrintView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-// ---------------------------------------------------------------------------
-// Date navigation helpers
-// ---------------------------------------------------------------------------
-
-function formatDisplayDate(isoDate: string): string {
-  return new Date(isoDate + "T00:00:00").toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function addDays(isoDate: string, days: number): string {
-  const d = new Date(isoDate + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
-}
-
-function todayIso(): string {
-  return new Date().toISOString().split("T")[0];
-}
+import { formatDateLong, shiftDate, clinicToday, useClinicTimezone } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Page Component
 // ---------------------------------------------------------------------------
 
 export default function OpticalPage() {
+  const tz = useClinicTimezone();
   const items = useOpticalStore((s) => s.items);
   const total = useOpticalStore((s) => s.total);
   const queueDate = useOpticalStore((s) => s.queueDate);
@@ -58,8 +37,8 @@ export default function OpticalPage() {
 
   // Subtitle
   useEffect(() => {
-    const isToday = queueDate === todayIso();
-    setSubtitle(formatDisplayDate(queueDate) + (isToday ? " · Today" : ""));
+    const isToday = queueDate === clinicToday(tz);
+    setSubtitle(formatDateLong(queueDate) + (isToday ? " · Today" : ""));
     return () => setSubtitle(null);
   }, [queueDate, setSubtitle]);
 
@@ -68,8 +47,6 @@ export default function OpticalPage() {
     setDateInput(val);
     if (val) setQueueDate(val);
   };
-
-  const isToday = queueDate === todayIso();
 
   // Count items with Rx change alerts
   const alertCount = items.filter((i) => i.rxChangeAlert.hasChange).length;
@@ -111,7 +88,7 @@ export default function OpticalPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setQueueDate(addDays(queueDate, -1))}
+            onClick={() => setQueueDate(shiftDate(queueDate, -1))}
             title="Previous day"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -121,14 +98,14 @@ export default function OpticalPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setQueueDate(todayIso())}
+            onClick={() => setQueueDate(clinicToday(tz))}
           >
             Today
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setQueueDate(addDays(queueDate, 1))}
+            onClick={() => setQueueDate(shiftDate(queueDate, 1))}
             title="Next day"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -190,8 +167,10 @@ export default function OpticalPage() {
           </div>
           <div className="text-center">
             <p className="text-subhead">No patients in optical queue</p>
-            <p className="text-caption text-[var(--text-muted)] mt-1">
-              Patients appear here after their encounter is finalized with a final prescription.
+            <p className="text-caption text-[var(--text-muted)] mt-1 max-w-sm">
+              Patients appear here after their encounter is finalized and a refraction
+              is marked as the final Rx. If encounters are missing, check that
+              &quot;Use as Final Rx&quot; is enabled on a refraction.
             </p>
           </div>
         </div>
@@ -205,6 +184,77 @@ export default function OpticalPage() {
           ))}
         </div>
       )}
+
+      {/* Optical future features marketing banner */}
+      <div
+        className="relative overflow-hidden rounded-2xl flex items-center gap-6 px-6 py-5"
+        style={{
+          background: "var(--bg-glass)",
+          border: "1px solid var(--glass-border)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        {/* Left accent bar */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+          style={{ background: "linear-gradient(to bottom, #2DD4BF, #8B5CF6)" }}
+        />
+
+        {/* Radial glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(45,212,191,0.07) 0%, transparent 60%)" }}
+        />
+
+        {/* Decorative SVG — glasses + inventory illustration */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.12] pointer-events-none hidden sm:block">
+          <svg width="160" height="100" viewBox="0 0 160 100" fill="none">
+            {/* Eyeglasses */}
+            <circle cx="52" cy="42" r="22" stroke="var(--accent)" strokeWidth="1.6" />
+            <circle cx="108" cy="42" r="22" stroke="var(--accent)" strokeWidth="1.6" />
+            <path d="M74 42 Q80 36 86 42" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+            <line x1="2" y1="36" x2="30" y2="36" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" />
+            <line x1="130" y1="36" x2="158" y2="36" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" />
+            {/* Dot grid (inventory) */}
+            {[0,1,2].flatMap(row => [0,1,2].map(col => (
+              <circle key={`${row}-${col}`} cx={20 + col * 12} cy={74 + row * 8} r="1.5" fill="#8B5CF6" />
+            )))}
+            {/* Sync arc */}
+            <path d="M110 72 Q130 65 148 72" stroke="#8B5CF6" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+            <polyline points="145,68 148,72 144,75" stroke="#8B5CF6" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0 pl-2">
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
+            >
+              ⚡ COMING SOON
+            </span>
+          </div>
+          <p className="text-subhead mb-1">Optical inventory &amp; ordering — next</p>
+          <p className="text-caption text-[var(--text-muted)] mb-3 max-w-md">
+            Frame catalog management, lens ordering with supplier integration, and real-time inventory tracking.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {["Frame Catalog", "Lens Ordering", "Inventory Sync"].map((pill) => (
+              <span
+                key={pill}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
+                style={{ background: "var(--bg-elevated)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)" }}
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
+          <a href="#" className="text-xs font-semibold text-[var(--accent)] hover:underline underline-offset-2 transition-colors">
+            Join the waitlist →
+          </a>
+        </div>
+      </div>
 
       {/* Rx Print View modal */}
       <RxPrintView />

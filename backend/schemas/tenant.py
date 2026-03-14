@@ -9,8 +9,10 @@ from backend.schemas.common import AppBaseModel
 
 class TenantSettingsUpdate(AppBaseModel):
     timezone: str | None = None
+    ai_model: str | None = None
 
 
 class TenantSettingsResponse(AppBaseModel):
     name: str
     timezone: str
+    ai_model: str

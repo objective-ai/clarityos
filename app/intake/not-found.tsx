@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 /**
  * app/intake/not-found.tsx
  *

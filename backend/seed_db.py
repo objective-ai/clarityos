@@ -30,9 +30,12 @@ What this script provisions
 
 Run instructions
 ────────────────
-  cd backend/
-  python seed_db.py           # first-time seed
-  RESEED=true python seed_db.py  # wipe + reseed
+  npm run db:seed             # first-time seed (auto-loads .env)
+  npm run db:reseed           # wipe + reseed
+
+  Or directly from project root:
+  python backend/seed_db.py           # first-time seed
+  RESEED=true python backend/seed_db.py  # wipe + reseed
 """
 
 from __future__ import annotations
@@ -48,6 +51,13 @@ from decimal import Decimal
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
+
+# ── Auto-load .env (works from project root or backend/) ───────────────────
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _load_dotenv(os.path.join(_SCRIPT_DIR, "..", ".env"), override=False)
+except ImportError:
+    pass  # dotenv optional — env vars may already be set in shell
 
 # ── SQLAlchemy ─────────────────────────────────────────────────────────────
 from sqlalchemy import create_engine, text
@@ -158,8 +168,8 @@ PATIENT_IDS = [uuid.UUID(f"d0000000-0005-0000-0000-{str(i).zfill(12)}") for i in
 # Appointments (13)
 APPT_IDS = [uuid.UUID(f"a0000000-0006-0000-0000-{str(i).zfill(12)}") for i in range(1, 14)]
 
-# Encounters (7)
-ENC_IDS = [uuid.UUID(f"e0000000-0007-0000-0000-{str(i).zfill(12)}") for i in range(1, 8)]
+# Encounters (8)
+ENC_IDS = [uuid.UUID(f"e0000000-0007-0000-0000-{str(i).zfill(12)}") for i in range(1, 9)]
 
 # Superbills (3)
 SB_IDS = [uuid.UUID(f"50000000-0008-0000-0000-{str(i).zfill(12)}") for i in range(1, 4)]
@@ -170,8 +180,8 @@ IT_IDS = [uuid.UUID(f"10000000-0009-0000-0000-{str(i).zfill(12)}") for i in rang
 # Addon
 ADDON_ID = uuid.UUID("00000000-0007-0007-0007-000000000001")
 
-# Date constants (hardcoded for reproducibility)
-TODAY = datetime.date(2026, 3, 7)
+# Use today's actual date so schedule appointments always land on the current day
+TODAY = datetime.date.today()
 
 # Clinic timezone — seed times are specified in local clinic time and converted to UTC
 from zoneinfo import ZoneInfo
@@ -684,11 +694,11 @@ def _seed_appointments(session: Session) -> None:
              end_time=_dt(TODAY, 11), duration_minutes=30,
              chief_complaint="Contact lens refit — progressive astigmatism",
              intake_status="submitted"),
-        dict(id=APPT_IDS[8], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[6], provider_id=STAFF_DUY_ID,
-             booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
+        dict(id=APPT_IDS[8], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[1], provider_id=STAFF_DUY_ID,
+             booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
              status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 11),
-             end_time=_dt(TODAY, 11, 45), duration_minutes=45,
-             chief_complaint="Digital eye strain, headaches with screen use",
+             end_time=_dt(TODAY, 11, 30), duration_minutes=30,
+             chief_complaint="Contact lens dryness and discomfort — possible fit issue",
              intake_status="pending"),
         dict(id=APPT_IDS[9], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[9], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.PEDIATRIC_EXAM,
@@ -731,12 +741,13 @@ def _seed_appointments(session: Session) -> None:
 # ── Encounters ────────────────────────────────────────────────────────────
 
 def _seed_encounters(session: Session) -> None:
-    step("Seeding 7 Encounters")
+    step("Seeding 8 Encounters")
 
     _seed_enc_hargrove(session)
     _seed_enc_vasquez(session)
     _seed_enc_thornton_series(session)
     _seed_enc_thompson(session)
+    _seed_enc_david_kim_today(session)
     _seed_enc_donovan_today(session)
 
     session.flush()
@@ -747,7 +758,7 @@ def _seed_enc_hargrove(session: Session) -> None:
     if session.get(Encounter, ENC_IDS[0]):
         warn("Encounter 1 (Hargrove) exists — skipping"); return
 
-    enc_date = datetime.date(2026, 2, 20)
+    enc_date = TODAY  # Optical queue needs finalized encounters on TODAY
     session.add(Encounter(
         id=ENC_IDS[0], tenant_id=TENANT_ID,
         patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
@@ -799,15 +810,47 @@ def _seed_enc_hargrove(session: Session) -> None:
     session.add(ExamFindings(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[0], patient_id=PATIENT_IDS[0],
         exam_section="anterior_segment", is_normal_wnl=True,
-        findings_od={"lids": "Normal", "conjunctiva": "Clear", "cornea": "Clear", "lens": "Trace nuclear sclerosis"},
-        findings_os={"lids": "Normal", "conjunctiva": "Clear, trace injection", "cornea": "Clear", "lens": "Trace nuclear sclerosis"},
+        findings_od={
+            "lids_lashes": {"status": "Normal", "severity": None, "finding": ""},
+            "conjunctiva_sclera": {"status": "White & quiet", "severity": None, "finding": ""},
+            "cornea": {"status": "Clear", "severity": None, "finding": ""},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Trace nuclear sclerosis", "severity": "trace", "finding": "1+ NS"},
+            "tear_film": {"status": "Stable", "severity": None, "finding": ""},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
+        findings_os={
+            "lids_lashes": {"status": "Normal", "severity": None, "finding": ""},
+            "conjunctiva_sclera": {"status": "White & quiet", "severity": None, "finding": "Trace injection"},
+            "cornea": {"status": "Clear", "severity": None, "finding": ""},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Trace nuclear sclerosis", "severity": "trace", "finding": "1+ NS"},
+            "tear_film": {"status": "Stable", "severity": None, "finding": ""},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
         recorded_by_id=STAFF_SARAH_ID,
     ))
     session.add(ExamFindings(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[0], patient_id=PATIENT_IDS[0],
         exam_section="posterior_segment", is_normal_wnl=False,
-        findings_od={"disc": "0.40 CDR, sharp margins", "macula": "Flat, no exudates", "vessels": "Normal A/V ratio", "periphery": "Flat, no breaks"},
-        findings_os={"disc": "0.35 CDR, sharp margins", "macula": "Flat, no drusen", "vessels": "Normal, mild arterial reflex (HTN)", "periphery": "Flat, trace pigment clumping"},
+        findings_od={
+            "cup_to_disc_ratio": {"status": "0.40", "severity": None, "finding": "Sharp margins"},
+            "optic_nerve": {"status": "Healthy, pink", "severity": None, "finding": ""},
+            "macula": {"status": "Flat & intact", "severity": None, "finding": "No exudates"},
+            "vitreous": {"status": "Clear", "severity": None, "finding": ""},
+            "vessels": {"status": "Normal A/V ratio", "severity": None, "finding": ""},
+            "periphery": {"status": "Flat & intact", "severity": None, "finding": "No breaks"},
+        },
+        findings_os={
+            "cup_to_disc_ratio": {"status": "0.35", "severity": None, "finding": "Sharp margins"},
+            "optic_nerve": {"status": "Healthy, pink", "severity": None, "finding": ""},
+            "macula": {"status": "Flat & intact", "severity": None, "finding": "No drusen"},
+            "vitreous": {"status": "Clear", "severity": None, "finding": ""},
+            "vessels": {"status": "Normal A/V ratio", "severity": "mild", "finding": "Mild arterial reflex (HTN)"},
+            "periphery": {"status": "Flat & intact", "severity": None, "finding": "Trace pigment clumping"},
+        },
         provider_notes="No diabetic retinopathy detected (ETDRS level 10). Annual follow-up recommended.",
         recorded_by_id=STAFF_SARAH_ID,
     ))
@@ -833,7 +876,7 @@ def _seed_enc_vasquez(session: Session) -> None:
     if session.get(Encounter, ENC_IDS[1]):
         warn("Encounter 2 (Vasquez) exists — skipping"); return
 
-    enc_date = datetime.date(2026, 2, 21)
+    enc_date = TODAY  # Optical queue needs finalized encounters on TODAY
     session.add(Encounter(
         id=ENC_IDS[1], tenant_id=TENANT_ID,
         patient_id=PATIENT_IDS[1], provider_id=STAFF_SARAH_ID,
@@ -884,15 +927,47 @@ def _seed_enc_vasquez(session: Session) -> None:
     session.add(ExamFindings(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[1], patient_id=PATIENT_IDS[1],
         exam_section="anterior_segment", is_normal_wnl=False,
-        findings_od={"lids": "Mild MGD", "conjunctiva": "1+ papillae", "tear_film": "TBUT 4s", "cornea": "SPK inferior 1/3", "lens": "Clear"},
-        findings_os={"lids": "Mild MGD", "conjunctiva": "1+ papillae", "tear_film": "TBUT 4s", "cornea": "Trace SPK inferior", "lens": "Clear"},
+        findings_od={
+            "lids_lashes": {"status": "Mild MGD", "severity": "mild", "finding": "Meibomian gland dysfunction, reduced expressibility"},
+            "conjunctiva_sclera": {"status": "1+ papillae", "severity": "mild", "finding": "Papillary reaction"},
+            "cornea": {"status": "SPK inferior", "severity": "mild", "finding": "Punctate staining inferior 1/3 on NaFl"},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Clear", "severity": None, "finding": ""},
+            "tear_film": {"status": "Reduced TBUT", "severity": "moderate", "finding": "TBUT 4s OD"},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
+        findings_os={
+            "lids_lashes": {"status": "Mild MGD", "severity": "mild", "finding": "Meibomian gland dysfunction"},
+            "conjunctiva_sclera": {"status": "1+ papillae", "severity": "mild", "finding": "Papillary reaction"},
+            "cornea": {"status": "Trace SPK inferior", "severity": "trace", "finding": "Trace punctate staining inferior on NaFl"},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Clear", "severity": None, "finding": ""},
+            "tear_film": {"status": "Reduced TBUT", "severity": "moderate", "finding": "TBUT 4s OS"},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
         recorded_by_id=STAFF_SARAH_ID,
     ))
     session.add(ExamFindings(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[1], patient_id=PATIENT_IDS[1],
         exam_section="posterior_segment", is_normal_wnl=True,
-        findings_od={"disc": "0.35 CDR", "macula": "Flat", "vessels": "Normal"},
-        findings_os={"disc": "0.35 CDR", "macula": "Flat", "vessels": "Normal"},
+        findings_od={
+            "cup_to_disc_ratio": {"status": "0.35", "severity": None, "finding": ""},
+            "optic_nerve": {"status": "Healthy, pink", "severity": None, "finding": ""},
+            "macula": {"status": "Flat & intact", "severity": None, "finding": ""},
+            "vitreous": {"status": "Clear", "severity": None, "finding": ""},
+            "vessels": {"status": "Normal A/V ratio", "severity": None, "finding": ""},
+            "periphery": {"status": "Flat & intact", "severity": None, "finding": ""},
+        },
+        findings_os={
+            "cup_to_disc_ratio": {"status": "0.35", "severity": None, "finding": ""},
+            "optic_nerve": {"status": "Healthy, pink", "severity": None, "finding": ""},
+            "macula": {"status": "Flat & intact", "severity": None, "finding": ""},
+            "vitreous": {"status": "Clear", "severity": None, "finding": ""},
+            "vessels": {"status": "Normal A/V ratio", "severity": None, "finding": ""},
+            "periphery": {"status": "Flat & intact", "severity": None, "finding": ""},
+        },
         recorded_by_id=STAFF_SARAH_ID,
     ))
 
@@ -1128,15 +1203,47 @@ def _seed_enc_thompson(session: Session) -> None:
     session.add(ExamFindings(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[5], patient_id=PATIENT_IDS[7],
         exam_section="anterior_segment", is_normal_wnl=False,
-        findings_od={"IOL": "Clear posterior chamber IOL, well-centered", "cornea": "Clear", "AC": "Deep and quiet"},
-        findings_os={"lens": "2+ nuclear sclerosis, 1+ posterior subcapsular", "cornea": "Clear", "AC": "Deep and quiet"},
+        findings_od={
+            "lids_lashes": {"status": "Normal", "severity": None, "finding": ""},
+            "conjunctiva_sclera": {"status": "White & quiet", "severity": None, "finding": ""},
+            "cornea": {"status": "Clear", "severity": None, "finding": ""},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Pseudophakia", "severity": None, "finding": "Clear PCIOL, well-centered"},
+            "tear_film": {"status": "Stable", "severity": None, "finding": ""},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
+        findings_os={
+            "lids_lashes": {"status": "Normal", "severity": None, "finding": ""},
+            "conjunctiva_sclera": {"status": "White & quiet", "severity": None, "finding": ""},
+            "cornea": {"status": "Clear", "severity": None, "finding": ""},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "2+ nuclear sclerosis", "severity": "moderate", "finding": "2+ NS, 1+ posterior subcapsular cataract"},
+            "tear_film": {"status": "Stable", "severity": None, "finding": ""},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
         recorded_by_id=STAFF_DUY_ID,
     ))
     session.add(ExamFindings(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[5], patient_id=PATIENT_IDS[7],
         exam_section="posterior_segment", is_normal_wnl=False,
-        findings_od={"disc": "0.30 CDR", "macula": "Few small drusen, no hemorrhage", "vessels": "Mild arteriolar narrowing"},
-        findings_os={"disc": "0.30 CDR", "macula": "Moderate drusen, no wet changes", "vessels": "Mild arteriolar narrowing"},
+        findings_od={
+            "cup_to_disc_ratio": {"status": "0.30", "severity": None, "finding": ""},
+            "optic_nerve": {"status": "Healthy, pink", "severity": None, "finding": ""},
+            "macula": {"status": "Drusen present", "severity": "mild", "finding": "Few small drusen, no hemorrhage"},
+            "vitreous": {"status": "Clear", "severity": None, "finding": ""},
+            "vessels": {"status": "Mild arteriolar narrowing", "severity": "mild", "finding": ""},
+            "periphery": {"status": "Flat & intact", "severity": None, "finding": ""},
+        },
+        findings_os={
+            "cup_to_disc_ratio": {"status": "0.30", "severity": None, "finding": ""},
+            "optic_nerve": {"status": "Healthy, pink", "severity": None, "finding": ""},
+            "macula": {"status": "Moderate drusen", "severity": "moderate", "finding": "Moderate drusen, no wet changes"},
+            "vitreous": {"status": "Clear", "severity": None, "finding": ""},
+            "vessels": {"status": "Mild arteriolar narrowing", "severity": "mild", "finding": ""},
+            "periphery": {"status": "Flat & intact", "severity": None, "finding": ""},
+        },
         provider_notes="OCT macula: drusen stable. No subretinal fluid. Early dry AMD.",
         recorded_by_id=STAFF_DUY_ID,
     ))
@@ -1156,36 +1263,113 @@ def _seed_enc_thompson(session: Session) -> None:
     ok("Encounter 6 (Barbara Thompson) created")
 
 
-def _seed_enc_donovan_today(session: Session) -> None:
-    """E7: William Donovan — today's in-progress exam (vitals only)."""
+def _seed_enc_david_kim_today(session: Session) -> None:
+    """E7: David Kim — today's in-progress exam (digital eye strain, vitals + habitual Rx only)."""
     if session.get(Encounter, ENC_IDS[6]):
-        warn("Encounter 7 (Donovan) exists — skipping"); return
+        warn("Encounter 7 (David Kim) exists — skipping"); return
 
     session.add(Encounter(
         id=ENC_IDS[6], tenant_id=TENANT_ID,
-        patient_id=PATIENT_IDS[4], provider_id=STAFF_DUY_ID,
-        appointment_id=APPT_IDS[4], encounter_date=TODAY,
-        chief_complaint="Post-LASIK annual. Presbyopia worsening — reading glasses not strong enough.",
-        assessment_and_plan=None,  # In progress — doctor hasn't finished
+        patient_id=PATIENT_IDS[6], provider_id=STAFF_DUY_ID,
+        appointment_id=None,  # Walk-in — not in the public schedule
+        encounter_date=TODAY,
+        chief_complaint="Digital eye strain — headaches with screen use, blurry near vision after prolonged screen time.",
+        assessment_and_plan=None,  # In progress — doctor hasn't documented yet
         is_finalized=False,
     ))
     session.flush()
 
     session.add(VitalsAndPretest(
         id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[6],
-        iop_od=Decimal("13.0"), iop_os=Decimal("14.0"),
-        iop_time=_dt(TODAY, 9, 5), iop_method="icare",
-        ucva_od="20/20", ucva_os="20/25", bcva_od="20/20", bcva_os="20/20",
-        near_va_od="20/50", near_va_os="20/40",
-        blood_pressure="122/78", pulse=66,
+        iop_od=Decimal("15.0"), iop_os=Decimal("16.0"),
+        iop_time=_dt(TODAY, 11, 10), iop_method="icare",
+        ucva_od="20/25", ucva_os="20/25", bcva_od="20/20", bcva_os="20/20",
+        near_va_od="20/30", near_va_os="20/30",
+        blood_pressure="118/74", pulse=72,
         pupils_equal_round_reactive=True, relative_afferent_pupillary_defect=False,
-        cover_test_notes="Ortho.",
-        technician_notes="Post-LASIK OD+OS 2005. Distance VA excellent. Near reduced — needs reading Rx update.",
+        cover_test_notes="Ortho at distance and near.",
+        technician_notes="Screen use 8-10h/day. Reports reduced blink rate. Last Rx 2 years old. No current glasses worn.",
+        recorded_by_id=STAFF_MARCUS_ID,
+    ))
+
+    # Habitual and autorefraction captured by tech — manifest not done yet
+    for rt, sph_od, cyl_od, ax_od, sph_os, cyl_os, ax_os, va_od, va_os, notes in [
+        (RefractionType.HABITUAL, "-0.50", "-0.25", 180, "-0.50", "0.00", 180, "20/25", "20/25", "Old glasses — 2 years ago Rx."),
+        (RefractionType.AUTO, "-0.75", "-0.50", 178, "-0.75", "-0.25", 172, None, None, "Topcon KR-800 autorefractor."),
+    ]:
+        session.add(Refraction(
+            id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[6],
+            refraction_type=rt,
+            od_sphere=Decimal(sph_od), od_cylinder=Decimal(cyl_od), od_axis=ax_od,
+            od_visual_acuity=va_od,
+            os_sphere=Decimal(sph_os), os_cylinder=Decimal(cyl_os), os_axis=ax_os,
+            os_visual_acuity=va_os,
+            pd_distance=Decimal("62.0"), is_final_rx=False, notes=notes,
+            recorded_by_id=STAFF_MARCUS_ID,
+        ))
+
+    # Tech started anterior grid — dry eye suspected
+    session.add(ExamFindings(
+        id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[6], patient_id=PATIENT_IDS[6],
+        exam_section="anterior_segment", is_normal_wnl=False,
+        findings_od={
+            "lids_lashes": {"status": "Normal", "severity": None, "finding": ""},
+            "conjunctiva_sclera": {"status": "White & quiet", "severity": None, "finding": "Trace injection inferior"},
+            "cornea": {"status": "Clear", "severity": None, "finding": "Trace SPK inferior OD on NaFl"},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Clear", "severity": None, "finding": ""},
+            "tear_film": {"status": "Reduced TBUT", "severity": "mild", "finding": "TBUT ~7s OD"},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
+        findings_os={
+            "lids_lashes": {"status": "Normal", "severity": None, "finding": ""},
+            "conjunctiva_sclera": {"status": "White & quiet", "severity": None, "finding": "Trace injection inferior"},
+            "cornea": {"status": "Clear", "severity": None, "finding": "Trace SPK inferior OS on NaFl"},
+            "anterior_chamber": {"status": "Deep & quiet", "severity": None, "finding": ""},
+            "iris": {"status": "Flat, normal architecture", "severity": None, "finding": ""},
+            "lens": {"status": "Clear", "severity": None, "finding": ""},
+            "tear_film": {"status": "Reduced TBUT", "severity": "mild", "finding": "TBUT ~8s OS"},
+            "angles": {"status": "Open (Grade 4)", "severity": None, "finding": ""},
+        },
         recorded_by_id=STAFF_MARCUS_ID,
     ))
 
     session.flush()
-    ok("Encounter 7 (William Donovan — in progress) created")
+    ok("Encounter 7 (David Kim — in progress) created")
+
+
+def _seed_enc_donovan_today(session: Session) -> None:
+    """E8: William Donovan — post-LASIK annual, presbyopia worsening; in-exam today."""
+    if session.get(Encounter, ENC_IDS[7]):
+        warn("Encounter 8 (Donovan) exists — skipping"); return
+
+    session.add(Encounter(
+        id=ENC_IDS[7], tenant_id=TENANT_ID,
+        patient_id=PATIENT_IDS[4], provider_id=STAFF_DUY_ID,
+        appointment_id=APPT_IDS[4], encounter_date=TODAY,
+        is_finalized=False,
+    ))
+
+    # Pre-test vitals done — post-LASIK IOP typically normal-low
+    session.add(VitalsAndPretest(
+        id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[7],
+        iop_od=Decimal("13.0"), iop_os=Decimal("14.0"),
+        iop_time=_dt(TODAY, 9, 10), iop_method="icare",
+    ))
+
+    # Habitual Rx: plano post-LASIK with +1.50 reading add (no cylinder → axis NULL)
+    session.add(Refraction(
+        id=uuid.uuid4(), tenant_id=TENANT_ID, encounter_id=ENC_IDS[7],
+        refraction_type=RefractionType.HABITUAL,
+        od_sphere=Decimal("0.00"), od_cylinder=Decimal("0.00"), od_axis=None,
+        od_add=Decimal("1.50"), od_visual_acuity="20/20",
+        os_sphere=Decimal("0.00"), os_cylinder=Decimal("0.00"), os_axis=None,
+        os_add=Decimal("1.50"), os_visual_acuity="20/20",
+    ))
+
+    session.flush()
+    ok("Encounter 8 (Donovan — in progress) created")
 
 
 # ── Superbills ────────────────────────────────────────────────────────────
@@ -1389,7 +1573,7 @@ def main() -> None:
   ├── Staff             : 4  (Dr. Duy Tran, Dr. Sarah Lin, Marcus Webb, Emily Nguyen)
   ├── Patients          : 10 (diverse demographics)
   ├── Appointments      : 13 (3 past + 8 today + 2 next week)
-  ├── Encounters        : 7  (5 finalized + 1 in-progress + 1 glaucoma series)
+  ├── Encounters        : 8  (5 finalized + 2 in-progress + 1 glaucoma series)
   ├── Superbills        : 3  (with CPT line items)
   └── IntakeTokens      : 2  (pending)
 

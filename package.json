@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --cache --cache-location .eslintcache",
+    "lint": "next lint",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch --preserveWatchOutput",
     "test": "vitest run",
@@ -15,7 +15,9 @@
     "api:ensure": "bash scripts/dev.sh ensure-api",
     "api:restart": "bash scripts/dev.sh restart-api",
     "api:check": "bash scripts/dev.sh check-api",
-    "api:pre-test": "bash scripts/dev.sh pre-test"
+    "api:pre-test": "bash scripts/dev.sh pre-test",
+    "db:seed": "bash scripts/dev.sh seed",
+    "db:reseed": "bash scripts/dev.sh reseed"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -31,6 +33,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-idle-timer": "^5.7.2",
+    "recharts": "^2.15.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
     "zustand": "^4.5.4"

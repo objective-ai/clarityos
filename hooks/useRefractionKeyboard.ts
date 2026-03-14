@@ -50,10 +50,6 @@ import {
 } from "@/types/refraction";
 import {
   getFieldType,
-  incrementDiopter,
-  decrementDiopter,
-  incrementAxis,
-  decrementAxis,
   parseCellValue,
 } from "@/lib/rx-format";
 import { useRefractionStore } from "@/store/refractionStore";
@@ -61,16 +57,6 @@ import { useRefractionStore } from "@/store/refractionStore";
 // ---------------------------------------------------------------------------
 // DOM focus helper
 // ---------------------------------------------------------------------------
-
-function focusCell(colIndex: number, rowKey: RowKey): boolean {
-  const el = document.getElementById(cellId(colIndex, rowKey)) as HTMLInputElement | null;
-  if (!el) return false;
-  el.focus();
-  // Move cursor to end of value
-  const len = el.value.length;
-  try { el.setSelectionRange(len, len); } catch {}
-  return true;
-}
 
 function focusCellSelectAll(colIndex: number, rowKey: RowKey): boolean {
   const el = document.getElementById(cellId(colIndex, rowKey)) as HTMLInputElement | null;
@@ -138,7 +124,7 @@ function belowCoord(current: GridCoord): GridCoord {
 function clinicalEnterTarget(
   current: GridCoord,
   currentValue: string,
-  cylValue: number | null
+  _cylValue: number | null
 ): GridCoord | null {
   const { colIndex, rowKey } = current;
 
@@ -200,7 +186,12 @@ export function useRefractionKeyboard({
   onDecrement,
 }: UseRefractionKeyboardOptions) {
   const setFocused = useRefractionStore((s) => s.setFocusedCell);
-  const columns    = useRefractionStore((s) => s.columns);
+  const odCyl = useRefractionStore(
+    useCallback((s) => s.columns[colIndex]?.draft.od.cylinder ?? null, [colIndex])
+  );
+  const osCyl = useRefractionStore(
+    useCallback((s) => s.columns[colIndex]?.draft.os.cylinder ?? null, [colIndex])
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -226,10 +217,6 @@ export function useRefractionKeyboard({
         // ── Enter: clinical smart-advance ───────────────────────────────
         case "Enter": {
           e.preventDefault();
-          // Get the current column's cylinder value for smart-advance
-          const colState = columns[colIndex];
-          const odCyl = colState?.draft.od.cylinder ?? null;
-          const osCyl = colState?.draft.os.cylinder ?? null;
           const relevantCyl = rowKey.startsWith("od_") ? odCyl : osCyl;
 
           const smartTarget = clinicalEnterTarget(current, input.value, relevantCyl);
@@ -331,7 +318,7 @@ export function useRefractionKeyboard({
           break;
       }
     },
-    [colIndex, rowKey, onClear, onIncrement, onDecrement, setFocused, columns]
+    [colIndex, rowKey, onClear, onIncrement, onDecrement, setFocused, odCyl, osCyl]
   );
 
   return handleKeyDown;

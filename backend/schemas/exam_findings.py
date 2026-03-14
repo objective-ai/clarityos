@@ -38,7 +38,7 @@ class StructureFinding(AppBaseModel):
     )
     finding: str = Field(
         default="",
-        max_length=500,
+        max_length=2000,
         description="Detailed finding text or free-text notes",
     )
 

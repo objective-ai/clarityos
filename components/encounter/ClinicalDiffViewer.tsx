@@ -80,7 +80,7 @@ function formatValue(val: unknown): string {
 
 export function ClinicalDiffViewer({
   changes,
-  encounterId,
+  encounterId: _encounterId,
   onRevert,
   isReadOnly = false,
 }: ClinicalDiffViewerProps) {

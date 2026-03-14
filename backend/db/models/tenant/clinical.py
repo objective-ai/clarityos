@@ -138,8 +138,11 @@ class AuditAction(str, enum.Enum):
     CHECK_IN = "check_in"
     REVERT_CHECK_IN = "revert_check_in"
     START_EXAM = "start_exam"
+    START_EXAM_PHASE = "start_exam_phase"
+    REVERT_TO_PRETEST = "revert_to_pretest"
     CANCEL_APPOINTMENT = "cancel_appointment"
     RESCHEDULE = "reschedule"
+    NO_SHOW = "no_show"
     # Billing actions (added in Phase 4 — migration 0003_billing)
     CREATE_SUPERBILL = "create_superbill"
     UPDATE_SUPERBILL = "update_superbill"
@@ -788,6 +791,14 @@ class Diagnosis(TimestampMixin, SoftDeleteMixin, TenantBase):
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Optional link to PatientProblem (for syncing master problem list on encounter finalization)
+    problem_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("patient_problems.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

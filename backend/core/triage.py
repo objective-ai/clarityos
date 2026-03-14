@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 
+from backend.core.ai_models import DEFAULT_AI_MODEL
 from backend.core.config import settings
 
 logger = logging.getLogger("clarityos.triage")
@@ -39,6 +40,7 @@ contact lens fitting, glasses prescription update
 async def triage_chief_complaint(
     chief_complaint: str,
     review_of_systems: dict | None = None,
+    ai_model: str = DEFAULT_AI_MODEL,
 ) -> dict:
     """
     Classify a chief complaint using Claude.
@@ -70,7 +72,7 @@ async def triage_chief_complaint(
 
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         response = await client.messages.create(
-            model="claude-sonnet-4-6-20250514",
+            model=ai_model,
             max_tokens=300,
             system=TRIAGE_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],

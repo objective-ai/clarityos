@@ -68,11 +68,13 @@ export function VitalsForm({ encounterId }: VitalsFormProps) {
 
   const draft = vitalsState?.draft;
   const saveStatus = vitalsState?.saveStatus ?? "idle";
-  const errors = vitalsState?.errors ?? [];
 
   const getError = useCallback(
-    (field: string) => errors.find((e) => e.field === field)?.message,
-    [errors]
+    (field: string) => {
+      const errors = vitalsState?.errors ?? [];
+      return errors.find((e) => e.field === field)?.message;
+    },
+    [vitalsState?.errors]
   );
 
   const handleChange = useCallback(

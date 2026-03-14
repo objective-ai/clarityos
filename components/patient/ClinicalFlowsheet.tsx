@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePatientStore } from "@/store/patientStore";
-import type { FlowsheetRow } from "@/types/patient";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -94,10 +94,7 @@ export function ClinicalFlowsheet({ patientId }: ClinicalFlowsheetProps) {
         </thead>
         <tbody>
           {flowsheet.map((row, idx) => {
-            const dateStr = new Date(row.encounterDate).toLocaleDateString(
-              "en-US",
-              { year: "2-digit", month: "short", day: "numeric" }
-            );
+            const dateStr = formatClinicDate(row.encounterDate);
             return (
               <tr
                 key={row.encounterId}

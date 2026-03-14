@@ -28,6 +28,25 @@ import type {
 } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Coerce Decimal strings from backend into numbers.
+ * FastAPI returns Decimal as string; this normalizes them for frontend use.
+ */
+function normalizeSuperBill(superbill: Superbill): Superbill {
+  return {
+    ...superbill,
+    totalFee: Number(superbill.totalFee) || 0,
+    lineItems: (superbill.lineItems ?? []).map((li) => ({
+      ...li,
+      fee: Number(li.fee) || 0,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
 
@@ -123,15 +142,26 @@ export const useBillingStore = create<BillingStore>()(
         );
 
         try {
-          const superbill = await apiFetch<Superbill>(
+          // 204 = no superbill created yet; apiFetch returns null in that case
+          const rawSuperbill = await apiFetch<Superbill | null>(
             `/api/encounters/${encounterId}/superbill`,
           );
 
-          // Backend returns Decimal as string — coerce to number
-          superbill.totalFee = Number(superbill.totalFee) || 0;
-          for (const li of superbill.lineItems ?? []) {
-            li.fee = Number(li.fee) || 0;
+          if (rawSuperbill === null) {
+            set(
+              {
+                encounters: {
+                  ...get().encounters,
+                  [encounterId]: { ...defaultSlice, loadStatus: "loaded" },
+                },
+              },
+              false,
+              "loadSuperbill/empty",
+            );
+            return;
           }
+
+          const superbill = normalizeSuperBill(rawSuperbill);
 
           set(
             {
@@ -160,23 +190,33 @@ export const useBillingStore = create<BillingStore>()(
             "loadSuperbill/success",
           );
         } catch (err) {
-          // 404 is expected when no superbill exists yet
-          const isNotFound =
-            err instanceof Error && err.message.includes("not found");
-
+          // 404 means no superbill exists yet — treat same as 204 so auto-create can proceed
+          if ((err as { status?: number }).status === 404) {
+            set(
+              {
+                encounters: {
+                  ...get().encounters,
+                  [encounterId]: { ...defaultSlice, loadStatus: "loaded" },
+                },
+              },
+              false,
+              "loadSuperbill/empty",
+            );
+            return;
+          }
           set(
             {
               encounters: {
                 ...get().encounters,
                 [encounterId]: {
                   ...defaultSlice,
-                  loadStatus: isNotFound ? "loaded" : "error",
-                  error: isNotFound ? null : (err instanceof Error ? err.message : "Failed to load superbill"),
+                  loadStatus: "error",
+                  error: err instanceof Error ? err.message : "Failed to load superbill",
                 },
               },
             },
             false,
-            "loadSuperbill/done",
+            "loadSuperbill/error",
           );
         }
       },
@@ -197,19 +237,14 @@ export const useBillingStore = create<BillingStore>()(
         );
 
         try {
-          const superbill = await apiFetch<Superbill>(
+          const rawSuperbill = await apiFetch<Superbill>(
             `/api/encounters/${encounterId}/superbill`,
             {
               method: "POST",
               body: JSON.stringify(payload),
             },
           );
-
-          // Backend returns Decimal as string — coerce to number
-          superbill.totalFee = Number(superbill.totalFee) || 0;
-          for (const li of superbill.lineItems ?? []) {
-            li.fee = Number(li.fee) || 0;
-          }
+          const superbill = normalizeSuperBill(rawSuperbill);
 
           set(
             {

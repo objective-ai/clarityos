@@ -68,12 +68,17 @@ const config: Config = {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(45, 212, 191, 0.4)" },
           "50%": { boxShadow: "0 0 0 6px rgba(45, 212, 191, 0)" },
         },
+        "fade-out": {
+          from: { opacity: "1", transform: "scale(1)" },
+          to: { opacity: "0", transform: "scale(0.98)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in-up": "fade-in-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "fade-out": "fade-out 200ms ease both",
       },
     },
   },

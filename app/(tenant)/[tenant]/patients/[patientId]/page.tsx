@@ -12,6 +12,7 @@ import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import dynamic from "next/dynamic";
 import { usePatientStore } from "@/store/patientStore";
 import type { PatientDetail, PatientUpdatePayload } from "@/types/patient";
+import { formatClinicDate } from "@/lib/timezone";
 
 const EncounterTimeline = dynamic(
   () => import("@/components/patient/EncounterTimeline").then((m) => ({ default: m.EncounterTimeline })),
@@ -60,15 +61,20 @@ function useEditableSection<T extends Record<string, unknown>>(
   const [saving, setSaving] = useState(false);
   const updatePatient = usePatientStore((s) => s.updatePatient);
 
+  // Stable serialized key so useEffect doesn't loop on object identity
+  const valuesKey = JSON.stringify(initialValues);
+
   // Sync draft when patient data changes externally
   useEffect(() => {
     if (!editing) setDraft(initialValues);
-  }, [initialValues, editing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valuesKey, editing]);
 
   const startEdit = useCallback(() => {
     setDraft(initialValues);
     setEditing(true);
-  }, [initialValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valuesKey]);
 
   const cancel = useCallback(() => setEditing(false), []);
 
@@ -535,11 +541,7 @@ export default function PatientDetailPage() {
   }
 
   const age = calculateAge(patient.dob);
-  const dobFormatted = new Date(patient.dob).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const dobFormatted = formatClinicDate(patient.dob);
 
   return (
     <div className="flex flex-col gap-6 stagger">

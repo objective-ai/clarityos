@@ -6,64 +6,14 @@
  * Dual-stream protocol:
  *   1. SOAP narrative text streams visibly to the UI
  *   2. After ___JSON_START___ delimiter, JSON is silently buffered
- *   3. On "done", JSON is parsed → structuredData ready for Accept
+ *   3. On "done", JSON is parsed → structuredDataV2 ready for review
  *
  * Falls back to mock streaming when backend is unreachable (Vercel / no backend).
  */
 
 import { useCallback, useRef, useState } from "react";
-
-// ---------------------------------------------------------------------------
-// Structured data shape from Claude's JSON output
-// ---------------------------------------------------------------------------
-
-export interface ScribeVitals {
-  iop_od?: number | null;
-  iop_os?: number | null;
-  va_od_distance?: string | null;
-  va_os_distance?: string | null;
-  va_od_near?: string | null;
-  va_os_near?: string | null;
-  bp_systolic?: number | null;
-  bp_diastolic?: number | null;
-  pupils_od?: string | null;
-  pupils_os?: string | null;
-}
-
-export interface ScribeStructureFinding {
-  status: "normal" | "abnormal";
-  notes?: string;
-}
-
-export interface ScribeExamFindings {
-  anterior?: {
-    OD?: Record<string, ScribeStructureFinding>;
-    OS?: Record<string, ScribeStructureFinding>;
-  };
-  posterior?: {
-    OD?: Record<string, ScribeStructureFinding>;
-    OS?: Record<string, ScribeStructureFinding>;
-  };
-}
-
-export interface ScribeDiagnosis {
-  icdCode: string;
-  description: string;
-  laterality?: "OD" | "OS" | "OU";
-}
-
-export interface ScribeRefraction {
-  OD?: { sphere?: string; cylinder?: string; axis?: string; add?: string };
-  OS?: { sphere?: string; cylinder?: string; axis?: string; add?: string };
-}
-
-export interface ScribeStructuredData {
-  chief_complaint?: string;
-  vitals?: ScribeVitals;
-  exam_findings?: ScribeExamFindings;
-  diagnoses?: ScribeDiagnosis[];
-  refraction?: ScribeRefraction;
-}
+import type { ScribeStructuredDataV2 } from "@/types/scribe";
+import { normalizeScribeData } from "@/lib/scribe-normalizer";
 
 // ---------------------------------------------------------------------------
 // Hook return type
@@ -72,7 +22,7 @@ export interface ScribeStructuredData {
 export interface UseAiScribeReturn {
   generate: (transcript: string) => void;
   soapText: string;
-  structuredData: ScribeStructuredData | null;
+  structuredDataV2: ScribeStructuredDataV2 | null;
   isStreaming: boolean;
   isDone: boolean;
   error: string | null;
@@ -86,10 +36,10 @@ export interface UseAiScribeReturn {
 const JSON_DELIMITER = "___JSON_START___";
 
 // ---------------------------------------------------------------------------
-// Mock fallback — generates realistic dual output from a transcript
+// Mock fallback — generates realistic V2 dual output from a transcript
 // ---------------------------------------------------------------------------
 
-function buildMockResponse(transcript: string): string {
+function buildMockResponse(): string {
   const soap = `SUBJECTIVE:
 Pt presents for comprehensive eye exam. Pt reports gradual onset of blurry distance vision over the past several months, worse at night. No ocular pain, flashes, or floaters reported.
 
@@ -110,62 +60,70 @@ PLAN:
 2. Recommend OCT optic nerve and visual fields for IOP evaluation.
 3. Return in 6 months for IOP recheck and comprehensive exam.`;
 
-  const structuredJson: ScribeStructuredData = {
-    chief_complaint: "Blurry distance vision",
+  const structuredJson: ScribeStructuredDataV2 = {
+    chief_complaint: { value: "Blurry distance vision", confidence: "high" },
+    assessment_and_plan: {
+      value: "1. Myopia, bilateral — updated spectacle Rx dispensed.\n2. Presbyopia — Add +2.00 OU.\n3. Elevated IOP OD, glaucoma suspect — order OCT optic nerve + VF. RTC 6 months.",
+      confidence: "high",
+    },
     vitals: {
-      iop_od: 23,
-      iop_os: 18,
-      va_od_distance: "20/200",
-      va_os_distance: "20/100",
-      bp_systolic: null,
-      bp_diastolic: null,
+      iop_od: { value: 23, confidence: "high" },
+      iop_os: { value: 18, confidence: "high" },
+      va_od_distance: { value: "20/200", confidence: "high" },
+      va_os_distance: { value: "20/100", confidence: "high" },
+      va_od_near: { value: null, confidence: "high" },
+      va_os_near: { value: null, confidence: "high" },
+      bp_systolic: { value: null, confidence: "high" },
+      bp_diastolic: { value: null, confidence: "high" },
+      pupils_od: { value: null, confidence: "high" },
+      pupils_os: { value: null, confidence: "high" },
     },
     exam_findings: {
       anterior: {
         OD: {
-          lids_lashes: { status: "normal", notes: "" },
-          cornea: { status: "normal", notes: "" },
-          anterior_chamber: { status: "normal", notes: "Deep and quiet" },
-          lens: { status: "abnormal", notes: "Trace nuclear sclerosis" },
+          lids_lashes: { status: "normal", notes: "", confidence: "high" },
+          cornea: { status: "normal", notes: "", confidence: "high" },
+          anterior_chamber: { status: "normal", notes: "Deep and quiet", confidence: "high" },
+          lens: { status: "abnormal", notes: "Trace nuclear sclerosis", confidence: "high" },
         },
         OS: {
-          lids_lashes: { status: "normal", notes: "" },
-          cornea: { status: "normal", notes: "" },
-          anterior_chamber: { status: "normal", notes: "Deep and quiet" },
-          lens: { status: "abnormal", notes: "Trace nuclear sclerosis" },
+          lids_lashes: { status: "normal", notes: "", confidence: "high" },
+          cornea: { status: "normal", notes: "", confidence: "high" },
+          anterior_chamber: { status: "normal", notes: "Deep and quiet", confidence: "high" },
+          lens: { status: "abnormal", notes: "Trace nuclear sclerosis", confidence: "high" },
         },
       },
       posterior: {
         OD: {
-          cup_to_disc_ratio: { status: "normal", notes: "0.3" },
-          macula: { status: "normal", notes: "Flat and clear" },
-          vessels: { status: "normal", notes: "Normal caliber" },
-          periphery: { status: "normal", notes: "Flat and intact" },
+          cup_to_disc_ratio: { status: "normal", notes: "0.3", confidence: "high" },
+          macula: { status: "normal", notes: "Flat and clear", confidence: "high" },
+          vessels: { status: "normal", notes: "Normal caliber", confidence: "high" },
+          periphery: { status: "normal", notes: "Flat and intact", confidence: "high" },
         },
         OS: {
-          cup_to_disc_ratio: { status: "normal", notes: "0.3" },
-          macula: { status: "normal", notes: "Flat and clear" },
-          vessels: { status: "normal", notes: "Normal caliber" },
-          periphery: { status: "normal", notes: "Flat and intact" },
+          cup_to_disc_ratio: { status: "normal", notes: "0.3", confidence: "high" },
+          macula: { status: "normal", notes: "Flat and clear", confidence: "high" },
+          vessels: { status: "normal", notes: "Normal caliber", confidence: "high" },
+          periphery: { status: "normal", notes: "Flat and intact", confidence: "high" },
         },
       },
     },
     diagnoses: [
-      { icdCode: "H52.13", description: "Myopia, bilateral", laterality: "OU" },
-      { icdCode: "H52.4", description: "Presbyopia", laterality: "OU" },
-      { icdCode: "H40.001", description: "Glaucoma suspect, unspecified eye", laterality: "OD" },
+      { icdCode: "H52.13", description: "Myopia, bilateral", laterality: "OU", confidence: "high" },
+      { icdCode: "H52.4", description: "Presbyopia", laterality: "OU", confidence: "high" },
+      { icdCode: "H40.001", description: "Glaucoma suspect, unspecified eye", laterality: "OD", confidence: "medium" },
     ],
     refraction: {
-      OD: { sphere: "-2.00", cylinder: "-0.75", axis: "180", add: "+2.00" },
-      OS: { sphere: "-1.75", cylinder: "-0.50", axis: "175", add: "+2.00" },
+      OD: { sphere: "-2.00", cylinder: "-0.75", axis: "180", add: "+2.00", confidence: "low" },
+      OS: { sphere: "-1.75", cylinder: "-0.50", axis: "175", add: "+2.00", confidence: "low" },
     },
   };
 
   return soap + "\n\n" + JSON_DELIMITER + "\n" + JSON.stringify(structuredJson, null, 2);
 }
 
-async function* mockStream(transcript: string): AsyncGenerator<string> {
-  const fullText = buildMockResponse(transcript);
+async function* mockStream(): AsyncGenerator<string> {
+  const fullText = buildMockResponse();
   const words = fullText.split(/(\s+)/);
   for (const word of words) {
     yield word;
@@ -179,7 +137,7 @@ async function* mockStream(transcript: string): AsyncGenerator<string> {
 
 export function useAiScribe(encounterId: string): UseAiScribeReturn {
   const [soapText, setSoapText] = useState("");
-  const [structuredData, setStructuredData] = useState<ScribeStructuredData | null>(null);
+  const [structuredDataV2, setStructuredDataV2] = useState<ScribeStructuredDataV2 | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDone, setIsDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -188,10 +146,22 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setSoapText("");
-    setStructuredData(null);
+    setStructuredDataV2(null);
     setIsStreaming(false);
     setIsDone(false);
     setError(null);
+  }, []);
+
+  const handleParsedJson = useCallback((jsonStr: string) => {
+    try {
+      // Strip markdown code fences if Claude wraps JSON in ```json ... ```
+      const cleaned = jsonStr.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+      const parsed = JSON.parse(cleaned) as ScribeStructuredDataV2;
+      setStructuredDataV2(normalizeScribeData(parsed));
+    } catch (e) {
+      console.error("AI Scribe JSON parse error:", e);
+      setError("AI output was malformed. SOAP note is available but auto-fill data could not be parsed.");
+    }
   }, []);
 
   const generate = useCallback(
@@ -224,32 +194,43 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
 
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
+          let lineBuffer = ""; // Buffer incomplete SSE lines across chunks
 
           while (true) {
             const { done: readerDone, value } = await reader.read();
             if (readerDone) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
+            lineBuffer += chunk;
+            const parts = lineBuffer.split("\n");
+            lineBuffer = parts.pop() ?? ""; // Keep incomplete last line in buffer
 
-            for (const line of lines) {
+            for (const line of parts) {
               if (!line.startsWith("data: ")) continue;
-              const data = JSON.parse(line.slice(6));
+
+              let data: Record<string, unknown>;
+              try {
+                data = JSON.parse(line.slice(6));
+              } catch {
+                continue; // Skip malformed SSE lines instead of crashing
+              }
 
               if (data.error) {
-                setError(data.error);
+                setError(data.error as string);
                 setIsStreaming(false);
                 return;
               }
 
               if (data.done) {
-                // Parse JSON from buffer
                 if (jsonBuffer.trim()) {
-                  try {
-                    setStructuredData(JSON.parse(jsonBuffer));
-                  } catch (e) {
-                    console.error("AI Scribe JSON parse error:", e);
-                    setError("AI output was malformed. SOAP note is available but auto-fill data could not be parsed.");
+                  handleParsedJson(jsonBuffer);
+                } else {
+                  // Fallback: extract JSON object from tail of fullBuffer
+                  const lastBrace = fullBuffer.lastIndexOf("}");
+                  const searchStart = Math.max(0, fullBuffer.length - 4000);
+                  const firstBrace = fullBuffer.indexOf("{", searchStart);
+                  if (lastBrace > firstBrace && firstBrace !== -1) {
+                    handleParsedJson(fullBuffer.slice(firstBrace, lastBrace + 1));
                   }
                 }
                 setIsStreaming(false);
@@ -258,7 +239,7 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
               }
 
               if (data.text) {
-                fullBuffer += data.text;
+                fullBuffer += data.text as string;
 
                 // Check for delimiter
                 if (!delimiterFound && fullBuffer.includes(JSON_DELIMITER)) {
@@ -267,7 +248,7 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
                   setSoapText(soapPart.trim());
                   jsonBuffer = jsonPart ?? "";
                 } else if (delimiterFound) {
-                  jsonBuffer += data.text;
+                  jsonBuffer += data.text as string;
                 } else {
                   setSoapText(fullBuffer);
                 }
@@ -280,7 +261,7 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
           delimiterFound = false;
           jsonBuffer = "";
 
-          for await (const word of mockStream(transcript)) {
+          for await (const word of mockStream()) {
             if (controller.signal.aborted) return;
 
             fullBuffer += word;
@@ -299,11 +280,14 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
 
           // Parse the mock JSON
           if (jsonBuffer.trim()) {
-            try {
-              setStructuredData(JSON.parse(jsonBuffer));
-            } catch (e) {
-              console.error("AI Scribe JSON parse error (mock):", e);
-              setError("AI output was malformed. SOAP note is available but auto-fill data could not be parsed.");
+            handleParsedJson(jsonBuffer);
+          } else {
+            // Fallback: extract JSON object from tail of fullBuffer
+            const lastBrace = fullBuffer.lastIndexOf("}");
+            const searchStart = Math.max(0, fullBuffer.length - 4000);
+            const firstBrace = fullBuffer.indexOf("{", searchStart);
+            if (lastBrace > firstBrace && firstBrace !== -1) {
+              handleParsedJson(fullBuffer.slice(firstBrace, lastBrace + 1));
             }
           }
         }
@@ -314,8 +298,8 @@ export function useAiScribe(encounterId: string): UseAiScribeReturn {
         }
       })();
     },
-    [encounterId, reset],
+    [encounterId, reset, handleParsedJson],
   );
 
-  return { generate, soapText, structuredData, isStreaming, isDone, error, reset };
+  return { generate, soapText, structuredDataV2, isStreaming, isDone, error, reset };
 }

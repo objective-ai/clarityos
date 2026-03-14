@@ -11,6 +11,8 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { apiFetch } from "@/lib/api-client";
+import { clinicToday } from "@/lib/timezone";
+import { useAppointmentStore } from "@/store/appointmentStore";
 import type {
   OpticalQueueItem,
   OpticalQueueResponse,
@@ -60,7 +62,7 @@ export const useOpticalStore = create<OpticalState>()(
     (set, get) => ({
       items: [],
       total: 0,
-      queueDate: new Date().toISOString().split("T")[0],
+      queueDate: clinicToday(useAppointmentStore.getState().clinicTimezone),
       isLoading: false,
       error: null,
       rxPdfData: null,

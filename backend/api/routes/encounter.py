@@ -41,7 +41,7 @@ from backend.schemas.encounter import (
     ExamFindingsResponse,
     VitalsResponse,
 )
-from backend.schemas.refraction import RefractionSummary
+from backend.schemas.refraction import RefractionResponse
 
 router = APIRouter()
 
@@ -138,18 +138,7 @@ def _build_encounter_response(enc: Encounter) -> EncounterResponse:
         is_deleted=enc.is_deleted,
         vitals=vitals_resp,
         refractions=[
-            RefractionSummary(
-                id=rx.id,
-                refraction_type=rx.refraction_type,
-                is_final_rx=rx.is_final_rx,
-                od_sphere=rx.od_sphere,
-                od_cylinder=rx.od_cylinder,
-                od_axis=rx.od_axis,
-                os_sphere=rx.os_sphere,
-                os_cylinder=rx.os_cylinder,
-                os_axis=rx.os_axis,
-                created_at=rx.created_at,
-            )
+            RefractionResponse.from_orm_model(rx)
             for rx in enc.refractions
         ],
         diagnoses=[
@@ -398,26 +387,16 @@ async def finalize_encounter(
     )
 
     # ── Post-finalization: sync diagnoses back to master problem list ──
-    # If a promoted diagnosis was marked "Resolved" in the encounter,
-    # update the corresponding PatientProblem.
+    # If a diagnosis linked to a PatientProblem is marked "Resolved" in the encounter,
+    # update the corresponding PatientProblem status.
     for dx in enc.diagnoses:
-        if dx.is_deleted:
-            continue
-        if not dx.notes or "problem_id:" not in dx.notes:
-            continue
-        # Extract problem_id from notes
-        try:
-            pid_str = dx.notes.split("problem_id:")[1].strip().rstrip(")")
-            from uuid import UUID as _UUID
-
-            problem_id = _UUID(pid_str)
-        except (IndexError, ValueError):
+        if dx.is_deleted or not dx.problem_id:
             continue
 
         problem = (
             await db.execute(
                 select(PatientProblem).where(
-                    PatientProblem.id == problem_id,
+                    PatientProblem.id == dx.problem_id,
                     PatientProblem.tenant_id == ctx.tenant_id,
                     PatientProblem.is_deleted == False,  # noqa: E712
                 )
@@ -430,6 +409,40 @@ async def finalize_encounter(
         if dx.status and dx.status.lower() == "resolved":
             problem.status = "resolved"
             problem.resolved_date = enc.encounter_date
+
+    # ── Post-finalization: promote new diagnoses to master problem list ──
+    # For diagnoses not yet linked to a problem, create one (or link to existing).
+    for dx in enc.diagnoses:
+        if dx.is_deleted or dx.problem_id:
+            continue
+
+        existing = (
+            await db.execute(
+                select(PatientProblem).where(
+                    PatientProblem.patient_id == enc.patient_id,
+                    PatientProblem.tenant_id == ctx.tenant_id,
+                    PatientProblem.icd10_code == dx.icd10_code,
+                    PatientProblem.is_deleted == False,  # noqa: E712
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            dx.problem_id = existing.id
+        else:
+            new_problem = PatientProblem(
+                tenant_id=ctx.tenant_id,
+                patient_id=enc.patient_id,
+                icd10_code=dx.icd10_code,
+                description=dx.description,
+                eye_affected=dx.eye_affected,
+                severity=dx.severity,
+                status="active",
+                source_encounter_id=enc.id,
+            )
+            db.add(new_problem)
+            await db.flush()
+            dx.problem_id = new_problem.id
 
     await db.flush()
     enc = await _refetch_encounter(db, enc.id)

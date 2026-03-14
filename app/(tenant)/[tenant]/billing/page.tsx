@@ -3,15 +3,24 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Download } from "lucide-react";
+import { Download, MoreHorizontal, ChevronRight, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useBillingDashboardStore } from "@/store/billingDashboardStore";
 import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
-// Status badge styling
+// Status badge styling + descriptions
 // ---------------------------------------------------------------------------
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
@@ -22,15 +31,75 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; 
   rejected:      { bg: "rgba(251,113,133,0.10)", text: "#FB7185", border: "rgba(251,113,133,0.25)", label: "Rejected" },
 };
 
+const STATUS_DESCRIPTIONS: Record<string, string> = {
+  draft:         "Superbill created but not yet reviewed or posted",
+  ready_to_bill: "Posted to billing — ready for claim submission",
+  submitted:     "Claim submitted to insurance/payer",
+  accepted:      "Claim accepted and payment received or approved",
+  rejected:      "Claim rejected — review and resubmit or appeal",
+};
+
 function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
   return (
     <Badge
       className="text-[10px]"
       style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}` }}
+      title={STATUS_DESCRIPTIONS[status] ?? ""}
     >
       {style.label}
     </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Status action transitions
+// ---------------------------------------------------------------------------
+
+const NEXT_ACTIONS: Record<ClaimStatus, { label: string; value: ClaimStatus }[]> = {
+  draft:         [{ label: "Mark Ready to Bill", value: "ready_to_bill" }],
+  ready_to_bill: [{ label: "Mark Submitted", value: "submitted" }],
+  submitted:     [
+    { label: "Mark Accepted", value: "accepted" },
+    { label: "Mark Rejected", value: "rejected" },
+  ],
+  accepted:      [],
+  rejected:      [{ label: "Resubmit", value: "submitted" }],
+};
+
+function StatusActionsMenu({ encounterId, currentStatus }: { encounterId: string; currentStatus: ClaimStatus }) {
+  const updateClaimStatus = useBillingDashboardStore((s) => s.updateClaimStatus);
+  const actions = NEXT_ACTIONS[currentStatus] ?? [];
+
+  if (actions.length === 0) return <span className="inline-block w-[26px]" />;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="p-1.5 rounded-md hover:bg-[var(--accent-dim)] transition-colors"
+          title="Status actions"
+        >
+          <MoreHorizontal size={14} className="text-[var(--text-muted)]" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[180px]">
+        <DropdownMenuLabel className="text-[10px] uppercase text-[var(--text-muted)]">
+          Change Status
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {actions.map((action) => (
+          <DropdownMenuItem
+            key={action.value}
+            onClick={() => updateClaimStatus(encounterId, action.value)}
+            className="text-xs cursor-pointer"
+          >
+            <ChevronRight size={12} className="mr-1.5 text-[var(--accent)]" />
+            {action.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -42,6 +111,9 @@ const FILTERS: { label: string; value: ClaimStatus | "all" }[] = [
   { label: "All", value: "all" },
   { label: "Draft", value: "draft" },
   { label: "Posted", value: "ready_to_bill" },
+  { label: "Submitted", value: "submitted" },
+  { label: "Accepted", value: "accepted" },
+  { label: "Rejected", value: "rejected" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -53,7 +125,7 @@ function downloadCsv(superbills: SuperbillListItem[]) {
   const header = "Date,Patient,Provider,CPT Codes,Total Fee,Status";
   const rows = posted.map((sb) =>
     [
-      new Date(sb.createdAt).toLocaleDateString(),
+      formatClinicDate(sb.createdAt),
       `"${sb.patientName}"`,
       `"${sb.providerName}"`,
       `"${sb.cptCodes.join(", ")}"`,
@@ -113,11 +185,7 @@ export default function BillingPage() {
   }
 
   function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+    return formatClinicDate(dateStr);
   }
 
   return (
@@ -207,7 +275,9 @@ export default function BillingPage() {
                 <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Provider</th>
                 <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">CPT Codes</th>
                 <th className="px-4 py-3 text-right text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Total</th>
+                <th className="px-4 py-3 w-16"></th>
                 <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Status</th>
+                <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-12"></th>
               </tr>
             </thead>
             <tbody>
@@ -245,7 +315,18 @@ export default function BillingPage() {
                     ${sb.totalFee.toFixed(2)}
                   </td>
                   <td className="px-4 py-3 text-center">
+                    <Link
+                      href={`/${tenant}/encounter/${sb.encounterId}`}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
+                    >
+                      View <ExternalLink size={11} />
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     <StatusBadge status={sb.claimStatus} />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <StatusActionsMenu encounterId={sb.encounterId} currentStatus={sb.claimStatus} />
                   </td>
                 </tr>
               ))}
@@ -253,6 +334,77 @@ export default function BillingPage() {
           </table>
         </div>
       )}
+
+      {/* Billing future features marketing banner */}
+      <div
+        className="relative overflow-hidden rounded-2xl flex items-center gap-6 px-6 py-5"
+        style={{
+          background: "var(--bg-glass)",
+          border: "1px solid var(--glass-border)",
+          backdropFilter: "blur(12px)",
+        }}
+      >
+        {/* Left accent bar */}
+        <div
+          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+          style={{ background: "linear-gradient(to bottom, #2DD4BF, #8B5CF6)" }}
+        />
+
+        {/* Radial glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 80% 50%, rgba(45,212,191,0.07) 0%, transparent 60%)" }}
+        />
+
+        {/* Decorative SVG — claim routing illustration */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.12] pointer-events-none hidden sm:block">
+          <svg width="140" height="100" viewBox="0 0 140 100" fill="none">
+            {/* Document */}
+            <rect x="8" y="10" width="60" height="76" rx="6" stroke="var(--accent)" strokeWidth="1.5" />
+            <line x1="20" y1="28" x2="56" y2="28" stroke="var(--accent)" strokeWidth="1.2" />
+            <line x1="20" y1="38" x2="56" y2="38" stroke="var(--accent)" strokeWidth="1.2" />
+            <line x1="20" y1="48" x2="44" y2="48" stroke="var(--accent)" strokeWidth="1.2" />
+            <polyline points="20,68 28,76 44,60" stroke="#8B5CF6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            {/* Routing nodes */}
+            <circle cx="100" cy="22" r="10" stroke="var(--accent)" strokeWidth="1.3" />
+            <circle cx="128" cy="50" r="10" stroke="#8B5CF6" strokeWidth="1.3" />
+            <circle cx="100" cy="78" r="10" stroke="var(--accent)" strokeWidth="1.3" />
+            <line x1="78" y1="38" x2="91" y2="28" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="110" y1="28" x2="120" y2="42" stroke="#8B5CF6" strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="120" y1="58" x2="110" y2="70" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 2" />
+          </svg>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0 pl-2">
+          <div className="flex items-center gap-2 mb-2">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
+            >
+              ⚡ COMING SOON
+            </span>
+          </div>
+          <p className="text-subhead mb-1">The future of billing is automated</p>
+          <p className="text-caption text-[var(--text-muted)] mb-3 max-w-md">
+            Direct clearinghouse submission, ERA/EOB auto-posting, and denial management — all inside ClarityOS.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {["Direct Claim Submission", "ERA/EOB Auto-posting", "Denial Workflow"].map((pill) => (
+              <span
+                key={pill}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
+                style={{ background: "var(--bg-elevated)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)" }}
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
+          <a href="#" className="text-xs font-semibold text-[var(--accent)] hover:underline underline-offset-2 transition-colors">
+            Join the waitlist →
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

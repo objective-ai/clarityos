@@ -160,68 +160,109 @@ The encounter progresses through 3 stages via the bottom status stepper:
 
 ### AI Scribe (Premium Only)
 
+The AI Scribe is a card widget in the **Assessment & Plan** section of the encounter. It has a 4-state flow: `draft` → `streaming` → `ai_ready` → `editing`.
+
 | # | Action | Expected Result |
 |---|--------|-----------------|
-| 7.12 | Click **AI Scribe** button (doctor/owner) | Transcript input area appears |
-| 7.13 | Paste sample transcript text | AI generates SOAP note. Streams auto-fill of vitals, exam findings, Rx, diagnoses |
-| 7.14 | Review AI output | Accept/Reject/Edit buttons for each auto-filled section |
-| 7.15 | Switch to **core_plan** role | AI Scribe button hidden or shows upsell modal |
+| 7.12 | Scroll to **Assessment & Plan** section (doctor/owner, premium plan) | "AI Scribe" card visible with transcript textarea and "Generate Note" button |
+| 7.13 | Paste a transcript, click **Generate Note** | SOAP note streams word-by-word. Animated cursor visible. Button disabled during stream |
+| 7.14 | Stream completes | SOAP note displayed read-only. **"Review & Merge (N)"** button appears — N = number of AI suggestions. Amber color if conflicts exist, teal if all are additions |
+| 7.15 | Click **Review & Merge** | Inline panel opens below: left pane = SOAP note (syntax-highlighted), right pane = field-by-field comparison table grouped by section |
+| 7.16 | Review conflict table | Each row shows: field name, your current value, AI suggestion, confidence badge (HIGH/MEDIUM/LOW), and Keep/Use AI toggle |
+| 7.17 | Click **Approve All Safe (N)** | Approves all non-conflict, non-diagnosis rows instantly. Diagnoses require manual confirmation (clinical safety) |
+| 7.18 | Toggle individual rows, click **Apply N Selected** | Selected AI values written to clinical stores (vitals, exam, Rx, diagnoses, A&P). Audit log entry created |
+| 7.19 | After merge, scroll to Vitals / Exam / Rx sections | Fields updated with AI values. Dirty save indicators appear briefly then clear |
+| 7.20 | Click **Edit Note** | SOAP textarea opens for manual edits. Click Save to commit changes |
+| 7.21 | Click **Redo Note** | Clears SOAP + structured data. Returns to transcript draft view |
+| 7.22 | Switch to **core_plan** role | Assessment & Plan shows manual textarea editor instead of AI Scribe. Upsell prompt visible at bottom |
+| 7.23 | Click the upsell prompt (core_plan) | Upgrade modal appears listing AI Scribe features |
+
+> **DEV mode**: In development (`NODE_ENV=development`), a "[DEV] Load scenario" dropdown appears in the widget header. Select any of 9 test scenarios to pre-load the transcript.
 
 ### AI Scribe Test Scripts
 
-Copy-paste these into the AI Scribe transcript box to test different clinical scenarios:
+Copy-paste these into the AI Scribe transcript textarea to test different clinical scenarios. All 9 are also available via the DEV scenario selector dropdown.
+
+---
 
 **Script 1 — Routine Contact Lens**
-*Why:* Tests the most common visit type — normal findings with a simple Rx change. Verifies the AI can extract IOP, prescription values, and mark all exam structures as normal.
+*Why:* Most common visit type — normal findings with a simple Rx change. Verifies IOP extraction, prescription values, and WNL segment mapping.
 
 > "Hi, good to see you. Vision is a bit blurry with your current contacts at the computer? Okay. Your pressure is 14 in the right and 13 in the left, which is perfect. Looking at your eyes, everything is healthy and clear. Your new prescription is minus 3.50 in the right and minus 3.00 in the left. No changes to the astigmatism."
 
-**Expected AI output:** IOP OD 14 / OS 13, Rx OD −3.50 / OS −3.00, anterior/posterior segments normal, chief complaint about blurry vision with contacts at computer.
+**Expected:** IOP OD 14 / OS 13, Rx OD −3.50 / OS −3.00, anterior + posterior segments normal, chief complaint: blurry vision with contacts at computer.
 
 ---
 
 **Script 2 — Glaucoma Suspect**
-*Why:* Tests a chronic disease monitoring visit with abnormal values. Verifies the AI can flag elevated IOP, extract optic nerve findings, identify medications, and generate a follow-up plan.
+*Why:* Chronic disease monitoring — elevated IOP, optic nerve findings, medication, follow-up plan.
 
 > "So your pressures are a bit high today at 24 and 23. Are you taking your Latanoprost every night? Your nerves look a little thinner than last time, especially on the right side. I see a cup-to-disc ratio of about 0.70. We're going to keep the diagnosis as glaucoma suspect but I want you to come back in three months for a visual field test."
 
-**Expected AI output:** IOP OD 24 / OS 23 (elevated), optic nerve thinning OD, C/D ratio 0.70, diagnosis: glaucoma suspect, plan: visual field in 3 months, medication: Latanoprost.
+**Expected:** IOP OD 24 / OS 23, optic nerve thinning OD, C/D 0.70, dx: glaucoma suspect, plan: VF in 3 months.
 
 ---
 
 **Script 3 — Corneal Abrasion**
-*Why:* Tests an acute injury with single-eye findings. Verifies the AI can assign laterality (OD only), extract measurements, identify the correct diagnosis, and build a treatment plan with prescriptions.
+*Why:* Acute injury — single-eye laterality, measurements, treatment plan.
 
 > "So that right eye looks very painful. You've got a lot of redness. I see a small scratch on the surface of the cornea, about 3 millimeters wide. It's a corneal abrasion. I'm going to prescribe some antibiotic drops and a bandage contact lens. No foreign body found."
 
-**Expected AI output:** OD corneal abrasion (3mm), redness, pain, no foreign body, diagnosis: corneal abrasion OD, plan: antibiotic drops + bandage contact lens.
+**Expected:** OD abrasion (3mm), conjunctival injection, dx: corneal abrasion OD, plan: antibiotic drops + bandage CL.
 
 ---
 
 **Script 4 — Diabetic Retinopathy**
-*Why:* Tests a complex visit with systemic disease context and bilateral retinal findings. Verifies the AI can handle multiple finding types (hemorrhages, microaneurysms), bilateral diagnoses, co-management referrals, and vision acuity extraction.
+*Why:* Bilateral retinal findings, co-management referral, VA extraction.
 
 > "So I'm seeing some changes in the back of your eyes related to your diabetes. There are a few small dot hemorrhages and microaneurysms in both eyes, more so on the right. No macular edema though, which is good. Your vision is still 20/25 in each eye. I'm going to diagnose this as mild nonproliferative diabetic retinopathy in both eyes and I want to send these photos to your primary care doctor. Let's recheck in six months."
 
-**Expected AI output:** VA OD 20/25 / OS 20/25, posterior segment: dot hemorrhages + microaneurysms OU (worse OD), no macular edema, diagnosis: mild NPDR OU, plan: fundus photos to PCP, recheck 6 months.
+**Expected:** VA OD/OS 20/25, posterior: dot hemorrhages + microaneurysms OU (worse OD), no macular edema, dx: mild NPDR OU, plan: fundus photos to PCP, recheck 6 months.
 
 ---
 
 **Script 5 — Comprehensive New Patient (Multiple Diagnoses)**
-*Why:* Tests the AI's ability to extract multiple concurrent diagnoses from a single visit — the hardest scenario. Verifies it doesn't collapse findings into one diagnosis and can handle Rx, dry eye, and early cataract simultaneously.
+*Why:* Hardest scenario — multiple concurrent diagnoses. Tests that AI doesn't collapse findings.
 
 > "So for your new glasses, you're minus 2.25 with minus 0.75 cylinder at 180 in the right, and minus 2.00 with minus 0.50 at 175 in the left. Add plus 1.50 both eyes for reading. Your eyes are pretty dry — I see some punctate staining on both corneas. I'd recommend artificial tears four times a day. Also, I'm noticing the very beginning of cataracts in both lenses, grade one nuclear sclerosis. Nothing to worry about yet but we'll keep an eye on it. Pressures are 16 and 15, nice and normal."
 
-**Expected AI output:** IOP OD 16 / OS 15, Rx OD −2.25 −0.75×180 / OS −2.00 −0.50×175, Add +1.50 OU, corneal punctate staining OU, early nuclear sclerotic cataract OU (grade 1), diagnoses: myopia with astigmatism, dry eye syndrome, early cataract OU, plan: artificial tears QID.
+**Expected:** IOP OD 16 / OS 15, Rx OD −2.25 −0.75×180 / OS −2.00 −0.50×175, Add +1.50 OU, SPK OU, grade 1 NS OU, dx: myopia + dry eye + early cataract OU.
 
 ---
 
 **Script 6 — Pediatric / Binocular Vision**
-*Why:* Tests terminology unique to pediatric optometry — accommodation, convergence, and binocular vision terms that differ from adult exams. Verifies the AI doesn't misinterpret these as standard refractive or pathological findings.
+*Why:* Pediatric terminology — accommodation and convergence terms that differ from adult exams.
 
 > "So your child is having trouble reading at school and getting headaches after about 20 minutes. Their distance vision is 20/20 in each eye which is great. But when I test how well their eyes focus up close, their accommodative amplitude is only about 5 diopters which is low for their age. And their convergence is receding to about 15 centimeters. I'm going to diagnose convergence insufficiency and accommodative insufficiency. I'd like to start vision therapy twice a week."
 
-**Expected AI output:** VA OD 20/20 / OS 20/20, accommodative amplitude 5D (low), near point of convergence 15cm (receded), diagnoses: convergence insufficiency + accommodative insufficiency, plan: vision therapy 2x/week, chief complaint: trouble reading + headaches after 20 min.
+**Expected:** VA OD/OS 20/20, accommodative amplitude 5D (low), NPC 15cm, dx: convergence insufficiency + accommodative insufficiency, plan: vision therapy 2x/week.
+
+---
+
+**Script 7 — Standard Annual (All Normal)**
+*Why:* Tests WNL mapping for every structure and spoken Rx numbers ("minus one-fifty").
+
+> "Alright, let's get started with your annual. Any changes? No? Great. Patient is here for a routine checkup. Vision is 20/20 in both eyes uncorrected at distance. Pressures look good, let's see... 14 in the right and 15 in the left using the iCare. Looking at the front of the eye now. Lids and lashes are clear. Conjunctiva is white and quiet. Corneas are nice and clear OU. Anterior chamber is deep and quiet, no cells or flare. Iris is flat and brown. Lens is clear, no signs of cataracts. Moving to the back. Cup to disc ratio is a healthy 0.3 in both eyes. Nerves are pink and well-rimmed. Macula is flat, no edema. Vessels look great, standard A/V ratio. Periphery is totally intact, no holes or tears 360. Refraction today is just a tiny bit of nearsightedness. OD is minus one-fifty sphere, OS is minus one-seventy-five sphere. No astigmatism. No change to your plan, just come back and see me in a year."
+
+**Expected:** VA 20/20 OU, IOP OD 14 / OS 15, all anterior + posterior structures normal, Rx OD −1.50 / OS −1.75, dx: myopia bilateral, plan: return 12 months.
+
+---
+
+**Script 8 — Pathology Case (Multi-Diagnosis)**
+*Why:* Tests spoken Rx normalization ("minus one-twenty-five axis ninety") and multi-diagnosis extraction (dry eye, cataract, AMD).
+
+> "Patient is presenting with significant dry eye and blurry near vision. Entering VAs with current glasses are 20/40 OD and 20/40 OS. Pressures are a bit elevated at 21 in the right and 20 in the left. Slit lamp shows some issues. Lids have trace blepharitis. The tear film is very unstable, high debris. Corneas show 2+ punctate epithelial staining, mostly inferiorly in both eyes. The lens is showing some early changes, Grade 1 nuclear sclerosis in both eyes. In the back, the nerves look okay, C/D is 0.4. But I'm seeing some drusen in the macula OU, very early dry AMD changes. Manifest refraction: Right eye is minus two-fifty, minus one-twenty-five axis ninety. Left eye is minus two-seventy-five, minus one-zero-zero axis eighty-five. We're adding a plus two-zero-zero for reading. Assessment is dry eye syndrome, early cataracts, and mild dry macular degeneration. Start using Refresh tears four times a day and let's get you into some high-quality bifocal lenses. Follow up in six months."
+
+**Expected:** VA 20/40 OU, IOP OD 21 / OS 20, blepharitis + SPK 2+ OU, grade 1 NS OU, macula drusen OU, Rx OD −2.50 −1.25×90 / OS −2.75 −1.00×85 Add +2.00, dx: dry eye + cataract + dry AMD OU.
+
+---
+
+**Script 9 — Conversational Mess (Noise Filtering)**
+*Why:* Tests noise filtering — social chat, non-linear findings, forgotten mid-exam checks.
+
+> "Hey Duy, how are the kids? Good? Glad to hear it. Let's take a look at these eyes. So you said the left one is itchy? Okay. Let me check the pressure first... hold still... okay, 18 in the right. And... 17 in the left. Your vision today is actually still 20/20 with your old glasses. Let's see if we can sharpen that. Which is better, one... or two? Let's go with minus three-zero-zero sphere for both. Simple. Look at my ear for a second. Yeah, that left cornea has a little scratch, probably from rubbing it. Right one is clear. Nerves look good, point-three cup. Everything else in the back is normal. Oh, I forgot to check the lens — lenses are clear, no cataracts. So, for that itchiness, it's just a bit of allergic conjunctivitis. I'll give you a sample of Pataday. Use it once a day in the left eye. Otherwise, eyes are healthy. See you next time!"
+
+**Expected:** Social chat filtered out, IOP OD 18 / OS 17, VA 20/20 OU, Rx −3.00 OU, OD cornea clear / OS corneal abrasion, lenses clear, dx: acute atopic conjunctivitis OS, plan: Pataday QD OS.
 
 ### Auto-Save & Dirty Guard
 

@@ -57,7 +57,6 @@ import {
   ROW_LABELS,
   cellId,
   getDraftValue,
-  type GridCoord,
   type RowKey,
   type RefractionDraft,
   type SaveStatus,
@@ -73,7 +72,6 @@ import {
   decrementDiopter,
   incrementAxis,
   decrementAxis,
-  getEyeForRow,
 } from "@/lib/rx-format";
 import { useRefractionKeyboard } from "@/hooks/useRefractionKeyboard";
 import {
@@ -195,21 +193,34 @@ const ErrorTooltip = memo(function ErrorTooltip({ message }: { message: string }
 interface RxCellProps {
   colIndex:   number;
   rowKey:     RowKey;
-  isFocused:  boolean;
   isReadOnly: boolean;
-  error?:     string;
 }
 
 const RxCell = memo(function RxCell({
   colIndex,
   rowKey,
-  isFocused,
   isReadOnly,
-  error,
 }: RxCellProps) {
   const storedValue = useRefractionStore(
     useCallback(
       (s) => getDraftValue(s.columns[colIndex].draft, rowKey),
+      [colIndex, rowKey]
+    )
+  );
+  const isFocused = useRefractionStore(
+    useCallback(
+      (s) => s.focusedCell?.colIndex === colIndex && s.focusedCell?.rowKey === rowKey,
+      [colIndex, rowKey]
+    )
+  );
+  const error = useRefractionStore(
+    useCallback(
+      (s) => {
+        const errors = s.columns[colIndex].errors;
+        if (!errors.length) return undefined;
+        const fieldPath = rowKey.replace("_", ".");
+        return errors.find((e) => e.field === fieldPath || e.field === "_column")?.message;
+      },
       [colIndex, rowKey]
     )
   );
@@ -222,6 +233,9 @@ const RxCell = memo(function RxCell({
   );
   const [localError, setLocalError] = useState<string | null>(null);
   const [hasFocus, setHasFocus] = useState(false);
+
+  const rawTextRef = useRef(rawText);
+  rawTextRef.current = rawText;
 
   const prevStoredRef = useRef(storedValue);
   useEffect(() => {
@@ -275,12 +289,22 @@ const RxCell = memo(function RxCell({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
       setRawText(raw);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[RxCell ${colIndex}-${rowKey}] onChange: raw="${raw}"`);
+      }
 
       const { value, error: parseError } = parseCellValue(rowKey, raw);
-      setLocalError(parseError);
+
+      // Suppress errors for partial typing prefixes (e.g. "-", "+", ".")
+      // so the user doesn't see "Must be a number" while still typing.
+      const isTypingPrefix = /^[+\-.]$/.test(raw) || /^[+\-]\.$/.test(raw);
+      setLocalError(parseError && !isTypingPrefix ? parseError : null);
 
       if (parseError === null) {
         setCellValue(colIndex, rowKey, value);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[RxCell ${colIndex}-${rowKey}] setCellValue: value=${value}`);
+        }
       }
     },
     [colIndex, rowKey, setCellValue]
@@ -297,20 +321,39 @@ const RxCell = memo(function RxCell({
     [colIndex, rowKey, storedValue, setFocused]
   );
 
-  const handleBlur = useCallback(() => {
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     setHasFocus(false);
-    const { value, error: parseError } = parseCellValue(rowKey, rawText);
+    const currentRaw = rawTextRef.current;
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[RxCell ${colIndex}-${rowKey}] onBlur: currentRaw="${currentRaw}", relatedTarget=${e.relatedTarget?.id ?? "null"}`);
+    }
+    const { value, error: parseError } = parseCellValue(rowKey, currentRaw);
     setLocalError(parseError);
 
     if (parseError === null && value !== null) {
       const formatted = rawCellValue(rowKey, value);
       setRawText(formatted);
       setCellValue(colIndex, rowKey, value);
-    } else if (!rawText.trim()) {
+    } else if (!currentRaw.trim()) {
       setRawText("");
     }
-    flushSave(colIndex);
-  }, [colIndex, rowKey, rawText, setCellValue, flushSave]);
+
+    // Only flush immediately when leaving this column — moving within
+    // the same column (e.g. CYL → AXIS) lets the debounce handle it,
+    // avoiding premature validation of incomplete field groups.
+    const nextEl = e.relatedTarget as HTMLElement | null;
+    const stayingInColumn = nextEl?.id?.startsWith(`rx-cell-${colIndex}-`) ?? false;
+    if (!stayingInColumn) {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[RxCell ${colIndex}-${rowKey}] onBlur: calling flushSave (leaving column)`);
+      }
+      flushSave(colIndex);
+    } else {
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[RxCell ${colIndex}-${rowKey}] onBlur: staying in column, debounce will handle save`);
+      }
+    }
+  }, [colIndex, rowKey, setCellValue, flushSave]);
 
   const displayValue = hasFocus
     ? rawText
@@ -482,6 +525,37 @@ function SectionRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ErrorSummary — detailed error list below the grid (subscribes independently)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ErrorSummary = memo(function ErrorSummary() {
+  const columns = useRefractionStore((s) => s.columns);
+
+  return (
+    <div className="mt-3 space-y-1">
+      {columns.map((col, colIndex) =>
+        col.errors.map((err, i) => (
+          <div
+            key={`${colIndex}-${i}`}
+            className="flex items-start gap-2 px-3 py-1.5 rounded text-xs animate-slide-down"
+            style={{
+              background: "rgba(248, 113, 113, 0.07)",
+              border: "1px solid rgba(248, 113, 113, 0.20)",
+              color: "var(--state-critical)",
+            }}
+          >
+            <span className="flex-shrink-0 font-bold">
+              {REFRACTION_COLUMN_LABELS[REFRACTION_COLUMNS[colIndex]]}:
+            </span>
+            <span>{err.message}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // RefractionGrid — main export
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -496,39 +570,32 @@ export function RefractionGrid({
   initialRefractions = [],
   isReadOnly = false,
 }: RefractionGridProps) {
-  const init          = useRefractionStore((s) => s.init);
-  const focusedCell   = useRefractionStore((s) => s.focusedCell);
-  const allErrors     = useRefractionStore((s) => s.columns.map((c) => c.errors));
+  const init            = useRefractionStore((s) => s.init);
+  const setIsReadOnly   = useRefractionStore((s) => s.setIsReadOnly);
+  const hasAnyError     = useRefractionStore((s) => s.columns.some((c) => c.errors.length > 0));
   const isReadOnlyStore = useIsReadOnly();
 
 
   const gridRef = useRef<HTMLDivElement>(null);
 
+  // Initialize store ONLY when the encounter changes (mount or navigate to new encounter).
+  // Never include isReadOnly or initialRefractions — both create new references on every
+  // parent re-render, so including them would call init() again and wipe in-progress input.
+  // isReadOnly is handled separately below; initialRefractions is always [] (parent never passes it).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     init(encounterId, initialRefractions, isReadOnly);
   }, [encounterId]);
 
+  // Update read-only flag independently when it changes (e.g., encounter finalized)
   useEffect(() => {
-    const firstId = cellId(0, "od_sphere");
-    const el = document.getElementById(firstId) as HTMLInputElement | null;
-    const timer = setTimeout(() => el?.focus(), 120);
-    return () => clearTimeout(timer);
-  }, []);
+    setIsReadOnly(isReadOnly);
+  }, [isReadOnly, setIsReadOnly]);
+
+  // No auto-focus — let the user click into the field they want.
+  // Auto-focusing Habitual/SPH was hiding the loaded value on first render.
 
   const colCount = REFRACTION_COLUMNS.length;
-
-  const getCellError = useCallback(
-    (colIndex: number, rowKey: RowKey): string | undefined => {
-      const errors = allErrors[colIndex];
-      if (!errors.length) return undefined;
-      const fieldPath = rowKey.replace("_", ".");
-      const err = errors.find(
-        (e) => e.field === fieldPath || e.field === `_column`
-      );
-      return err?.message;
-    },
-    [allErrors]
-  );
 
   return (
     <div ref={gridRef} className="relative">
@@ -543,7 +610,7 @@ export function RefractionGrid({
         </div>
 
         <div className="flex items-center gap-2">
-          {allErrors.some((e) => e.length > 0) && (
+          {hasAnyError && (
             <span
               className="text-xs px-2 py-1 rounded"
               style={{
@@ -603,10 +670,7 @@ export function RefractionGrid({
           <tbody>
             {ROW_KEYS.map((rowKey) => {
               const section = isSectionHeader(rowKey);
-              const eye     = getEyeForRow(rowKey);
               const label   = ROW_LABELS[rowKey];
-              const isPD    = eye === "binocular";
-
               return (
                 <React.Fragment key={rowKey}>
                   {section && (
@@ -634,30 +698,22 @@ export function RefractionGrid({
                       </span>
                     </td>
 
-                    {REFRACTION_COLUMNS.map((_, colIndex) => {
-                      const focused =
-                        focusedCell?.colIndex === colIndex &&
-                        focusedCell?.rowKey === rowKey;
-
-                      return (
-                        <td
-                          key={colIndex}
-                          className="align-middle"
-                          style={{
-                            padding: "4px 6px",
-                          }}
-                          role="gridcell"
-                        >
-                          <RxCell
-                            colIndex={colIndex}
-                            rowKey={rowKey}
-                            isFocused={focused}
-                            isReadOnly={isReadOnly || isReadOnlyStore}
-                            error={getCellError(colIndex, rowKey)}
-                          />
-                        </td>
-                      );
-                    })}
+                    {REFRACTION_COLUMNS.map((_, colIndex) => (
+                      <td
+                        key={colIndex}
+                        className="align-middle"
+                        style={{
+                          padding: "4px 6px",
+                        }}
+                        role="gridcell"
+                      >
+                        <RxCell
+                          colIndex={colIndex}
+                          rowKey={rowKey}
+                          isReadOnly={isReadOnly || isReadOnlyStore}
+                        />
+                      </td>
+                    ))}
                   </tr>
                 </React.Fragment>
               );
@@ -666,28 +722,7 @@ export function RefractionGrid({
         </table>
       </div>
 
-      {allErrors.some((e) => e.length > 0) && (
-        <div className="mt-3 space-y-1">
-          {allErrors.map((errors, colIndex) =>
-            errors.map((err, i) => (
-              <div
-                key={`${colIndex}-${i}`}
-                className="flex items-start gap-2 px-3 py-1.5 rounded text-xs animate-slide-down"
-                style={{
-                  background: "rgba(248, 113, 113, 0.07)",
-                  border: "1px solid rgba(248, 113, 113, 0.20)",
-                  color: "var(--state-critical)",
-                }}
-              >
-                <span className="flex-shrink-0 font-bold">
-                  {REFRACTION_COLUMN_LABELS[REFRACTION_COLUMNS[colIndex]]}:
-                </span>
-                <span>{err.message}</span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      {hasAnyError && <ErrorSummary />}
 
     </div>
   );

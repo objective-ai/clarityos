@@ -9,7 +9,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-booking.spec.js
  */
-const { launchBrowser, printResults, assert, API_URL, TARGET_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, printResults, assert, API_URL, TARGET_URL } = require('./helpers/test-utils');
 
 const SLUG = 'sunview';
 
@@ -350,6 +350,7 @@ async function runUiTests() {
 // Main — run both suites
 // ============================================================================
 (async () => {
+  await ensureApi();
   // API tests first (fast, no browser)
   const apiResults = await runApiTests();
   const apiPass = printResults('Public Booking — API Contracts', apiResults);

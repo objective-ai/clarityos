@@ -11,7 +11,7 @@
  * react-pdf, or a dedicated PDF service) for email/fax workflows.
  */
 
-import type { RxPdfData, EyeRxSummary } from "@/types/optical";
+import type { EyeRxSummary } from "@/types/optical";
 
 // ---------------------------------------------------------------------------
 // Spherical Equivalent calculation

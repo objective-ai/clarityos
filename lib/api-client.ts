@@ -29,6 +29,10 @@ async function withRetry<T>(
       return await fn();
     } catch (err) {
       lastError = err;
+      // 4xx errors are client errors — retrying won't help, fail fast
+      if (err instanceof HttpError && err.status >= 400 && err.status < 500) {
+        throw err;
+      }
       if (attempt < retries) {
         const delay = baseDelayMs * Math.pow(2, attempt);
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -57,6 +61,20 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 
   return headers;
+}
+
+/**
+ * HTTP error with status code, thrown by apiFetch for non-2xx responses.
+ * Use `err instanceof HttpError && err.status === 404` instead of parsing message strings.
+ */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
 }
 
 export interface ApiFetchOptions extends RequestInit {
@@ -99,9 +117,11 @@ export async function apiFetch<T = unknown>(
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
-      throw new Error((errBody as { detail?: string }).detail ?? `API error ${res.status}`);
+      const message = (errBody as { detail?: string }).detail ?? `API error ${res.status}`;
+      throw new HttpError(res.status, message);
     }
 
+    if (res.status === 204) return null as T;
     const json = await res.json();
     return camelizeKeys<T>(json);
   }, retries);

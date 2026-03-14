@@ -13,7 +13,7 @@
  * https://www.cms.gov/medicare/cms-forms/cms-forms/cms-forms-items/cms012949
  */
 
-import type { Superbill, SuperbillLineItem } from "@/types/billing";
+import type { Superbill } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
 // CMS-1500 JSON Schema Types
@@ -260,7 +260,8 @@ export function buildCms1500Claim(
  * Format an ISO date string to MMDDYYYY (CMS-1500 date format).
  */
 function formatDateCms(isoDate: string): string {
-  const d = new Date(isoDate);
+  // Parse date-only strings safely (avoid UTC day shift)
+  const d = isoDate.includes("T") ? new Date(isoDate) : new Date(isoDate + "T12:00:00");
   if (isNaN(d.getTime())) return "00000000";
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");

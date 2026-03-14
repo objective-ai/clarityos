@@ -157,7 +157,7 @@ export default function IntakePage() {
   const { token } = useParams<{ token: string }>();
 
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
-  const [patientInfo, setPatientInfo] = useState<PatientInfo | null>(null);
+  const [, setPatientInfo] = useState<PatientInfo | null>(null);
   const [pageState, setPageState] = useState<
     "loading" | "dob_gate" | "form" | "submitting" | "success" | "error"
   >("loading");

@@ -12,18 +12,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIdleTimer } from "react-idle-timer";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useSessionStore } from "@/store/sessionStore";
 import { clearEphi } from "@/components/auth/LogoutButton";
 import { Button } from "@/components/ui/button";
 
 const WARNING_TIMEOUT_MS = 28 * 60 * 1000; // 28 minutes
-const LOGOUT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const COUNTDOWN_SECONDS = 120; // 2 minutes between warning and logout
 
 export function SessionTimeoutModal() {
-  const router = useRouter();
   const session = useSessionStore((s) => s.session);
   const [showWarning, setShowWarning] = useState(false);
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
@@ -47,9 +44,11 @@ export function SessionTimeoutModal() {
     // Clear session store
     useSessionStore.getState().clearSession();
 
-    // Redirect
-    router.push("/login");
-  }, [router]);
+    // Hard navigation to fully destroy all DOM (portals, overlays, etc.)
+    // Using window.location instead of router.push ensures complete teardown,
+    // especially when the tab is in the background and React updates are throttled.
+    window.location.href = "/login";
+  }, []);
 
   // Warning timer: fires at 28 minutes of inactivity
   const { reset: resetWarning } = useIdleTimer({

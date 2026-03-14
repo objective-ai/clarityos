@@ -9,7 +9,7 @@
  *
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-billing.spec.js
  */
-const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 // Known encounters from seed data (see memory/seed-data.md)
 // Non-finalized encounter (William Donovan) — for testing Finalize modal
@@ -40,10 +40,10 @@ async function runCoreTests(page, slug, apiCalls) {
   const superbillBtnInBanner = page.locator('button:has-text("Superbill")');
 
   // Wait for either button to appear (encounter data loaded)
+  // Note: don't include waitForLoadState here — it resolves instantly and short-circuits the race
   await Promise.race([
-    finalizeBtn.waitFor({ state: 'visible', timeout: 10000 }),
-    lockedBadge.waitFor({ state: 'visible', timeout: 10000 }),
-    page.waitForLoadState('networkidle'),
+    finalizeBtn.waitFor({ state: 'visible', timeout: 12000 }),
+    lockedBadge.waitFor({ state: 'visible', timeout: 12000 }),
   ]).catch(() => {});
 
   const hasFinalizeBtn = await finalizeBtn.count();
@@ -227,6 +227,13 @@ async function runUiTests(page, slug) {
     return results;
   }
 
+  // Wait for superbill data to load (Export button or "No CPT codes" text appear)
+  await Promise.race([
+    dialog.locator('button:has-text("Export CMS-1500")').waitFor({ state: 'visible', timeout: 8000 }),
+    dialog.locator('text=No CPT codes added yet').waitFor({ state: 'visible', timeout: 8000 }),
+    dialog.locator('th:has-text("CPT")').waitFor({ state: 'visible', timeout: 8000 }),
+  ]).catch(() => {});
+
   // ── 1. MDM Section & Badge ────────────────────────────────────────────
   const mdmSection = await dialog.locator('text=Medical Decision Making').count();
   const mdmBadge = await dialog.locator('text=/straightforward|low|moderate|high/').count();
@@ -237,18 +244,24 @@ async function runUiTests(page, slug) {
     : 'INFO (no MDM section — may not have been computed)';
 
   // ── 2. CPT Table Structure ────────────────────────────────────────────
+  // Table only renders when lineItems.length > 0; otherwise "No CPT codes added yet." is shown
+  const noCptText = await dialog.locator('text=No CPT codes added yet').count();
   const cptHeader = await dialog.locator('th:has-text("CPT")').count();
   const descHeader = await dialog.locator('th:has-text("Description")').count();
   const dxHeader = await dialog.locator('th:has-text("Dx Pointers")').count();
   const unitsHeader = await dialog.locator('th:has-text("Units")').count();
   const feeHeader = await dialog.locator('th:has-text("Fee")').count();
 
-  const headerCount = [cptHeader, descHeader, dxHeader, unitsHeader, feeHeader].filter(h => h > 0).length;
-  results.cptTableHeaders = headerCount >= 4
-    ? `PASS (${headerCount}/5 column headers present)`
-    : headerCount > 0
-      ? `FAIL (only ${headerCount}/5 headers: CPT=${cptHeader} Desc=${descHeader} Dx=${dxHeader} Units=${unitsHeader} Fee=${feeHeader})`
-      : 'FAIL (no CPT table headers — table may be empty)';
+  if (noCptText > 0) {
+    results.cptTableHeaders = 'INFO (empty superbill — "No CPT codes added yet" shown, table headers not rendered)';
+  } else {
+    const headerCount = [cptHeader, descHeader, dxHeader, unitsHeader, feeHeader].filter(h => h > 0).length;
+    results.cptTableHeaders = headerCount >= 4
+      ? `PASS (${headerCount}/5 column headers present)`
+      : headerCount > 0
+        ? `FAIL (only ${headerCount}/5 headers: CPT=${cptHeader} Desc=${descHeader} Dx=${dxHeader} Units=${unitsHeader} Fee=${feeHeader})`
+        : 'FAIL (no CPT table headers and no empty-state text — superbill may not have loaded)';
+  }
 
   // ── 3. Existing CPT Codes ─────────────────────────────────────────────
   const cptCodeCells = dialog.locator('td span.font-mono.font-semibold');
@@ -409,7 +422,6 @@ async function runDashboardTests(page, slug, apiCalls) {
   const filterOrRestricted = await Promise.race([
     page.locator('button:has-text("All")').waitFor({ state: 'visible', timeout: 8000 }).then(() => 'content'),
     page.locator('text=Access Restricted').waitFor({ state: 'visible', timeout: 8000 }).then(() => 'restricted'),
-    page.waitForLoadState('networkidle').then(() => 'timeout'),
   ]).catch(() => 'timeout');
 
   if (filterOrRestricted === 'restricted') {
@@ -419,6 +431,9 @@ async function runDashboardTests(page, slug, apiCalls) {
   results.roleGate = 'PASS (billing page accessible)';
 
   await page.screenshot({ path: '/tmp/pw-e2e-billing-dashboard.png', fullPage: true });
+
+  // Wait for loading state to finish before checking table/empty state
+  await page.locator('text=Loading superbills').waitFor({ state: 'hidden', timeout: 8000 }).catch(() => {});
 
   // ── Filter tabs ─────────────────────────────────────────────────────────
   const allTab = page.locator('button:has-text("All")');
@@ -521,6 +536,7 @@ async function runDashboardTests(page, slug, apiCalls) {
 // =========================================================================
 
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
 

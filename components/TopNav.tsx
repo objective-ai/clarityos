@@ -17,8 +17,8 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
 import { useSessionStore } from "@/store/sessionStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
-import { useEncounterStore } from "@/store/encounterStore";
-import type { PatientHeaderData, StaffRole } from "@/types/session";
+import type { PatientHeaderData } from "@/types/session";
+import { formatClinicDate } from "@/lib/timezone";
 
 function calculateAge(dob: string): number {
   const birth = new Date(dob);
@@ -58,7 +58,7 @@ const SCENARIO_LABELS: [DevScenario, string][] = [
   ["owner", "Owner"],
 ];
 
-export function TopNav({ tenant, patient }: TopNavProps) {
+export function TopNav({ patient }: TopNavProps) {
   const pathname = usePathname();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -76,10 +76,6 @@ export function TopNav({ tenant, patient }: TopNavProps) {
   const diagnoses = useDiagnosisStore(
     (s) => (encounterId ? s.encounters[encounterId]?.diagnoses : null) ?? []
   );
-  const encounter = useEncounterStore(
-    (s) => (encounterId ? s.encounters[encounterId] : null) ?? null
-  );
-
   // Derive active scenario from actual session state so badge and checkmark stay in sync
   const activeScenario: DevScenario = (() => {
     if (role === "receptionist") return "receptionist";
@@ -137,7 +133,7 @@ export function TopNav({ tenant, patient }: TopNavProps) {
                     <span className="text-[var(--border-strong)]">&middot;</span>
                     <span>{calculateAge(patient.dob)}y</span>
                     <span className="text-[var(--border-strong)]">&middot;</span>
-                    <span>{new Date(patient.dob + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    <span>{formatClinicDate(patient.dob)}</span>
                     <span className="text-[var(--border-strong)]">&middot;</span>
                   </>
                 )}
@@ -149,26 +145,16 @@ export function TopNav({ tenant, patient }: TopNavProps) {
             {diagnoses.length > 0 && (
               <>
                 <div className="w-px self-stretch bg-[var(--border-default)] flex-shrink-0" />
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {diagnoses.slice(0, 4).map((dx) => {
+                <div className="flex items-center gap-2 flex-wrap">
+                  {diagnoses.map((dx) => {
                     const isOD = dx.eyeAffected === "OD";
                     const isOS = dx.eyeAffected === "OS";
                     return (
                       <span
                         key={dx.id}
-                        className="inline-flex items-center gap-1.5 flex-shrink-0 rounded-xl text-base px-4 py-2.5 font-semibold max-w-[200px]"
-                        title={dx.icd10Code}
+                        className="inline-flex items-center gap-0 flex-shrink-0 rounded-full overflow-hidden text-xs"
+                        title={dx.description}
                         style={{
-                          background: isOD
-                            ? "#DBEAFE"
-                            : isOS
-                            ? "#EDE9FE"
-                            : "#CCFBF1",
-                          color: isOD
-                            ? "#1E40AF"
-                            : isOS
-                            ? "#5B21B6"
-                            : "#115E59",
                           border: isOD
                             ? "1px solid #93C5FD"
                             : isOS
@@ -176,18 +162,40 @@ export function TopNav({ tenant, patient }: TopNavProps) {
                             : "1px solid #5EEAD4",
                         }}
                       >
-                        <span className="truncate">{dx.description || dx.icd10Code}</span>
+                        <span
+                          className="font-mono px-2.5 py-1"
+                          style={{
+                            background: isOD
+                              ? "#DBEAFE"
+                              : isOS
+                              ? "#EDE9FE"
+                              : "#CCFBF1",
+                            color: isOD
+                              ? "#1E40AF"
+                              : isOS
+                              ? "#5B21B6"
+                              : "#115E59",
+                          }}
+                        >
+                          {dx.icd10Code}
+                        </span>
                         {dx.eyeAffected && (
-                          <span className="font-bold flex-shrink-0">{dx.eyeAffected}</span>
+                          <span
+                            className="font-mono px-2 py-1"
+                            style={{
+                              color: isOD
+                                ? "#1E40AF"
+                                : isOS
+                                ? "#5B21B6"
+                                : "#115E59",
+                            }}
+                          >
+                            {dx.eyeAffected}
+                          </span>
                         )}
                       </span>
                     );
                   })}
-                  {diagnoses.length > 4 && (
-                    <span className="text-xs text-[var(--text-muted)] flex-shrink-0">
-                      +{diagnoses.length - 4}
-                    </span>
-                  )}
                 </div>
               </>
             )}

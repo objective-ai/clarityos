@@ -37,7 +37,6 @@ import { devtools, subscribeWithSelector } from "zustand/middleware";
 const isDev = process.env.NODE_ENV === "development";
 import {
   blankDraft,
-  getDraftValue,
   setDraftValue,
   REFRACTION_COLUMNS,
   type ColumnState,
@@ -78,6 +77,9 @@ interface RefractionStoreActions {
   /** Called once when the component mounts with encounter data from the server */
   init: (encounterId: string, initialRefractions: RefractionDraft[], isReadOnly: boolean) => void;
 
+  /** Update the read-only flag without reinitializing (when encounter finalization status changes) */
+  setIsReadOnly: (value: boolean) => void;
+
   /** Update a single cell value in the draft (called on every keystroke) */
   setCellValue: (colIndex: number, rowKey: RowKey, value: number | string | null) => void;
 
@@ -87,8 +89,8 @@ interface RefractionStoreActions {
   /** Immediately flush a column to the API (called on blur of last field) */
   flushSave: (colIndex: number) => void;
 
-  /** Called by the API layer on success */
-  commitColumn: (colIndex: number, savedDraft: RefractionDraft) => void;
+  /** Called by the API layer on success — merges server ID into live draft */
+  commitColumn: (colIndex: number, serverId: string | null) => void;
 
   /** Called by the API layer on error */
   setColumnError: (colIndex: number, errors: { field: string; message: string }[]) => void;
@@ -123,6 +125,13 @@ const DEBOUNCE_MS = 1500;
  * Maps a camelCase API refraction response to the snake_case RefractionDraft shape.
  * apiFetch() returns camelCase keys; the store/components use snake_case internally.
  */
+/** Parse a value that may be a string (from Decimal serialization) into a number or null. */
+function toNum(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
 function refractionSummaryToDraft(data: Record<string, unknown>): RefractionDraft {
   const od = (data.od ?? {}) as Record<string, unknown>;
   const os = (data.os ?? {}) as Record<string, unknown>;
@@ -130,27 +139,27 @@ function refractionSummaryToDraft(data: Record<string, unknown>): RefractionDraf
     id: (data.id as string) ?? null,
     refraction_type: (data.refractionType as RefractionType) ?? "habitual",
     od: {
-      sphere: (od.sphere as number) ?? null,
-      cylinder: (od.cylinder as number) ?? null,
-      axis: (od.axis as number) ?? null,
-      add: (od.add as number) ?? null,
-      prism: (od.prism as number) ?? null,
+      sphere: toNum(od.sphere),
+      cylinder: toNum(od.cylinder),
+      axis: toNum(od.axis),
+      add: toNum(od.add),
+      prism: toNum(od.prism),
       prism_base: (od.prismBase as EyeRxDraft["prism_base"]) ?? null,
       visual_acuity: (od.visualAcuity as string) ?? null,
     },
     os: {
-      sphere: (os.sphere as number) ?? null,
-      cylinder: (os.cylinder as number) ?? null,
-      axis: (os.axis as number) ?? null,
-      add: (os.add as number) ?? null,
-      prism: (os.prism as number) ?? null,
+      sphere: toNum(os.sphere),
+      cylinder: toNum(os.cylinder),
+      axis: toNum(os.axis),
+      add: toNum(os.add),
+      prism: toNum(os.prism),
       prism_base: (os.prismBase as EyeRxDraft["prism_base"]) ?? null,
       visual_acuity: (os.visualAcuity as string) ?? null,
     },
-    pd_distance: (data.pdDistance as number) ?? null,
-    pd_near: (data.pdNear as number) ?? null,
-    pd_od: (data.pdOd as number) ?? null,
-    pd_os: (data.pdOs as number) ?? null,
+    pd_distance: toNum(data.pdDistance),
+    pd_near: toNum(data.pdNear),
+    pd_od: toNum(data.pdOd),
+    pd_os: toNum(data.pdOs),
     is_final_rx: (data.isFinalRx as boolean) ?? false,
     notes: (data.notes as string) ?? null,
   };
@@ -200,26 +209,16 @@ async function saveColumnToAPI(
   };
 
   try {
-    // Client-side validation (fast feedback)
-    const errors: { field: string; message: string }[] = [];
-    if (draft.od.cylinder && !draft.od.axis)
-      errors.push({ field: "od.axis", message: "Axis required when cylinder is set" });
-    if (draft.os.cylinder && !draft.os.axis)
-      errors.push({ field: "os.axis", message: "Axis required when cylinder is set" });
-
-    if (errors.length > 0) {
-      actions.setColumnError(colIndex, errors);
-      return;
-    }
-
     // Real API — PATCH /api/encounters/{id}/column/{col} — no mock fallback
+    // Note: cylinder/axis co-dependency is validated server-side by the
+    // Pydantic schema. Client-side validation was removed because it
+    // fired prematurely during normal CYL → AXIS data entry flow.
     const json = await apiFetch<{ id: string }>(
       `/api/encounters/${encounterId}/column/${colIndex}`,
       { method: "PATCH", body: JSON.stringify(body) },
     );
-    const savedDraft: RefractionDraft = { ...draft, id: json.id ?? draft.id };
 
-    actions.commitColumn(colIndex, savedDraft);
+    actions.commitColumn(colIndex, json.id ?? null);
     setTimeout(() => actions.resetStatus(colIndex), 2000);
   } catch (err) {
     actions.setColumnError(colIndex, [
@@ -304,7 +303,25 @@ export const useRefractionStore = create<RefractionStore>()(
       },
 
       init(encounterId, initialRefractions, isReadOnly) {
-        const columns: ColumnState[] = REFRACTION_COLUMNS.map((type, i) => {
+        // Idempotency guard: if the store already holds data for this encounter
+        // (either committed to server, or dirty/saving with unsaved changes),
+        // skip blanking the drafts. This prevents RefractionGrid's mount-triggered
+        // init() from wiping live data when the component remounts — e.g. after
+        // review mode toggles, or when loadEncounter() briefly shows a skeleton
+        // (triggered by "Start Exam" / "Revert to Pre-Test" status transitions).
+        const current = get();
+        if (
+          current.encounterId === encounterId &&
+          current.columns.some(
+            (c) => c.committed !== null || c.saveStatus === "dirty" || c.saveStatus === "saving"
+          )
+        ) {
+          // Data is already loaded or has unsaved changes — just honour the read-only flag update.
+          set({ isReadOnly }, false, "init/skip");
+          return;
+        }
+
+        const columns: ColumnState[] = REFRACTION_COLUMNS.map((type) => {
           const existing = initialRefractions.find((r) => r.refraction_type === type);
           const draft = existing ?? blankDraft(type);
           return {
@@ -318,7 +335,14 @@ export const useRefractionStore = create<RefractionStore>()(
         set({ columns, encounterId, isReadOnly }, false, "init");
       },
 
+      setIsReadOnly(value) {
+        set({ isReadOnly: value }, false, "setIsReadOnly");
+      },
+
       setCellValue(colIndex, rowKey, value) {
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] setCellValue(${colIndex}, ${rowKey}, ${value})`);
+        }
         set(
           (state) => {
             const columns = [...state.columns];
@@ -332,6 +356,9 @@ export const useRefractionStore = create<RefractionStore>()(
           false,
           "setCellValue"
         );
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] setCellValue: calling scheduleSave`);
+        }
         get().scheduleSave(colIndex);
       },
 
@@ -339,8 +366,17 @@ export const useRefractionStore = create<RefractionStore>()(
         // Cancel existing debounce for this column
         if (debounceTimers[colIndex]) {
           clearTimeout(debounceTimers[colIndex]);
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] scheduleSave(${colIndex}): cancelled previous timer`);
+          }
+        }
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] scheduleSave(${colIndex}): starting 1500ms debounce`);
         }
         debounceTimers[colIndex] = setTimeout(() => {
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] scheduleSave(${colIndex}): debounce fired, calling flushSave`);
+          }
           get().flushSave(colIndex);
         }, DEBOUNCE_MS);
       },
@@ -353,8 +389,17 @@ export const useRefractionStore = create<RefractionStore>()(
         const state = get();
         const column = state.columns[colIndex];
 
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] flushSave(${colIndex}): saveStatus=${column.saveStatus}`);
+        }
+
         // Don't save if nothing has changed or already saving
-        if (column.saveStatus === "idle" || column.saveStatus === "saving") return;
+        if (column.saveStatus === "idle" || column.saveStatus === "saving") {
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] flushSave(${colIndex}): SKIPPED - status is idle or saving`);
+          }
+          return;
+        }
 
         // Don't save if the draft has no data worth saving
         const draft = column.draft;
@@ -363,7 +408,16 @@ export const useRefractionStore = create<RefractionStore>()(
           draft.od.cylinder !== null ||
           draft.os.sphere !== null ||
           draft.os.cylinder !== null;
-        if (!hasAnyValue) return;
+        if (!hasAnyValue) {
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[Store] flushSave(${colIndex}): SKIPPED - no data to save`);
+          }
+          return;
+        }
+
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Store] flushSave(${colIndex}): calling saveColumnToAPI`);
+        }
 
         saveColumnToAPI(state.encounterId, column, colIndex, {
           commitColumn:  state.commitColumn,
@@ -373,16 +427,19 @@ export const useRefractionStore = create<RefractionStore>()(
         });
       },
 
-      commitColumn(colIndex, savedDraft) {
+      commitColumn(colIndex, serverId) {
+        const wasDirty = get().columns[colIndex].saveStatus === "dirty";
         set(
           (state) => {
             const columns = [...state.columns];
+            const current = columns[colIndex];
+            const draftWithId = { ...current.draft, id: serverId ?? current.draft.id };
             columns[colIndex] = {
-              ...columns[colIndex],
-              draft:       savedDraft,
-              committed:   savedDraft,
-              saveStatus:  "saved",
-              errors:      [],
+              ...current,
+              draft:       draftWithId,
+              committed:   draftWithId,
+              saveStatus:  wasDirty ? "dirty" : "saved",
+              errors:      wasDirty ? current.errors : [],
               lastSavedAt: new Date(),
             };
             return { columns };
@@ -390,6 +447,9 @@ export const useRefractionStore = create<RefractionStore>()(
           false,
           "commitColumn"
         );
+        if (wasDirty) {
+          get().scheduleSave(colIndex);
+        }
       },
 
       setColumnError(colIndex, errors) {

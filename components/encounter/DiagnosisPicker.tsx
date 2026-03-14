@@ -11,7 +11,7 @@ import {
 import type { EyeLaterality, Diagnosis } from "@/types/diagnosis";
 
 // ---------------------------------------------------------------------------
-// Common optometry ICD-10 codes
+// ICD-10 codes loaded from JSON
 // ---------------------------------------------------------------------------
 
 interface ICD10Code {
@@ -20,29 +20,21 @@ interface ICD10Code {
   category: string;
 }
 
-const COMMON_CODES: ICD10Code[] = [
-  { code: "H52.13", description: "Myopia, bilateral", category: "Refractive" },
-  { code: "H52.11", description: "Myopia, right eye", category: "Refractive" },
-  { code: "H52.12", description: "Myopia, left eye", category: "Refractive" },
-  { code: "H52.03", description: "Hypermetropia, bilateral", category: "Refractive" },
-  { code: "H52.223", description: "Regular astigmatism, bilateral", category: "Refractive" },
-  { code: "H52.4", description: "Presbyopia", category: "Refractive" },
-  { code: "H40.001", description: "Preglaucoma, unspecified, right eye", category: "Glaucoma" },
-  { code: "H40.002", description: "Preglaucoma, unspecified, left eye", category: "Glaucoma" },
-  { code: "H40.11X0", description: "Primary open-angle glaucoma, stage unspecified", category: "Glaucoma" },
-  { code: "H40.053", description: "Ocular hypertension, bilateral", category: "Glaucoma" },
-  { code: "H25.10", description: "Age-related nuclear cataract, unspecified eye", category: "Cataract" },
-  { code: "H25.11", description: "Age-related nuclear cataract, right eye", category: "Cataract" },
-  { code: "H25.12", description: "Age-related nuclear cataract, left eye", category: "Cataract" },
-  { code: "H35.30", description: "Unspecified macular degeneration", category: "Retinal" },
-  { code: "E11.319", description: "Type 2 DM with unspec diabetic retinopathy without macular edema", category: "Retinal" },
-  { code: "H35.3110", description: "Nonexudative AMD, right eye, stage unspec", category: "Retinal" },
-  { code: "H04.123", description: "Dry eye syndrome, bilateral", category: "Dry Eye" },
-  { code: "H04.121", description: "Dry eye syndrome, right eye", category: "Dry Eye" },
-  { code: "H04.122", description: "Dry eye syndrome, left eye", category: "Dry Eye" },
-  { code: "Z01.00", description: "Encounter for examination of eyes without abnormal findings", category: "General" },
-  { code: "Z01.01", description: "Encounter for examination of eyes with abnormal findings", category: "General" },
-];
+let ICD10_CODES_CACHE: ICD10Code[] | null = null;
+
+async function loadICD10Codes(): Promise<ICD10Code[]> {
+  if (ICD10_CODES_CACHE) return ICD10_CODES_CACHE;
+
+  try {
+    const response = await fetch("/icd10-codes.json");
+    const data = await response.json() as { codes: ICD10Code[] };
+    ICD10_CODES_CACHE = data.codes;
+    return data.codes;
+  } catch (error) {
+    console.error("Failed to load ICD-10 codes:", error);
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -63,7 +55,6 @@ interface DiagnosisPickerProps {
 export function DiagnosisPicker({
   encounterId,
   isReadOnly = false,
-  columns = 1,
   initialDiagnoses,
 }: DiagnosisPickerProps) {
   const store = useDiagnosisStore();
@@ -71,23 +62,29 @@ export function DiagnosisPicker({
   const saveStatus = useDiagnosisSaveStatus(encounterId);
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [codes, setCodes] = useState<ICD10Code[]>([]);
 
-  // Initialize on mount
+  // Load ICD-10 codes on mount
+  useEffect(() => {
+    loadICD10Codes().then(setCodes);
+  }, []);
+
+  // Initialize store on mount
   useEffect(() => {
     store.init(encounterId, initialDiagnoses);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [encounterId]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return COMMON_CODES;
+    if (!search.trim()) return codes;
     const q = search.toLowerCase();
-    return COMMON_CODES.filter(
+    return codes.filter(
       (c) =>
         c.code.toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q) ||
         c.category.toLowerCase().includes(q),
     );
-  }, [search]);
+  }, [search, codes]);
 
   const addDiagnosis = useCallback(
     async (code: ICD10Code, eye: EyeLaterality) => {
@@ -138,27 +135,39 @@ export function DiagnosisPicker({
 
       {/* Current diagnoses */}
       {diagnoses.length > 0 && (
-        <div className={columns === 2
-          ? "grid grid-cols-1 md:grid-cols-2 gap-3"
-          : "rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]"
-        }>
-          {diagnoses.map((dx, i) => (
+        <div className="flex flex-wrap gap-2">
+          {diagnoses.map((dx) => {
+            const isOD = dx.eyeAffected === "OD";
+            const isOS = dx.eyeAffected === "OS";
+            return (
             <div
               key={dx.id}
-              className={`flex items-center gap-3 px-5 py-3 ${
-                columns === 2
-                  ? "rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)]"
-                  : i > 0 ? "border-t border-[var(--border-subtle)]" : ""
-              }`}
+              title={dx.description}
+              className="group inline-flex items-center gap-0 rounded-full overflow-hidden cursor-default"
+              style={{
+                border: isOD
+                  ? "1px solid #93C5FD"
+                  : isOS
+                  ? "1px solid #C4B5FD"
+                  : "1px solid #5EEAD4",
+              }}
             >
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--mono-border)]">
+              <span
+                className="text-xs font-mono font-bold px-3 py-1.5"
+                style={{
+                  background: isOD ? "#DBEAFE" : isOS ? "#EDE9FE" : "#CCFBF1",
+                  color: isOD ? "#1E40AF" : isOS ? "#5B21B6" : "#115E59",
+                }}
+              >
                 {dx.icd10Code}
               </span>
-              <span className="flex-1 text-xs text-[var(--text-primary)]">
-                {dx.description}
-              </span>
               {dx.eyeAffected && (
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-lg bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--glass-border)]">
+                <span
+                  className="text-[11px] font-mono font-semibold px-2.5 py-1.5"
+                  style={{
+                    color: isOD ? "#1E40AF" : isOS ? "#5B21B6" : "#115E59",
+                  }}
+                >
                   {dx.eyeAffected}
                 </span>
               )}
@@ -166,14 +175,15 @@ export function DiagnosisPicker({
                 <button
                   type="button"
                   onClick={() => removeDiagnosis(dx.id)}
-                  className="text-xs hover-danger text-[var(--text-muted)] w-8 h-8 flex items-center justify-center flex-shrink-0"
-                  aria-label="Remove diagnosis"
+                  className="text-xs hover-danger text-[var(--text-muted)] px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={`Remove ${dx.icd10Code}`}
                 >
                   &times;
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

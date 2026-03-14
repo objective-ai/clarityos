@@ -3,6 +3,7 @@ import { persist, devtools } from "zustand/middleware";
 
 const isDev = process.env.NODE_ENV === "development";
 import type { EncounterStatus } from "@/types/encounter";
+import type { ScribeStructuredDataV2 } from "@/types/scribe";
 import { apiFetch } from "@/lib/api-client";
 
 export type { EncounterStatus };
@@ -21,6 +22,7 @@ export interface EncounterState {
   patientId?: string;
   patientChartNumber?: number;
   providerId?: string;
+  appointmentId?: string;
   patientName?: string;
   patientPreferredName?: string;
   patientDob?: string;
@@ -29,8 +31,13 @@ export interface EncounterState {
   chiefComplaint?: string;
   signedByName?: string;
   signedAt?: string;
+  assessmentAndPlan?: string;
   aiSummaryText?: string;
   aiSummaryGeneratedAt?: string;
+  aiScribeTranscript?: string;
+  aiScribeStatus?: "draft" | "streaming" | "ai_ready" | "editing";
+  /** Parsed structured data from AI scribe (for inline merge panel) */
+  aiStructuredData?: ScribeStructuredDataV2 | null;
   /** Load status for this encounter from the API */
   loadStatus?: EncounterLoadStatus;
   loadError?: string;
@@ -43,6 +50,7 @@ interface EncounterApiResponse {
   patientId: string;
   patientChartNumber?: number;
   providerId: string;
+  appointmentId?: string;
   patientName?: string;
   patientPreferredName?: string;
   patientDob?: string;
@@ -53,6 +61,7 @@ interface EncounterApiResponse {
   encounterDate: string;
   signedByName?: string;
   signedAt?: string;
+  assessmentAndPlan?: string;
   aiSummaryText?: string;
   aiSummaryGeneratedAt?: string;
 }
@@ -69,6 +78,10 @@ interface EncounterStoreState {
   unlockEncounter: (id: string) => void;
   setFinalizeModalOpen: (open: boolean) => void;
   setAiSummary: (id: string, text: string) => void;
+  setAssessmentAndPlan: (id: string, text: string) => void;
+  setAiScribeTranscript: (id: string, text: string) => void;
+  setAiScribeStatus: (id: string, status: "draft" | "streaming" | "ai_ready" | "editing") => void;
+  setAiStructuredData: (id: string, data: ScribeStructuredDataV2 | null) => void;
   getEncounter: (id: string) => EncounterState | undefined;
 }
 
@@ -135,16 +148,22 @@ export const useEncounterStore = create<EncounterStoreState>()(
                     patientId: data.patientId,
                     patientChartNumber: data.patientChartNumber,
                     providerId: data.providerId,
+                    appointmentId: data.appointmentId,
                     patientName: data.patientName,
                     patientPreferredName: data.patientPreferredName,
                     patientDob: data.patientDob,
                     patientSex: data.patientSex,
                     providerName: data.providerName ?? "",
                     chiefComplaint: data.chiefComplaint,
+                    assessmentAndPlan: data.assessmentAndPlan ?? state.encounters[id]?.assessmentAndPlan,
                     signedByName: data.signedByName,
                     signedAt: data.signedAt,
                     aiSummaryText: data.aiSummaryText,
                     aiSummaryGeneratedAt: data.aiSummaryGeneratedAt,
+                    // Preserve client-only AI Scribe state across API refreshes
+                    aiScribeTranscript: state.encounters[id]?.aiScribeTranscript,
+                    aiScribeStatus: state.encounters[id]?.aiScribeStatus,
+                    aiStructuredData: state.encounters[id]?.aiStructuredData,
                     loadStatus: "loaded",
                     loadError: undefined,
                   },
@@ -283,6 +302,61 @@ export const useEncounterStore = create<EncounterStoreState>()(
             }),
             false,
             "setAiSummary"
+          );
+        },
+
+        setAssessmentAndPlan: (id, text) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: {
+                  ...state.encounters[id],
+                  assessmentAndPlan: text,
+                },
+              },
+            }),
+            false,
+            "setAssessmentAndPlan"
+          );
+        },
+
+        setAiScribeTranscript: (id, text) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], aiScribeTranscript: text },
+              },
+            }),
+            false,
+            "setAiScribeTranscript"
+          );
+        },
+
+        setAiScribeStatus: (id, status) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], aiScribeStatus: status },
+              },
+            }),
+            false,
+            "setAiScribeStatus"
+          );
+        },
+
+        setAiStructuredData: (id, data) => {
+          set(
+            (state) => ({
+              encounters: {
+                ...state.encounters,
+                [id]: { ...state.encounters[id], aiStructuredData: data },
+              },
+            }),
+            false,
+            "setAiStructuredData"
           );
         },
 

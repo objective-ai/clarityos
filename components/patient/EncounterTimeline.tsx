@@ -7,17 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { usePatientStore } from "@/store/patientStore";
 import type { PatientEncounterSummary } from "@/types/patient";
+import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Timeline item
 // ---------------------------------------------------------------------------
 
 function TimelineItem({ encounter, tenant }: { encounter: PatientEncounterSummary; tenant: string }) {
-  const dateStr = new Date(encounter.encounterDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const dateStr = formatClinicDate(encounter.encounterDate);
 
   return (
     <div className="relative pl-8 pb-6 last:pb-0 group">

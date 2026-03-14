@@ -2,7 +2,8 @@
 api/routes/billing.py
 
 CRUD endpoints for superbills and billing operations.
-Includes MDM complexity calculation and CPT-ICD pointer validation.
+Business logic (MDM calculation, CPT suggestion, pointer validation)
+lives in backend/services/billing_service.py.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,9 +24,7 @@ from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import (
     AuditAction,
     ClaimStatus,
-    Diagnosis,
     Encounter,
-    ExamFindings,
     PatientProblem,
     Superbill,
     SuperbillLineItem,
@@ -41,224 +40,39 @@ from backend.schemas.billing import (
     SuperbillResponse,
     SuperbillUpdateRequest,
 )
+from backend.services.billing_service import (
+    calculate_mdm,
+    suggest_line_items,
+    validate_cpt_icd_pointers,
+)
 
 router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# Common optometry CPT codes with default fees
-# ---------------------------------------------------------------------------
-
-CPT_CATALOG: dict[str, dict] = {
-    "92004": {"description": "Comprehensive new patient eye exam", "fee": Decimal("250.00")},
-    "92014": {"description": "Comprehensive established patient eye exam", "fee": Decimal("175.00")},
-    "92002": {"description": "Intermediate new patient eye exam", "fee": Decimal("150.00")},
-    "92012": {"description": "Intermediate established patient eye exam", "fee": Decimal("100.00")},
-    "99213": {"description": "Office visit E&M Level 3 (straightforward MDM)", "fee": Decimal("110.00")},
-    "99214": {"description": "Office visit E&M Level 4 (moderate MDM)", "fee": Decimal("165.00")},
-    "99215": {"description": "Office visit E&M Level 5 (high MDM)", "fee": Decimal("225.00")},
-    "92015": {"description": "Refraction", "fee": Decimal("45.00")},
-    "92083": {"description": "Visual field test", "fee": Decimal("85.00")},
-    "92250": {"description": "Fundus photography", "fee": Decimal("65.00")},
-    "92134": {"description": "OCT retina scan", "fee": Decimal("75.00")},
-}
-
-
-# ---------------------------------------------------------------------------
-# MDM Complexity Calculator
-# ---------------------------------------------------------------------------
-
-
-def calculate_mdm(
-    diagnoses: list[Diagnosis],
-    problems: list[PatientProblem],
-    exam_findings: list[ExamFindings],
-) -> MdmCalculationResult:
-    """Calculate Medical Decision Making complexity from clinical data.
-
-    Uses the 2021 E&M guidelines framework:
-    1. Number and Complexity of Problems Addressed
-    2. Amount and/or Complexity of Data Reviewed
-    3. Risk of Complications and/or Morbidity
-    """
-    # --- 1. Problem complexity ---
-    problem_points = 0
-    active_dx = [dx for dx in diagnoses if not dx.is_deleted and dx.status == "active"]
-    chronic_dx = [dx for dx in diagnoses if not dx.is_deleted and dx.status == "chronic"]
-    active_problems = [p for p in problems if p.status == "active" and not p.is_deleted]
-
-    # Self-limited problems: 1 point each
-    # Stable chronic: 2 points each
-    # Chronic with exacerbation: 3 points each
-    # New problem needing workup: 3 points
-    # Acute life-threatening: 4 points
-
-    for dx in active_dx:
-        severity = (dx.severity or "").lower()
-        if severity in ("severe", "acute"):
-            problem_points += 3
-        elif severity in ("moderate",):
-            problem_points += 2
-        else:
-            problem_points += 1
-
-    for dx in chronic_dx:
-        severity = (dx.severity or "").lower()
-        if severity in ("severe", "exacerbation", "worsening"):
-            problem_points += 3
-        else:
-            problem_points += 2
-
-    for p in active_problems:
-        severity = (p.severity or "").lower()
-        if severity in ("severe", "exacerbation"):
-            problem_points += 3
-        else:
-            problem_points += 1
-
-    # --- 2. Data complexity ---
-    data_points = 0
-    # Each exam section reviewed = 1 point
-    data_points += len(exam_findings)
-    # Each diagnosis with notes = additional data reviewed
-    data_points += sum(1 for dx in active_dx if dx.notes)
-
-    # --- 3. Risk assessment ---
-    risk_keywords_high = {"glaucoma", "retinal detachment", "macular degeneration",
-                          "diabetic retinopathy", "papilledema", "optic neuritis"}
-    risk_keywords_moderate = {"cataract", "dry eye", "blepharitis", "conjunctivitis",
-                              "keratoconus", "uveitis", "iritis"}
-
-    all_descriptions = " ".join(
-        (dx.description or "").lower() for dx in active_dx + chronic_dx
-    )
-    all_problem_desc = " ".join(
-        (p.description or "").lower() for p in active_problems
-    )
-    combined_text = all_descriptions + " " + all_problem_desc
-
-    risk_level = "minimal"
-    if any(kw in combined_text for kw in risk_keywords_high):
-        risk_level = "high"
-    elif any(kw in combined_text for kw in risk_keywords_moderate):
-        risk_level = "moderate"
-    elif problem_points >= 2:
-        risk_level = "low"
-
-    # --- Determine MDM level ---
-    # Using the "two of three" rule:
-    # Must meet at least 2 of 3 criteria for a given level
-
-    scores = {"problems": 0, "data": 0, "risk": 0}
-
-    # Problem scoring
-    if problem_points >= 4:
-        scores["problems"] = 4  # High
-    elif problem_points >= 3:
-        scores["problems"] = 3  # Moderate
-    elif problem_points >= 2:
-        scores["problems"] = 2  # Low
-    else:
-        scores["problems"] = 1  # Straightforward
-
-    # Data scoring
-    if data_points >= 4:
-        scores["data"] = 4
-    elif data_points >= 3:
-        scores["data"] = 3
-    elif data_points >= 2:
-        scores["data"] = 2
-    else:
-        scores["data"] = 1
-
-    # Risk scoring
-    risk_map = {"high": 4, "moderate": 3, "low": 2, "minimal": 1}
-    scores["risk"] = risk_map.get(risk_level, 1)
-
-    # Two of three rule — take the second-highest score
-    sorted_scores = sorted(scores.values(), reverse=True)
-    mdm_score = sorted_scores[1]  # Second highest determines level
-
-    if mdm_score >= 4:
-        mdm_level = "high"
-        em_code = "99215"
-    elif mdm_score >= 3:
-        mdm_level = "moderate"
-        em_code = "99214"
-    else:
-        mdm_level = "straightforward"
-        em_code = "99213"
-
-    # Build reasoning
-    parts = []
-    parts.append(
-        f"Problems addressed: {len(active_dx)} active diagnoses, "
-        f"{len(chronic_dx)} chronic conditions, "
-        f"{len(active_problems)} active problems ({problem_points} complexity points)."
-    )
-    parts.append(
-        f"Data reviewed: {len(exam_findings)} exam sections, "
-        f"{data_points} total data points."
-    )
-    parts.append(f"Risk level: {risk_level}.")
-    parts.append(
-        f"MDM level: {mdm_level} (2-of-3 rule: "
-        f"problems={scores['problems']}, data={scores['data']}, risk={scores['risk']})."
-    )
-
-    return MdmCalculationResult(
-        mdm_level=mdm_level,
-        suggested_em_code=em_code,
-        reasoning=" ".join(parts),
-        problem_points=problem_points,
-        data_points=data_points,
-        risk_level=risk_level,
-    )
-
-
-# ---------------------------------------------------------------------------
-# CPT-ICD Pointer Validation
-# ---------------------------------------------------------------------------
-
-
-def validate_cpt_icd_pointers(
-    line_items: list[SuperbillLineItem],
-    diagnoses: list[Diagnosis],
-) -> list[CptIcdWarning]:
-    """Check that every CPT code has at least one supporting diagnosis pointer."""
-    warnings: list[CptIcdWarning] = []
-    active_icd_codes = {
-        dx.icd10_code for dx in diagnoses if not dx.is_deleted
-    }
-
-    for item in line_items:
-        if not item.diagnosis_pointers:
-            warnings.append(CptIcdWarning(
-                cpt_code=item.cpt_code,
-                description=item.description,
-                warning=f"CPT {item.cpt_code} has no diagnosis pointer. "
-                        "A supporting ICD-10 code is required for claim submission.",
-            ))
-        else:
-            # Check that referenced ICD codes actually exist on the encounter
-            missing = [
-                code for code in item.diagnosis_pointers
-                if code not in active_icd_codes
-            ]
-            if missing:
-                warnings.append(CptIcdWarning(
-                    cpt_code=item.cpt_code,
-                    description=item.description,
-                    warning=f"CPT {item.cpt_code} references ICD-10 codes not on this encounter: "
-                            f"{', '.join(missing)}.",
-                ))
-
-    return warnings
-
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+async def _get_superbill_or_404(
+    encounter_id: UUID | str,
+    tenant_id: UUID,
+    db: AsyncSession,
+    *,
+    load_line_items: bool = False,
+) -> Superbill:
+    """Fetch a superbill by encounter ID scoped to tenant, or raise 404."""
+    stmt = select(Superbill).where(
+        Superbill.encounter_id == encounter_id,
+        Superbill.tenant_id == tenant_id,
+    )
+    if load_line_items:
+        stmt = stmt.options(selectinload(Superbill.line_items))
+
+    sb = (await db.execute(stmt)).scalar_one_or_none()
+    if not sb:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Superbill not found")
+    return sb
 
 
 def _build_superbill_response(
@@ -298,55 +112,6 @@ def _build_superbill_response(
         created_at=sb.created_at,
         updated_at=sb.updated_at,
     )
-
-
-def _suggest_line_items(
-    diagnoses: list[Diagnosis],
-    has_refraction: bool,
-    mdm_result: MdmCalculationResult,
-) -> list[dict]:
-    """Auto-suggest CPT line items based on encounter data."""
-    items: list[dict] = []
-    active_dx = [dx for dx in diagnoses if not dx.is_deleted]
-    icd_codes = [dx.icd10_code for dx in active_dx]
-
-    # Add suggested E&M code from MDM calculation
-    em_code = mdm_result.suggested_em_code
-    if em_code in CPT_CATALOG:
-        items.append({
-            "cpt_code": em_code,
-            "description": CPT_CATALOG[em_code]["description"],
-            "fee": CPT_CATALOG[em_code]["fee"],
-            "units": 1,
-            "diagnosis_pointers": icd_codes[:4],  # CMS allows max 4 pointers per line
-            "modifiers": [],
-        })
-
-    # Add comprehensive exam code if multiple diagnoses
-    if len(active_dx) >= 2:
-        exam_code = "92014"  # Established patient comprehensive
-        if exam_code in CPT_CATALOG and not any(i["cpt_code"] == exam_code for i in items):
-            items.append({
-                "cpt_code": exam_code,
-                "description": CPT_CATALOG[exam_code]["description"],
-                "fee": CPT_CATALOG[exam_code]["fee"],
-                "units": 1,
-                "diagnosis_pointers": icd_codes[:4],
-                "modifiers": [],
-            })
-
-    # Add refraction if performed
-    if has_refraction:
-        items.append({
-            "cpt_code": "92015",
-            "description": CPT_CATALOG["92015"]["description"],
-            "fee": CPT_CATALOG["92015"]["fee"],
-            "units": 1,
-            "diagnosis_pointers": icd_codes[:4],
-            "modifiers": [],
-        })
-
-    return items
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +220,7 @@ async def create_superbill(
         raw_items = [li.model_dump() for li in payload.line_items]
     else:
         has_refraction = len(enc.refractions) > 0
-        raw_items = _suggest_line_items(
+        raw_items = suggest_line_items(
             list(enc.diagnoses), has_refraction, mdm_result
         )
 
@@ -492,8 +257,14 @@ async def create_superbill(
 
     await db.commit()
 
-    # Reload with line items
-    await db.refresh(sb, attribute_names=["line_items"])
+    # Re-fetch with line items (db.refresh is unsafe in async context — use selectinload)
+    sb = (
+        await db.execute(
+            select(Superbill)
+            .where(Superbill.id == sb.id)
+            .options(selectinload(Superbill.line_items))
+        )
+    ).scalar_one()
 
     # Validate pointers
     active_items = [li for li in sb.line_items if not li.is_deleted]
@@ -507,7 +278,7 @@ async def create_superbill(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{encounter_id}/superbill", response_model=SuperbillResponse)
+@router.get("/{encounter_id}/superbill", response_model=SuperbillResponse | None)
 async def get_superbill(
     encounter_id: str,
     request: Request,
@@ -516,18 +287,16 @@ async def get_superbill(
 ):
     """Retrieve the superbill for an encounter."""
     encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
-    stmt = (
-        select(Superbill)
-        .where(
-            Superbill.encounter_id == encounter_id,
-            Superbill.tenant_id == ctx.tenant_id,
+    sb = (
+        await db.execute(
+            select(Superbill)
+            .where(Superbill.encounter_id == encounter_id, Superbill.tenant_id == ctx.tenant_id)
+            .options(selectinload(Superbill.line_items))
         )
-        .options(selectinload(Superbill.line_items))
-    )
-    sb = (await db.execute(stmt)).scalar_one_or_none()
-
+    ).scalar_one_or_none()
     if not sb:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Superbill not found")
+        # No PHI accessed — audit log intentionally skipped
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # Fetch encounter diagnoses for validation
     enc = (
@@ -569,19 +338,7 @@ async def update_superbill(
 ):
     """Update superbill status or notes."""
     encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
-    sb = (
-        await db.execute(
-            select(Superbill)
-            .where(
-                Superbill.encounter_id == encounter_id,
-                Superbill.tenant_id == ctx.tenant_id,
-            )
-            .options(selectinload(Superbill.line_items))
-        )
-    ).scalar_one_or_none()
-
-    if not sb:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Superbill not found")
+    sb = await _get_superbill_or_404(encounter_id, ctx.tenant_id, db, load_line_items=True)
 
     changes: dict = {}
     if payload.claim_status is not None:
@@ -601,7 +358,15 @@ async def update_superbill(
     )
 
     await db.commit()
-    await db.refresh(sb, attribute_names=["line_items"])
+
+    # Re-fetch with line items (db.refresh is unsafe in async context — use selectinload)
+    sb = (
+        await db.execute(
+            select(Superbill)
+            .where(Superbill.id == sb.id)
+            .options(selectinload(Superbill.line_items))
+        )
+    ).scalar_one()
 
     return _build_superbill_response(sb)
 
@@ -625,17 +390,7 @@ async def add_line_item(
 ):
     """Add a CPT line item to an existing superbill."""
     encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
-    sb = (
-        await db.execute(
-            select(Superbill).where(
-                Superbill.encounter_id == encounter_id,
-                Superbill.tenant_id == ctx.tenant_id,
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not sb:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Superbill not found")
+    sb = await _get_superbill_or_404(encounter_id, ctx.tenant_id, db)
 
     li = SuperbillLineItem(
         tenant_id=ctx.tenant_id,
@@ -696,17 +451,7 @@ async def delete_line_item(
 ):
     """Remove a CPT line item from a superbill."""
     encounter_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
-    sb = (
-        await db.execute(
-            select(Superbill).where(
-                Superbill.encounter_id == encounter_id,
-                Superbill.tenant_id == ctx.tenant_id,
-            )
-        )
-    ).scalar_one_or_none()
-
-    if not sb:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Superbill not found")
+    sb = await _get_superbill_or_404(encounter_id, ctx.tenant_id, db)
 
     li = (
         await db.execute(

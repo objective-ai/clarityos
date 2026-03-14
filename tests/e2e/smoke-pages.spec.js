@@ -5,9 +5,10 @@
  * all API calls return 200, no console errors.
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-pages.spec.js
  */
-const { launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, setupTracking, getFailedApiCalls, printResults, TARGET_URL } = require('./helpers/test-utils');
 
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
   const { apiCalls, consoleErrors } = setupTracking(page);
   const results = {};

@@ -71,3 +71,6 @@ docs/
 
 # test artifacts
 finalized-enc.yaml
+encounter-state.yml
+encounter-refractions*.png
+dashboard-after-login.png

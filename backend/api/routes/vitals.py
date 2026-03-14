@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from backend.schemas.vitals import VitalsCreate, VitalsResponse
 router = APIRouter()
 
 
-@router.get("/{encounter_id}/vitals", response_model=VitalsResponse)
+@router.get("/{encounter_id}/vitals", response_model=VitalsResponse | None)
 async def get_vitals(
     encounter_id: str,
     request: Request,
@@ -45,7 +45,8 @@ async def get_vitals(
     ).scalar_one_or_none()
 
     if not vitals:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No vitals recorded yet")
+        # No PHI accessed — audit log intentionally skipped
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     await log_action(
         db, ctx, AuditAction.READ, "vitals", vitals.id,

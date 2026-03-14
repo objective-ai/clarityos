@@ -88,8 +88,11 @@ interface EncounterBottomTabsProps {
   status: EncounterStatus;
   isFinalized: boolean;
   onAdvanceStatus: () => void;
+  onRevertToPretest?: () => void;
   sidebarCollapsed: boolean;
   patientId: string;
+  /** When false, Finalize button is visually subdued to indicate missing required fields */
+  canFinalize?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,8 +103,10 @@ export function EncounterBottomTabs({
   status,
   isFinalized,
   onAdvanceStatus,
+  onRevertToPretest,
   sidebarCollapsed,
   patientId,
+  canFinalize,
 }: EncounterBottomTabsProps) {
   const [activeTab, setActiveTab] = useState(TABS[0].id);
   const [chartOpen, setChartOpen] = useState(false);
@@ -195,6 +200,21 @@ export function EncounterBottomTabs({
             const stepIndex = STATUS_ORDER[step.key];
             const isActive = stepIndex === currentStep;
             const isDone = stepIndex < currentStep;
+            const isRevertable = step.key === "pre_test" && status === "in_exam" && !!onRevertToPretest;
+            const stepStyle = isActive
+              ? { background: "var(--accent-dim)", color: "var(--accent)", borderColor: "var(--accent)" }
+              : isDone
+              ? { background: "rgba(34,197,94,0.08)", color: "var(--state-normal)", borderColor: "rgba(34,197,94,0.2)" }
+              : { background: "transparent", color: "var(--text-muted)", borderColor: "var(--border-subtle)" };
+            const innerStep = (
+              <span
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-all"
+                style={stepStyle}
+              >
+                {isDone && <Check size={10} />}
+                {step.label}
+              </span>
+            );
             return (
               <div key={step.key} className="flex items-center gap-1">
                 {i > 0 && (
@@ -203,19 +223,18 @@ export function EncounterBottomTabs({
                     style={{ background: isDone ? "var(--state-normal)" : "var(--border-default)" }}
                   />
                 )}
-                <span
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-all"
-                  style={
-                    isActive
-                      ? { background: "var(--accent-dim)", color: "var(--accent)", borderColor: "var(--accent)" }
-                      : isDone
-                      ? { background: "rgba(34,197,94,0.08)", color: "var(--state-normal)", borderColor: "rgba(34,197,94,0.2)" }
-                      : { background: "transparent", color: "var(--text-muted)", borderColor: "var(--border-subtle)" }
-                  }
-                >
-                  {isDone && <Check size={10} />}
-                  {step.label}
-                </span>
+                {isRevertable ? (
+                  <button
+                    type="button"
+                    onClick={onRevertToPretest}
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    title="Revert to Pre-Test"
+                  >
+                    {innerStep}
+                  </button>
+                ) : (
+                  innerStep
+                )}
               </div>
             );
           })}
@@ -226,7 +245,12 @@ export function EncounterBottomTabs({
           <button
             type="button"
             onClick={onAdvanceStatus}
-            className="text-xs px-4 py-2 rounded-xl font-semibold transition-all bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
+            title={actionLabel === "Finalize" && !canFinalize ? "Complete required fields to finalize" : undefined}
+            className={`text-xs px-4 py-2 rounded-xl font-semibold transition-all ${
+              actionLabel === "Finalize" && canFinalize === false
+                ? "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] opacity-70 hover:opacity-90"
+                : "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
+            }`}
           >
             {actionLabel} &rarr;
           </button>

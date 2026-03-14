@@ -267,3 +267,4 @@ class PrepMeResponse(AppBaseModel):
 
     summary: str
     encounter_count: int = 0
+    last_encounter_date: date | None = None

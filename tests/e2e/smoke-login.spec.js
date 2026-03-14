@@ -4,9 +4,10 @@
  * Verifies: login flow, JWT token success, slug-based redirect (no UUIDs).
  * Run: bash scripts/dev.sh verify tests/e2e/smoke-login.spec.js
  */
-const { launchBrowser, loginOrRestore, setupTracking, printResults } = require('./helpers/test-utils');
+const { ensureApi, launchBrowser, loginOrRestore, setupTracking, printResults } = require('./helpers/test-utils');
 
 (async () => {
+  await ensureApi();
   const { browser, context, page } = await launchBrowser();
   const { consoleErrors } = setupTracking(page);
   const results = {};

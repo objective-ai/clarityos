@@ -178,12 +178,34 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
 
         try {
           // apiFetch returns camelCase keys from the standalone GET endpoint
+          // 204 = no findings saved yet; apiFetch returns null in that case
           const res = await apiFetch<{
             isNormalWnl: boolean;
             findingsOd: Record<string, StructureFinding> | null;
             findingsOs: Record<string, StructureFinding> | null;
             providerNotes: string | null;
-          }>(`/api/encounters/${encounterId}/exam-findings/${section}`);
+          } | null>(`/api/encounters/${encounterId}/exam-findings/${section}`);
+
+          if (res === null) {
+            // 204: no findings saved yet — initialize with blank draft
+            set(
+              (state) => ({
+                findings: {
+                  ...state.findings,
+                  [key]: {
+                    draft: state.findings[key]?.draft ?? blankDraft(section),
+                    committed: null,
+                    saveStatus: "idle" as FindingsSaveStatus,
+                    errors: [],
+                    lastSavedAt: null,
+                  },
+                },
+              }),
+              false,
+              "loadFindings/empty"
+            );
+            return;
+          }
 
           const draft: FindingsDraft = {
             is_normal_wnl: res.isNormalWnl,
@@ -209,43 +231,22 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
             "loadFindings/loaded"
           );
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "";
-          // 404 means no findings saved yet — initialize with blank draft (not an error)
-          if (msg.includes("not found") || msg.includes("404")) {
-            set(
-              (state) => ({
-                findings: {
-                  ...state.findings,
-                  [key]: {
-                    draft: state.findings[key]?.draft ?? blankDraft(section),
-                    committed: null,
-                    saveStatus: "idle" as FindingsSaveStatus,
-                    errors: [],
-                    lastSavedAt: null,
-                  },
+          set(
+            (state) => ({
+              findings: {
+                ...state.findings,
+                [key]: {
+                  draft: state.findings[key]?.draft ?? blankDraft(section),
+                  committed: state.findings[key]?.committed ?? null,
+                  saveStatus: "error" as FindingsSaveStatus,
+                  errors: [{ field: "_load", message: err instanceof Error ? err.message : "Could not load exam findings" }],
+                  lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
                 },
-              }),
-              false,
-              "loadFindings/not-found"
-            );
-          } else {
-            set(
-              (state) => ({
-                findings: {
-                  ...state.findings,
-                  [key]: {
-                    draft: state.findings[key]?.draft ?? blankDraft(section),
-                    committed: state.findings[key]?.committed ?? null,
-                    saveStatus: "error" as FindingsSaveStatus,
-                    errors: [{ field: "_load", message: msg || "Could not load exam findings" }],
-                    lastSavedAt: state.findings[key]?.lastSavedAt ?? null,
-                  },
-                },
-              }),
-              false,
-              "loadFindings/error"
-            );
-          }
+              },
+            }),
+            false,
+            "loadFindings/error"
+          );
         }
       },
 

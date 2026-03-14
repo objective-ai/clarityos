@@ -6,7 +6,6 @@ import {
   formatRxLine,
   hasSignificantRxChange,
 } from "@/lib/utils/generateRxPdf";
-import type { EyeRxSummary } from "@/types/optical";
 import { makeEyeRx } from "../../helpers/fixtures/optical";
 
 // ---------------------------------------------------------------------------

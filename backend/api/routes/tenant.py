@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.ai_models import DEFAULT_AI_MODEL, VALID_MODEL_IDS
 from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext
 from backend.db.models.public.saas import Tenant
@@ -41,7 +42,8 @@ async def get_tenant_settings(
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    return TenantSettingsResponse(name=tenant.name, timezone=tenant.timezone)
+    ai_model = (tenant.settings_jsonb or {}).get("ai_model", DEFAULT_AI_MODEL)
+    return TenantSettingsResponse(name=tenant.name, timezone=tenant.timezone, ai_model=ai_model)
 
 
 @router.patch("/settings/", response_model=TenantSettingsResponse)
@@ -64,5 +66,21 @@ async def update_tenant_settings(
             )
         tenant.timezone = payload.timezone
 
+    if payload.ai_model is not None:
+        model_id = payload.ai_model.strip()
+        if not model_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="AI model cannot be empty",
+            )
+        if model_id not in VALID_MODEL_IDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid AI model. Must be one of: {sorted(VALID_MODEL_IDS)}",
+            )
+        current = tenant.settings_jsonb or {}
+        tenant.settings_jsonb = {**current, "ai_model": model_id}
+
     await db.flush()
-    return TenantSettingsResponse(name=tenant.name, timezone=tenant.timezone)
+    ai_model = (tenant.settings_jsonb or {}).get("ai_model", DEFAULT_AI_MODEL)
+    return TenantSettingsResponse(name=tenant.name, timezone=tenant.timezone, ai_model=ai_model)

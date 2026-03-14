@@ -8,6 +8,7 @@ import type { PatientAlert, PatientHeaderData } from "@/types/session";
 import { Badge } from "@/components/ui/badge";
 import { useEncounterStore } from "@/store/encounterStore";
 import { useVitalsDraft } from "@/store/vitalsStore";
+import { formatClinicDate } from "@/lib/timezone";
 import { isIopElevated } from "@/types/vitals";
 
 // ---------------------------------------------------------------------------
@@ -32,11 +33,7 @@ function calculateAge(dob: string): number {
 }
 
 function formatDob(dob: string): string {
-  return new Date(dob + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatClinicDate(dob);
 }
 
 function formatSex(sex: PatientHeaderData["sex"]): string {
@@ -201,11 +198,7 @@ export function PatientStickyHeader({
                     {encounter.providerName}
                   </div>
                   <div className="text-[10px] text-[var(--text-muted)]">
-                    {new Date(encounter.encounterDate + "T00:00:00").toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
+                    {formatClinicDate(encounter.encounterDate)}
                   </div>
                 </div>
               </>

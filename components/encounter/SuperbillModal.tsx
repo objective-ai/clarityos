@@ -23,7 +23,7 @@ import {
 import { useBillingStore, useSuperbill, useBillingWarnings, useMdmResult } from "@/store/billingStore";
 import { useDiagnoses } from "@/store/diagnosisStore";
 import { CPT_CATALOG } from "@/types/billing";
-import type { ClaimStatus, CptEntry, LineItemCreateRequest, Superbill } from "@/types/billing";
+import type { CptEntry, LineItemCreateRequest } from "@/types/billing";
 import { buildCms1500Claim, downloadCms1500Json, validateCms1500Claim } from "@/lib/utils/cms1500";
 
 // ---------------------------------------------------------------------------
@@ -99,7 +99,7 @@ function AddCptDropdown({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div
-            className="absolute top-full left-0 mt-1 z-50 w-80 max-h-60 overflow-y-auto rounded-xl shadow-lg"
+            className="absolute top-full right-0 mt-1 z-50 w-[26rem] max-h-60 overflow-y-auto rounded-xl shadow-lg"
             style={{
               background: "var(--bg-surface)",
               border: "1px solid var(--glass-border)",
@@ -155,6 +155,7 @@ export function SuperbillModal({
   const updateStatus = useBillingStore((s) => s.updateStatus);
   const addLineItem = useBillingStore((s) => s.addLineItem);
   const removeLineItem = useBillingStore((s) => s.removeLineItem);
+  const reset = useBillingStore((s) => s.reset);
   const isSaving = useBillingStore(
     (s) => s.encounters[encounterId]?.isSaving ?? false,
   );
@@ -166,16 +167,15 @@ export function SuperbillModal({
   );
 
   const allDiagnoses = useDiagnoses(encounterId);
-  const activeDiagnoses = allDiagnoses.filter((dx) => dx.status === "Active");
+  const activeDiagnoses = allDiagnoses.filter((dx) => dx.status.toLowerCase() === "active");
   const icdCodes = activeDiagnoses.map((dx) => dx.icd10Code);
 
-  // Load or create superbill on open
+  // Always reset and reload on open to clear any stale error state
   useEffect(() => {
     if (!open) return;
-    if (loadStatus === "idle") {
-      loadSuperbill(encounterId);
-    }
-  }, [open, encounterId, loadStatus, loadSuperbill]);
+    reset(encounterId);
+    loadSuperbill(encounterId);
+  }, [open, encounterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-create superbill if none exists after load
   useEffect(() => {
@@ -263,7 +263,7 @@ export function SuperbillModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl flex flex-col"
+        className="max-w-[70vw] flex flex-col"
         style={{ maxHeight: "85vh" }}
       >
         <DialogHeader className="px-6 pt-6 pb-0 flex-shrink-0">

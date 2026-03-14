@@ -2,6 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+status: in_progress
+stopped_at: Phase 9 context updated with billing flow decisions
+last_updated: "2026-03-13T00:04:00.451Z"
+last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
+progress:
+  total_phases: 12
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 14
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: Post-MVP (Analytics, Claims, Reporting, AI Scribe Audio, Mobile)
+status: in_progress
+stopped_at: Phase 8 complete, Phase 9 context gathered
+last_updated: "2026-03-12T19:50:25.410Z"
+last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
+progress:
+  total_phases: 12
+  completed_phases: 8
+  total_plans: 17
+  completed_plans: 17
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
 status: complete
 stopped_at: "All 7 phases complete — MVP done"
 last_updated: "2026-03-07T06:00:00Z"
@@ -25,11 +55,11 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 7 of 7 COMPLETE
-Next: V2 roadmap features
-Last activity: 2026-03-07 — Phase 7 (Patient Intake) complete
+Phase: 8 of 12 COMPLETE (V2 Milestone)
+Next: Phase 9 (Claims Basics) planning and execution
+Last activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
 
-Progress: [==========] 100%
+Progress: [======    ] 67%
 
 ## Performance Metrics
 
@@ -52,6 +82,8 @@ Progress: [==========] 100%
 **Recent Trend:**
 - Last 11 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min), 02-01 (~12min), 02-02 (~8min), 02-03 (~45min), 03-01 (~12min), 03-02 (~13min), 04-01 (~9min), 05-01 (~11min), 06-01 (~10min)
 - Trend: Improving — parallel execution of 3 phases completed in ~10min wall time
+| Phase 08-analytics-dashboard P00 | 12 | 2 tasks | 5 files |
+| Phase 08-analytics-dashboard P02 | 25 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -95,6 +127,15 @@ Recent decisions affecting current work:
 - [Phase 06-01]: Rx PDF uses window.print() with print-optimized div (no external lib)
 - [Phase 06-01]: Optical status: waiting -> in_progress -> dispensed
 - [Phase 06-01]: Print styles use dangerouslySetInnerHTML (not styled-jsx)
+- [Phase 08-analytics-dashboard]: kpi_avg_exam_duration used instead of kpi_avg_wait_time (no actual_start_time DB column)
+- [Phase 08-analytics-dashboard]: Single aggregate /api/analytics endpoint returns all 7 charts + 4 KPIs in one request
+- [Phase 08-analytics-dashboard]: All 7 Recharts chart components defined inline in analytics/page.tsx for SSR safety
+- [Phase 08-analytics-dashboard]: GlassCardSkeleton used for KPI loading (shadcn Skeleton not available in project)
+- [Phase 08-analytics-dashboard]: Date range picker filters all 7 charts dynamically (7d/30d/90d/6m)
+- [AI Scribe V2]: ValidationStationModal provides full-screen SOAP review with field-level confidence scores (HIGH/MEDIUM/LOW)
+- [AI Scribe V2]: ConfidenceBadge color-codes suspect fields; FieldReviewer allows field-by-field approval/edit
+- [AI Scribe V2]: RefractionMiniGrid shows OD/OS sphere/cylinder/axis with confidence coloring
+- [AI Scribe V2]: PATCH `/encounters/{id}/ai-findings` endpoint finalizes validated AI-populated fields
 
 ### Pending Todos
 
@@ -106,6 +147,15 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-07T06:00:00Z
-Stopped at: All 7 phases complete — MVP done
-Resume file: None
+Last session: 2026-03-13T00:04:00.446Z
+Stopped at: Phase 9 context updated with billing flow decisions
+Resume file: .planning/phases/09-claims-basics/09-CONTEXT.md
+
+**Phase 9 Overview:**
+- Extends Phase 4 (Superbill) with insurance infrastructure: payer CRUD, patient insurance records, per-payer fee schedules
+- New admin tab for payer management + fee schedule editing
+- New Insurance tab on patient detail page (primary/secondary capture)
+- CMS-1500 PDF generation via reportlab (server-side, clean professional layout)
+- Pre-seed ~10 California payers (VSP, EyeMed, Davis Vision, Medicare, Medi-Cal, etc.)
+- Manual status transitions (draft → ready_to_bill → submitted → accepted/rejected)
+- Electronic clearinghouse integration deferred to V3-01

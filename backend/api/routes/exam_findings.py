@@ -7,7 +7,7 @@ Uses JSONB + Pydantic validation per section.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -135,7 +135,7 @@ async def upsert_exam_findings(
 
 @router.get(
     "/{encounter_id}/exam-findings/{exam_section}",
-    response_model=ExamFindingsDetailResponse,
+    response_model=ExamFindingsDetailResponse | None,
 )
 async def get_exam_findings(
     encounter_id: str,
@@ -158,9 +158,8 @@ async def get_exam_findings(
     ).scalar_one_or_none()
 
     if not row:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Findings not found"
-        )
+        # No PHI accessed — audit log intentionally skipped
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # HIPAA-01: Log PHI read access for breach notification queries
     await log_action(
