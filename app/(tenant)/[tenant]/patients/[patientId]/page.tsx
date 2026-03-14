@@ -34,18 +34,28 @@ const PrepMeButton = dynamic(
   () => import("@/components/patient/PrepMeButton").then((m) => ({ default: m.PrepMeButton })),
   { loading: () => <div className="animate-pulse h-10 w-24 bg-white/5 rounded-xl" />, ssr: false },
 );
+const InsuranceTab = dynamic(
+  () => import("@/components/patient/InsuranceTab").then((m) => ({ default: m.InsuranceTab })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
+const PatientBillingTab = dynamic(
+  () => import("@/components/patient/PatientBillingTab").then((m) => ({ default: m.PatientBillingTab })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
 
 // ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history";
+type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "demographics", label: "Patient Info" },
   { key: "encounters", label: "Encounters" },
   { key: "flowsheets", label: "Flowsheets" },
   { key: "rx-history", label: "Rx History" },
+  { key: "insurance", label: "Insurance" },
+  { key: "billing", label: "Billing" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -229,7 +239,6 @@ function DemographicsTab({ patient, patientId }: { patient: PatientDetail; patie
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <ContactInfoCard patient={patient} patientId={patientId} />
-        <InsuranceCard patient={patient} patientId={patientId} />
         <EmergencyContactCard patient={patient} patientId={patientId} />
         <NotesCard patient={patient} patientId={patientId} />
       </div>
@@ -292,56 +301,6 @@ function ContactInfoCard({ patient, patientId }: { patient: PatientDetail; patie
             <InfoRow label="Phone" value={patient.phone} />
             <InfoRow label="Email" value={patient.email} />
             <InfoRow label="Address" value={formatAddress(patient)} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// --- Insurance Card ---
-
-function InsuranceCard({ patient, patientId }: { patient: PatientDetail; patientId: string }) {
-  const { editing, draft, saving, startEdit, cancel, save, setField } =
-    useEditableSection(
-      {
-        insuranceProvider: patient.insuranceProvider ?? "",
-        insuranceMemberId: patient.insuranceMemberId ?? "",
-        insuranceGroup: patient.insuranceGroup ?? "",
-      },
-      patientId,
-    );
-
-  const icon = (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="4" width="12" height="8" rx="1.5" stroke="var(--text-muted)" strokeWidth="1.2" />
-      <path d="M2 7h12" stroke="var(--text-muted)" strokeWidth="1.2" />
-    </svg>
-  );
-
-  return (
-    <Card className="glass-card">
-      <CardContent className="p-5">
-        <SectionHeader
-          icon={icon}
-          title="Insurance"
-          editing={editing}
-          saving={saving}
-          onEdit={startEdit}
-          onSave={save}
-          onCancel={cancel}
-        />
-        {editing ? (
-          <div className="space-y-3">
-            <EditableInput label="Provider" value={draft.insuranceProvider} onChange={(v) => setField("insuranceProvider", v)} />
-            <EditableInput label="Member ID" value={draft.insuranceMemberId} onChange={(v) => setField("insuranceMemberId", v)} />
-            <EditableInput label="Group" value={draft.insuranceGroup} onChange={(v) => setField("insuranceGroup", v)} />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <InfoRow label="Provider" value={patient.insuranceProvider} />
-            <InfoRow label="Member ID" value={patient.insuranceMemberId} />
-            <InfoRow label="Group" value={patient.insuranceGroup} />
           </div>
         )}
       </CardContent>
@@ -585,6 +544,8 @@ export default function PatientDetailPage() {
         {activeTab === "rx-history" && (
           <RxHistoryTable patientId={patientId} />
         )}
+        {activeTab === "insurance" && <InsuranceTab patientId={patientId} />}
+        {activeTab === "billing" && <PatientBillingTab patientId={patientId} />}
       </div>
     </div>
   );
@@ -700,12 +661,6 @@ function PatientHeaderCard({
                     </span>
                   )}
                 </div>
-                {patient.insuranceProvider && (
-                  <p className="text-caption text-[var(--text-muted)] mt-1">
-                    {patient.insuranceProvider}
-                    {patient.insuranceMemberId ? ` / ${patient.insuranceMemberId}` : ""}
-                  </p>
-                )}
               </div>
             )}
           </div>
