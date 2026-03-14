@@ -251,6 +251,7 @@ class SuperbillListItem(AppBaseModel):
     cpt_codes: list[str]
     total_fee: float
     created_at: datetime
+    last_pdf_generated_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------

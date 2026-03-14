@@ -149,6 +149,7 @@ export interface SuperbillListItem {
   cptCodes: string[];
   totalFee: number;
   createdAt: string;
+  lastPdfGeneratedAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------

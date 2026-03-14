@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trash2, Plus, Zap, Lock } from "lucide-react";
+import { Trash2, Plus, Zap, Lock, FileDown, Eye, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useBillingStore } from "@/store/billingStore";
 import { CPT_CATALOG } from "@/types/billing";
@@ -161,6 +161,9 @@ export default function SuperbillEditor({
   // Track whether we already triggered payer selection to avoid double-fire
   const openedPayerRef = useRef(false);
 
+  // PDF download state
+  const [pdfLoading, setPdfLoading] = useState(false);
+
   // Change Payer: insurance plans for dropdown
   const [insurancePlans, setInsurancePlans] = useState<PatientInsurance[]>([]);
   const [payerDropdownValue, setPayerDropdownValue] = useState<string>("");
@@ -212,6 +215,29 @@ export default function SuperbillEditor({
         setInsurancePlans([]);
       });
   }, [superbill?.id, patientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDownloadPdf = async () => {
+    if (!superbill?.encounterId) return;
+    setPdfLoading(true);
+    try {
+      const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
+      if (!res.ok) {
+        console.error("PDF download failed");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `claim-${encounterId.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const handlePayerChange = async (value: string) => {
     if (!superbill) return;
@@ -469,21 +495,42 @@ export default function SuperbillEditor({
           </table>
         </div>
 
-        {/* ── Footer: Add CPT + Total ─────────────────────────────────────── */}
+        {/* ── Footer: Add CPT + PDF Download + Total ──────────────────────── */}
         <div className="flex items-center justify-between">
           <CptAddDropdown
             encounterId={encounterId}
             existingCodes={existingCodes}
           />
 
-          <div className="flex items-center gap-2">
-            {isSaving && (
-              <div className="animate-spin h-4 w-4 rounded-full border-2 border-[var(--accent)] border-t-transparent" />
-            )}
-            <span className="text-caption text-[var(--text-muted)]">Total:</span>
-            <span className="text-lg font-semibold text-[var(--text-primary)] tabular-nums">
-              ${superbill.totalFee.toFixed(2)}
-            </span>
+          <div className="flex items-center gap-3">
+            {/* PDF Download button */}
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm glass-card hover:bg-white/10 disabled:opacity-40 transition-colors"
+            >
+              {pdfLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : superbill.claimStatus === "draft" ? (
+                <Eye className="w-4 h-4" />
+              ) : (
+                <FileDown className="w-4 h-4" />
+              )}
+              <span>
+                {superbill.claimStatus === "draft" ? "Preview PDF (Draft)" : "Download PDF"}
+              </span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              {isSaving && (
+                <div className="animate-spin h-4 w-4 rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+              )}
+              <span className="text-caption text-[var(--text-muted)]">Total:</span>
+              <span className="text-lg font-semibold text-[var(--text-primary)] tabular-nums">
+                ${superbill.totalFee.toFixed(2)}
+              </span>
+            </div>
           </div>
         </div>
       </div>

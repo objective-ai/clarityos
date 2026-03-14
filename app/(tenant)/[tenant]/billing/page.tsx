@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Download, MoreHorizontal, ChevronRight, ExternalLink } from "lucide-react";
+import { Download, MoreHorizontal, ChevronRight, ExternalLink, FileDown, Eye, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -144,6 +144,33 @@ function downloadCsv(superbills: SuperbillListItem[]) {
 }
 
 // ---------------------------------------------------------------------------
+// PDF Download
+// ---------------------------------------------------------------------------
+
+async function downloadPdf(encounterId: string, setLoading: (v: boolean) => void) {
+  setLoading(true);
+  try {
+    const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("PDF download failed:", err);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `claim-${encounterId.slice(0, 8)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -158,6 +185,8 @@ export default function BillingPage() {
   const statusFilter = useBillingDashboardStore((s) => s.statusFilter);
   const fetchSuperbills = useBillingDashboardStore((s) => s.fetchSuperbills);
   const setStatusFilter = useBillingDashboardStore((s) => s.setStatusFilter);
+
+  const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({});
 
   // Initial load
   useEffect(() => {
@@ -323,10 +352,36 @@ export default function BillingPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <StatusBadge status={sb.claimStatus} />
+                    <div className="flex flex-col items-center gap-0.5">
+                      <StatusBadge status={sb.claimStatus} />
+                      {sb.lastPdfGeneratedAt && (
+                        <span className="text-[10px] text-gray-500">
+                          Last printed: {Math.floor((Date.now() - new Date(sb.lastPdfGeneratedAt).getTime()) / 86400000)}d ago
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <StatusActionsMenu encounterId={sb.encounterId} currentStatus={sb.claimStatus} />
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => downloadPdf(
+                          sb.encounterId,
+                          (v) => setPdfLoading((prev) => ({ ...prev, [sb.id]: v }))
+                        )}
+                        disabled={pdfLoading[sb.id]}
+                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white disabled:opacity-40"
+                        title={sb.claimStatus === "draft" ? "Preview PDF (Draft)" : "Download PDF"}
+                      >
+                        {pdfLoading[sb.id] ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : sb.claimStatus === "draft" ? (
+                          <Eye className="w-4 h-4" />
+                        ) : (
+                          <FileDown className="w-4 h-4" />
+                        )}
+                      </button>
+                      <StatusActionsMenu encounterId={sb.encounterId} currentStatus={sb.claimStatus} />
+                    </div>
                   </td>
                 </tr>
               ))}

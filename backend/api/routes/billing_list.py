@@ -76,6 +76,7 @@ async def list_superbills(
             ],
             total_fee=float(sb.total_fee or 0),
             created_at=sb.created_at,
+            last_pdf_generated_at=sb.last_pdf_generated_at,
         )
         for sb in rows
     ]
