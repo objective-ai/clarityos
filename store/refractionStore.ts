@@ -303,16 +303,20 @@ export const useRefractionStore = create<RefractionStore>()(
       },
 
       init(encounterId, initialRefractions, isReadOnly) {
-        // Idempotency guard: if the store already holds loaded data for this
-        // encounter (any column has a non-null committed value), skip blanking
-        // the drafts. This prevents RefractionGrid's mount-triggered init() from
-        // wiping live data when the component remounts after review mode toggles.
+        // Idempotency guard: if the store already holds data for this encounter
+        // (either committed to server, or dirty/saving with unsaved changes),
+        // skip blanking the drafts. This prevents RefractionGrid's mount-triggered
+        // init() from wiping live data when the component remounts — e.g. after
+        // review mode toggles, or when loadEncounter() briefly shows a skeleton
+        // (triggered by "Start Exam" / "Revert to Pre-Test" status transitions).
         const current = get();
         if (
           current.encounterId === encounterId &&
-          current.columns.some((c) => c.committed !== null)
+          current.columns.some(
+            (c) => c.committed !== null || c.saveStatus === "dirty" || c.saveStatus === "saving"
+          )
         ) {
-          // Data is already loaded — just honour the read-only flag update.
+          // Data is already loaded or has unsaved changes — just honour the read-only flag update.
           set({ isReadOnly }, false, "init/skip");
           return;
         }

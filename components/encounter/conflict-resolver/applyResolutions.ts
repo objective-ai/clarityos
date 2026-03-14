@@ -131,8 +131,18 @@ export async function applyResolutions(
       continue;
     }
 
-    // --- Diagnoses (description — display-only, schema change needed) ---
+    // --- Diagnoses (description update) ---
     if (row.fieldKey.startsWith("dx.") && row.fieldKey.endsWith(".description")) {
+      const icdCode = row.fieldKey.slice("dx.".length, -".description".length);
+      const dxStore = useDiagnosisStore.getState();
+      const existing = dxStore.encounters[encounterId]?.diagnoses?.find(
+        (d) => d.icd10Code === icdCode,
+      );
+      if (existing) {
+        await dxStore.updateDiagnosis(encounterId, existing.id, {
+          description: row.aiValue,
+        });
+      }
       continue;
     }
 

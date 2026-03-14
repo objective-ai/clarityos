@@ -27,6 +27,7 @@ export interface DiagnosisCreateRequest {
 }
 
 export interface DiagnosisUpdateRequest {
+  description?: string;
   eyeAffected?: EyeLaterality | null;
   severity?: string | null;
   status?: string | null;
