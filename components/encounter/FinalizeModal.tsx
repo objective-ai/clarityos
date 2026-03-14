@@ -29,6 +29,7 @@ interface FinalizeModalProps {
   onOpenChange: (open: boolean) => void;
   encounterId: string;
   providerName: string;
+  patientId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +94,7 @@ export function FinalizeModal({
   onOpenChange,
   encounterId,
   providerName,
+  patientId,
 }: FinalizeModalProps) {
   // ── Internal state ──────────────────────────────────────────────────────
   const [assessmentPlan, setAssessmentPlan] = useState("");
@@ -510,7 +512,7 @@ export function FinalizeModal({
         {step === "billing" && (
           <>
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              <SuperbillEditor encounterId={encounterId} />
+              <SuperbillEditor encounterId={encounterId} patientId={patientId} />
             </div>
 
             <div

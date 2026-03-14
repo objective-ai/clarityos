@@ -756,6 +756,7 @@ export default function EncounterPage({
         onOpenChange={setFinalizeModalOpen}
         encounterId={params.encounterId}
         providerName={encounterState?.providerName ?? "Unknown Provider"}
+        patientId={patientId ?? ""}
       />
 
       {/* Superbill modal (shown after finalization) */}
