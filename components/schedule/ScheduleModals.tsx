@@ -18,7 +18,7 @@ export function CancelModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string) => Promise<void> | void;
 }) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);

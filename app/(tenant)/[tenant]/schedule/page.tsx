@@ -393,8 +393,8 @@ function SchedulePageInner() {
       <CancelModal
         open={cancelTarget !== null}
         onClose={() => setCancelTarget(null)}
-        onConfirm={(reason) => {
-          if (cancelTarget) handleCancel(cancelTarget, reason);
+        onConfirm={async (reason) => {
+          if (cancelTarget) await handleCancel(cancelTarget, reason);
         }}
       />
       <RescheduleModal
