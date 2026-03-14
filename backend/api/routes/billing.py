@@ -10,9 +10,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from io import BytesIO
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import Response as FastAPIResponse
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -546,3 +553,207 @@ async def get_mdm_calculation(
         list(problems),
         list(enc.exam_findings),
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /encounters/{encounter_id}/superbill/pdf — generate CMS-1500 PDF
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{encounter_id}/superbill/pdf")
+async def generate_superbill_pdf(
+    encounter_id: str,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_BILLING)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a CMS-1500 style PDF for a superbill.
+
+    All statuses allowed. Draft superbills receive a diagonal 'DRAFT' watermark.
+    Returns binary application/pdf.
+    """
+    from backend.db.models.tenant.clinical import Patient
+
+    enc_id = await resolve_encounter_id(encounter_id, ctx.tenant_id, db)
+
+    # Load superbill with line items and payer
+    sb_result = await db.execute(
+        select(Superbill)
+        .where(Superbill.encounter_id == enc_id, Superbill.tenant_id == ctx.tenant_id)
+        .options(
+            selectinload(Superbill.line_items),
+            selectinload(Superbill.billed_payer),
+        )
+    )
+    superbill = sb_result.scalar_one_or_none()
+    if not superbill:
+        raise HTTPException(status_code=404, detail="Superbill not found")
+
+    is_draft = superbill.claim_status == ClaimStatus.DRAFT
+
+    # Update PDF generation audit trail
+    superbill.last_pdf_generated_at = datetime.now(timezone.utc)
+    superbill.pdf_generation_count = (superbill.pdf_generation_count or 0) + 1
+    await db.flush()
+
+    # Load patient
+    patient = (
+        await db.execute(
+            select(Patient).where(Patient.id == superbill.patient_id, Patient.tenant_id == ctx.tenant_id)
+        )
+    ).scalar_one_or_none()
+
+    # Load encounter
+    encounter = (
+        await db.execute(
+            select(Encounter).where(Encounter.id == enc_id, Encounter.tenant_id == ctx.tenant_id)
+        )
+    ).scalar_one_or_none()
+
+    pdf_bytes = _build_cms1500_pdf(superbill, patient, encounter, is_draft=is_draft)
+    filename = f"{'DRAFT-' if is_draft else ''}claim-{str(enc_id)[:8]}.pdf"
+
+    # Audit log
+    staff = await resolve_staff(ctx, db)
+    await log_action(
+        db, ctx, AuditAction.READ, "superbill", superbill.id,
+        staff_id=staff.id if staff else None,
+        encounter_id=enc_id,
+        patient_id=superbill.patient_id,
+        detail=f"Generated PDF (draft={is_draft}, count={superbill.pdf_generation_count})",
+        metadata={"is_draft": is_draft, "generation_count": superbill.pdf_generation_count},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# PDF builder helper (private)
+# ---------------------------------------------------------------------------
+
+
+def _build_cms1500_pdf(superbill, patient, encounter, *, is_draft: bool = False) -> bytes:
+    """Build a clean professional CMS-1500 style PDF using reportlab."""
+
+    def to_pdf_currency(val) -> str:
+        return f"${float(val):,.2f}"
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("title", parent=styles["Heading1"], fontSize=16, spaceAfter=4)
+    normal = styles["Normal"]
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
+
+    story = []
+
+    # 1. Clinic header
+    story.append(Paragraph("ClarityOS Clinic", title_style))
+    story.append(Paragraph("INSURANCE CLAIM STATEMENT", styles["Heading2"]))
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor("#2DD4BF")))
+    story.append(Spacer(1, 0.15 * inch))
+
+    # 2. Claim info
+    encounter_date = encounter.created_at.strftime("%m/%d/%Y") if encounter and encounter.created_at else "—"
+    story.append(Paragraph(f"<b>Claim ID:</b> {str(superbill.id)[:8].upper()}", normal))
+    story.append(Paragraph(f"<b>Date of Service:</b> {encounter_date}", normal))
+    status_label = (
+        superbill.claim_status.value.replace("_", " ").title()
+        if hasattr(superbill.claim_status, "value")
+        else str(superbill.claim_status)
+    )
+    story.append(Paragraph(f"<b>Status:</b> {status_label}", normal))
+    story.append(Spacer(1, 0.15 * inch))
+
+    # 3. Two-column: Patient | Payer
+    patient_name = f"{patient.first_name} {patient.last_name}" if patient else "Unknown"
+    patient_dob = str(patient.dob) if patient and patient.dob else "—"
+    payer_name = (
+        superbill.billed_payer.name
+        if superbill.billed_payer
+        else ("Self-Pay" if superbill.is_self_pay else "—")
+    )
+
+    two_col_data = [
+        ["PATIENT INFORMATION", "INSURANCE / PAYER"],
+        [f"Name: {patient_name}", f"Payer: {payer_name}"],
+        [f"DOB: {patient_dob}", f"Type: {'Self-Pay' if superbill.is_self_pay else 'Insurance'}"],
+    ]
+    two_col_table = Table(two_col_data, colWidths=[3.5 * inch, 3.5 * inch])
+    two_col_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2DD4BF")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5FFFE")]),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+    story.append(two_col_table)
+    story.append(Spacer(1, 0.2 * inch))
+
+    # 4. Service lines table
+    active_items = [li for li in superbill.line_items if not getattr(li, "is_deleted", False)]
+    svc_headers = ["CPT Code", "Description", "Units", "Fee"]
+    svc_rows = []
+    total_fee = 0.0
+    for li in active_items:
+        fee_val = float(li.fee)
+        total_fee += fee_val * li.units
+        source_note = " *" if getattr(li, "fee_source", "base_rate") == "base_rate" else ""
+        svc_rows.append([li.cpt_code, li.description or "—", str(li.units), f"{to_pdf_currency(li.fee)}{source_note}"])
+
+    if svc_rows:
+        svc_data = [svc_headers] + svc_rows
+        svc_table = Table(svc_data, colWidths=[1 * inch, 4.5 * inch, 0.75 * inch, 0.75 * inch])
+        svc_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2DD4BF")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5FFFE")]),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ]))
+        story.append(Paragraph("<b>SERVICE LINES</b>", styles["Heading3"]))
+        story.append(svc_table)
+        if any(getattr(li, "fee_source", "base_rate") == "base_rate" for li in active_items):
+            story.append(Paragraph("* Base catalog rate (no payer-specific rate on file)", small))
+        story.append(Spacer(1, 0.15 * inch))
+
+    # 5. Total
+    story.append(Paragraph(f"<b>TOTAL BILLED: {to_pdf_currency(total_fee)}</b>", styles["Heading3"]))
+    story.append(Spacer(1, 0.3 * inch))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey))
+
+    # 6. Footer
+    story.append(Spacer(1, 0.1 * inch))
+    story.append(Paragraph("Generated by ClarityOS EHR — This document is for billing purposes only.", small))
+
+    # Build with optional DRAFT watermark
+    buffer = BytesIO()
+
+    def add_draft_watermark(canvas_obj, doc_obj):
+        canvas_obj.saveState()
+        canvas_obj.setFont("Helvetica-Bold", 80)
+        canvas_obj.setFillColorRGB(0.8, 0.2, 0.2, alpha=0.15)
+        canvas_obj.translate(4.25 * inch, 5.5 * inch)
+        canvas_obj.rotate(45)
+        canvas_obj.drawCentredString(0, 0, "DRAFT")
+        canvas_obj.restoreState()
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
+        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+    )
+
+    if is_draft:
+        doc.build(story, onFirstPage=add_draft_watermark, onLaterPages=add_draft_watermark)
+    else:
+        doc.build(story)
+
+    return buffer.getvalue()
