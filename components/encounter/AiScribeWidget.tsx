@@ -25,6 +25,116 @@ import { Badge } from "@/components/ui/badge";
 
 
 // ---------------------------------------------------------------------------
+// DictationComingSoonModal
+// ---------------------------------------------------------------------------
+
+function DictationComingSoonModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(10px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm glass-card animate-slide-down overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Hero section */}
+        <div
+          className="relative flex flex-col items-center justify-center py-8 px-5 overflow-hidden"
+          style={{
+            background: "linear-gradient(135deg, rgba(45,212,191,0.18) 0%, rgba(139,92,246,0.18) 100%)",
+            borderBottom: "1px solid var(--border-subtle)",
+          }}
+        >
+          {/* Decorative blobs */}
+          <div className="absolute top-[-20px] left-[-20px] w-32 h-32 rounded-full" style={{ background: "rgba(45,212,191,0.12)", filter: "blur(24px)" }} />
+          <div className="absolute bottom-[-10px] right-[-10px] w-24 h-24 rounded-full" style={{ background: "rgba(139,92,246,0.15)", filter: "blur(20px)" }} />
+
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors z-10"
+          >
+            &times;
+          </button>
+
+          {/* Animated mic with pulse rings */}
+          <div className="relative flex items-center justify-center mb-4 z-10">
+            <span className="absolute w-16 h-16 rounded-full animate-ping" style={{ background: "rgba(45,212,191,0.15)" }} />
+            <span className="absolute w-12 h-12 rounded-full animate-ping" style={{ background: "rgba(45,212,191,0.2)", animationDelay: "0.3s" }} />
+            <div
+              className="relative w-14 h-14 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(45,212,191,0.15)", border: "1.5px solid rgba(45,212,191,0.4)" }}
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <rect x="9" y="2" width="6" height="11" rx="3" stroke="#2DD4BF" strokeWidth="1.8" />
+                <path d="M5 11a7 7 0 0 0 14 0" stroke="#2DD4BF" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="12" y1="18" x2="12" y2="22" stroke="#2DD4BF" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="8" y1="22" x2="16" y2="22" stroke="#2DD4BF" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Sound wave bars */}
+          <div className="flex items-end gap-1 h-6 z-10">
+            {[3, 5, 8, 5, 7, 4, 6, 3, 5].map((h, i) => (
+              <div
+                key={i}
+                className="w-1 rounded-full"
+                style={{
+                  height: `${h * 2.5}px`,
+                  background: "linear-gradient(to top, #2DD4BF, #8B5CF6)",
+                  opacity: 0.7,
+                  animation: `pulse ${0.8 + i * 0.1}s ease-in-out infinite alternate`,
+                  animationDelay: `${i * 0.08}s`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-5">
+          <div className="text-overline text-[var(--accent)] mb-1">COMING SOON</div>
+          <h3 className="text-subhead mb-3">Live Dictation</h3>
+          <p className="text-body text-[var(--text-secondary)] mb-4">
+            Speak directly to ClarityOS. Our AI transcribes your clinical encounter in real time — keeping you focused on the patient.
+          </p>
+
+          <div className="rounded-xl p-4 mb-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="text-overline mb-2">What&apos;s coming:</div>
+            <ul className="space-y-2">
+              {[
+                "Real-time transcription",
+                "Hands-free SOAP generation",
+                "Works with any microphone",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2 text-caption text-[var(--text-secondary)]">
+                  <span className="text-[var(--accent)]">✓</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <button className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110">
+            Notify Me When It&apos;s Ready
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 text-xs mt-2 cursor-pointer underline-offset-2 hover:underline text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            Not right now
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // UpsellModal (moved from page.tsx)
 // ---------------------------------------------------------------------------
 
@@ -156,6 +266,7 @@ function DraftView({
   hasAiScribe,
   error,
   isGenerating,
+  onMicClick,
 }: {
   transcript: string;
   onTranscriptChange: (text: string) => void;
@@ -163,6 +274,7 @@ function DraftView({
   hasAiScribe: boolean;
   error: string | null;
   isGenerating: boolean;
+  onMicClick: () => void;
 }) {
   // Local state for instant typing feedback; 1.5s debounce to persist to store
   const [localText, setLocalText] = useState(transcript);
@@ -213,17 +325,40 @@ function DraftView({
         </div>
       )}
 
-      <button
-        onClick={onGenerate}
-        disabled={isGenerating || !transcript.trim()}
-        className={`self-start px-6 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-          hasAiScribe
-            ? "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
-            : "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] hover-btn"
-        }`}
-      >
-        {hasAiScribe ? "Generate Note" : "Upgrade to Unlock"}
-      </button>
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Dictate button — teaser for upcoming live dictation */}
+        <button
+          type="button"
+          onClick={onMicClick}
+          className="relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border border-[var(--border-default)] hover-btn text-[var(--text-secondary)] overflow-hidden"
+        >
+          {/* Pulse ring */}
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full animate-ping" style={{ background: "rgba(45,212,191,0.2)" }} />
+          <span className="relative flex items-center justify-center w-4 h-4 flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="2" width="6" height="11" rx="3" stroke="#2DD4BF" strokeWidth="2" />
+              <path d="M5 11a7 7 0 0 0 14 0" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" />
+              <line x1="12" y1="18" x2="12" y2="22" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </span>
+          <span>Dictate</span>
+          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(45,212,191,0.12)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}>
+            SOON
+          </span>
+        </button>
+
+        <button
+          onClick={onGenerate}
+          disabled={isGenerating || !transcript.trim()}
+          className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+            hasAiScribe
+              ? "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
+              : "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] hover-btn"
+          }`}
+        >
+          {hasAiScribe ? "Generate Note" : "Upgrade to Unlock"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -373,6 +508,7 @@ export function AiScribeWidget({
   const { has } = useEntitlements();
   const hasAiScribe = has(Entitlement.AI_SCRIBE);
   const [showUpsell, setShowUpsell] = useState(false);
+  const [showDictationModal, setShowDictationModal] = useState(false);
   const [editDraft, setEditDraft] = useState("");
   const [manualApDraft, setManualApDraft] = useState("");
   const [manualApSaved, setManualApSaved] = useState(false);
@@ -557,6 +693,7 @@ export function AiScribeWidget({
             hasAiScribe={hasAiScribe}
             error={error}
             isGenerating={isStreaming}
+            onMicClick={() => setShowDictationModal(true)}
           />
         );
 
@@ -632,6 +769,10 @@ export function AiScribeWidget({
           feature={Entitlement.AI_SCRIBE}
           onClose={() => setShowUpsell(false)}
         />
+      )}
+
+      {showDictationModal && (
+        <DictationComingSoonModal onClose={() => setShowDictationModal(false)} />
       )}
     </>
   );
