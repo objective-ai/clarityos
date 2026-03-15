@@ -14,6 +14,7 @@ Staff routes (authenticated, mounted under /api/appointments):
 
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -352,8 +353,10 @@ async def generate_intake_token(
     )
 
     # Build URL — frontend will serve /intake/{token}
-    base_url = str(request.base_url).rstrip("/")
-    intake_url = f"{base_url.replace(':8000', ':3000')}/intake/{token_str}"
+    frontend_url = os.getenv("NEXT_PUBLIC_API_URL") or request.headers.get("origin")
+    if not frontend_url:
+        frontend_url = str(request.base_url).rstrip("/").replace(":8000", ":3000")
+    intake_url = f"{frontend_url}/intake/{token_str}"
 
     return IntakeTokenResponse(
         token=token_str,
