@@ -232,6 +232,10 @@ class MdmCalculationResult(AppBaseModel):
         ...,
         description="Risk of complications or mortality assessment.",
     )
+    is_new_patient: bool = Field(
+        default=False,
+        description="Whether the patient is new (no prior finalized encounters).",
+    )
 
 
 # ---------------------------------------------------------------------------

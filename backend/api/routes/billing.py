@@ -20,7 +20,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -204,11 +204,26 @@ async def create_superbill(
         )
     ).scalars().all()
 
+    # Determine new vs. established: zero prior finalized encounters = new patient
+    prior_count = (
+        await db.execute(
+            select(func.count(Encounter.id)).where(
+                Encounter.patient_id == enc.patient_id,
+                Encounter.tenant_id == ctx.tenant_id,
+                Encounter.is_finalized == True,
+                Encounter.is_deleted == False,
+                Encounter.id != encounter_id,
+            )
+        )
+    ).scalar_one()
+    is_new_patient = prior_count == 0
+
     # Calculate MDM
     mdm_result = calculate_mdm(
         list(enc.diagnoses),
         list(problems),
         list(enc.exam_findings),
+        is_new_patient=is_new_patient,
     )
 
     # Create superbill
@@ -235,7 +250,7 @@ async def create_superbill(
     else:
         has_refraction = len(enc.refractions) > 0
         raw_items = suggest_line_items(
-            list(enc.diagnoses), has_refraction, mdm_result
+            list(enc.diagnoses), has_refraction, mdm_result, is_new_patient=is_new_patient
         )
 
     total_fee = Decimal("0.00")
@@ -270,7 +285,12 @@ async def create_superbill(
         staff_id=staff.id if staff else None,
         encounter_id=encounter_id,
         patient_id=enc.patient_id,
-        detail=f"Created superbill with {len(raw_items)} line items, MDM: {mdm_result.mdm_level}",
+        detail=(
+            f"Created superbill with {len(raw_items)} line items, "
+            f"MDM: {mdm_result.mdm_level}, "
+            f"patient_type={'new' if is_new_patient else 'established'}, "
+            f"E&M: {mdm_result.suggested_em_code}"
+        ),
         ip_address=request.client.host if request.client else None,
     )
 
@@ -370,14 +390,15 @@ async def update_superbill(
         changes["notes"] = {"old": sb.notes, "new": payload.notes}
         sb.notes = payload.notes
 
-    await log_action(
-        db, ctx, AuditAction.UPDATE_SUPERBILL, "superbill", sb.id,
-        encounter_id=encounter_id,
-        patient_id=sb.patient_id,
-        detail=f"Updated superbill: {', '.join(changes.keys())}",
-        changes=changes,
-        ip_address=request.client.host if request.client else None,
-    )
+    if changes:
+        await log_action(
+            db, ctx, AuditAction.UPDATE_SUPERBILL, "superbill", sb.id,
+            encounter_id=encounter_id,
+            patient_id=sb.patient_id,
+            detail=f"Updated superbill: {', '.join(changes.keys())}",
+            changes=changes,
+            ip_address=request.client.host if request.client else None,
+        )
 
     await db.commit()
 
@@ -440,6 +461,14 @@ async def add_line_item(
     )
 
     await db.commit()
+
+    # Re-fetch after commit — object is expired and accessing attributes is unsafe
+    # (db.refresh is unsafe in async context — use explicit select)
+    li = (
+        await db.execute(
+            select(SuperbillLineItem).where(SuperbillLineItem.id == li.id)
+        )
+    ).scalar_one()
 
     return LineItemResponse(
         id=li.id,
@@ -609,6 +638,9 @@ async def generate_superbill_pdf(
             select(Encounter).where(Encounter.id == enc_id, Encounter.tenant_id == ctx.tenant_id)
         )
     ).scalar_one_or_none()
+
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient record not found — cannot generate PDF")
 
     pdf_bytes = _build_cms1500_pdf(superbill, patient, encounter, is_draft=is_draft)
     filename = f"{'DRAFT-' if is_draft else ''}claim-{str(enc_id)[:8]}.pdf"

@@ -1676,6 +1676,14 @@ def _seed_insurance_payers(session: Session) -> None:
     ok(f"Created {len(CA_PAYERS)} insurance payers")
 
     CPT_CATALOG_SEED = [
+        # E/M codes — New Patient
+        ("99202", "Office visit, new patient, straightforward MDM",        Decimal("100.00")),
+        ("99203", "Office visit, new patient, low MDM",                    Decimal("135.00")),
+        ("99204", "Office visit, new patient, moderate MDM",               Decimal("190.00")),
+        ("99205", "Office visit, new patient, high MDM",                   Decimal("255.00")),
+        # E/M codes — Established Patient
+        ("99212", "Office visit, established patient, straightforward MDM", Decimal("75.00")),
+        # Eye examination codes
         ("92002", "Medical examination new patient, intermediate",        Decimal("120.00")),
         ("92004", "Medical examination new patient, comprehensive",        Decimal("175.00")),
         ("92012", "Medical examination established patient, intermediate", Decimal("95.00")),

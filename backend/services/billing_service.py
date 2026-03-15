@@ -26,17 +26,39 @@ from backend.schemas.billing import CptIcdWarning, MdmCalculationResult
 # ---------------------------------------------------------------------------
 
 CPT_CATALOG: dict[str, dict] = {
+    # Comprehensive exams
     "92004": {"description": "Comprehensive new patient eye exam", "fee": Decimal("250.00")},
     "92014": {"description": "Comprehensive established patient eye exam", "fee": Decimal("175.00")},
     "92002": {"description": "Intermediate new patient eye exam", "fee": Decimal("150.00")},
     "92012": {"description": "Intermediate established patient eye exam", "fee": Decimal("100.00")},
-    "99213": {"description": "Office visit E&M Level 3 (straightforward MDM)", "fee": Decimal("110.00")},
-    "99214": {"description": "Office visit E&M Level 4 (moderate MDM)", "fee": Decimal("165.00")},
-    "99215": {"description": "Office visit E&M Level 5 (high MDM)", "fee": Decimal("225.00")},
+    # E/M codes — New Patient (99202-99205)
+    "99202": {"description": "Office visit, new patient — straightforward MDM", "fee": Decimal("100.00")},
+    "99203": {"description": "Office visit, new patient — low MDM", "fee": Decimal("135.00")},
+    "99204": {"description": "Office visit, new patient — moderate MDM", "fee": Decimal("190.00")},
+    "99205": {"description": "Office visit, new patient — high MDM", "fee": Decimal("255.00")},
+    # E/M codes — Established Patient (99212-99215)
+    "99212": {"description": "Office visit, established patient — straightforward MDM", "fee": Decimal("75.00")},
+    "99213": {"description": "Office visit, established patient — low MDM", "fee": Decimal("110.00")},
+    "99214": {"description": "Office visit, established patient — moderate MDM", "fee": Decimal("165.00")},
+    "99215": {"description": "Office visit, established patient — high MDM", "fee": Decimal("225.00")},
+    # Ancillary procedures
     "92015": {"description": "Refraction", "fee": Decimal("45.00")},
     "92083": {"description": "Visual field test", "fee": Decimal("85.00")},
     "92250": {"description": "Fundus photography", "fee": Decimal("65.00")},
     "92134": {"description": "OCT retina scan", "fee": Decimal("75.00")},
+}
+
+
+# Industry-standard E/M crosswalk: (mdm_level, is_new_patient) → CPT code
+EM_CROSSWALK: dict[tuple[str, bool], str] = {
+    ("straightforward", False): "99212",
+    ("straightforward", True): "99202",
+    ("low", False): "99213",
+    ("low", True): "99203",
+    ("moderate", False): "99214",
+    ("moderate", True): "99204",
+    ("high", False): "99215",
+    ("high", True): "99205",
 }
 
 
@@ -49,6 +71,7 @@ def calculate_mdm(
     diagnoses: list[Diagnosis],
     problems: list[PatientProblem],
     exam_findings: list[ExamFindings],
+    is_new_patient: bool = False,
 ) -> MdmCalculationResult:
     """Calculate Medical Decision Making complexity from clinical data.
 
@@ -144,13 +167,13 @@ def calculate_mdm(
 
     if mdm_score >= 4:
         mdm_level = "high"
-        em_code = "99215"
     elif mdm_score >= 3:
         mdm_level = "moderate"
-        em_code = "99214"
     else:
         mdm_level = "straightforward"
-        em_code = "99213"
+
+    # Use crosswalk to select correct E/M code based on patient type
+    em_code = EM_CROSSWALK.get((mdm_level, is_new_patient), "99213")
 
     # Build reasoning
     parts = []
@@ -168,6 +191,8 @@ def calculate_mdm(
         f"MDM level: {mdm_level} (2-of-3 rule: "
         f"problems={scores['problems']}, data={scores['data']}, risk={scores['risk']})."
     )
+    patient_type_label = "new patient" if is_new_patient else "established patient"
+    parts.append(f"Patient type: {patient_type_label}. Suggested E/M: {em_code}.")
 
     return MdmCalculationResult(
         mdm_level=mdm_level,
@@ -176,6 +201,7 @@ def calculate_mdm(
         problem_points=problem_points,
         data_points=data_points,
         risk_level=risk_level,
+        is_new_patient=is_new_patient,
     )
 
 
@@ -227,6 +253,7 @@ def suggest_line_items(
     diagnoses: list[Diagnosis],
     has_refraction: bool,
     mdm_result: MdmCalculationResult,
+    is_new_patient: bool = False,
 ) -> list[dict]:
     """Auto-suggest CPT line items based on encounter data."""
     items: list[dict] = []
@@ -249,24 +276,43 @@ def suggest_line_items(
     if len(active_dx) >= 2:
         exam_code = "92014"
         if exam_code in CPT_CATALOG and not any(i["cpt_code"] == exam_code for i in items):
-            items.append({
+            exam_item = {
                 "cpt_code": exam_code,
                 "description": CPT_CATALOG[exam_code]["description"],
                 "fee": CPT_CATALOG[exam_code]["fee"],
                 "units": 1,
                 "diagnosis_pointers": icd_codes[:4],
                 "modifiers": [],
-            })
+            }
+            # Add laterality modifier for 92xxx codes based on primary diagnosis
+            if icd_codes and icd_codes[0]:
+                primary_dx = icd_codes[0]
+                last_char = primary_dx[-1]
+                if last_char == "1":
+                    exam_item["modifiers"].append("-RT")
+                elif last_char == "2":
+                    exam_item["modifiers"].append("-LT")
+            items.append(exam_item)
 
     # Add refraction if performed
     if has_refraction:
-        items.append({
+        refraction_item = {
             "cpt_code": "92015",
             "description": CPT_CATALOG["92015"]["description"],
             "fee": CPT_CATALOG["92015"]["fee"],
             "units": 1,
             "diagnosis_pointers": icd_codes[:4],
             "modifiers": [],
-        })
+            "fee_source": "patient_responsibility",  # Medicare/most insurers don't cover refraction
+        }
+        # Add laterality modifier for 92015 if indicated
+        if icd_codes and icd_codes[0]:
+            primary_dx = icd_codes[0]
+            last_char = primary_dx[-1]
+            if last_char == "1":
+                refraction_item["modifiers"].append("-RT")
+            elif last_char == "2":
+                refraction_item["modifiers"].append("-LT")
+        items.append(refraction_item)
 
     return items
