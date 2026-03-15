@@ -45,6 +45,7 @@ import {
   downloadCms1500Json,
   validateCms1500Claim,
 } from "@/lib/utils/cms1500";
+import { fetchPatientInsurance, fetchSuperbillPdfBlob } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // MDM colour map
@@ -278,11 +279,8 @@ export function BillingWorkflow({
     loadSuperbill(encounterId);
 
     setIsLoadingPlans(true);
-    fetch(`/api/patients/${patientId}/insurance`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data: PatientInsurance[]) =>
-        setInsurancePlans(Array.isArray(data) ? data : []),
-      )
+    fetchPatientInsurance(patientId)
+      .then((data) => setInsurancePlans(data as PatientInsurance[]))
       .catch(() => setInsurancePlans([]))
       .finally(() => setIsLoadingPlans(false));
   }, [encounterId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -394,9 +392,8 @@ export function BillingWorkflow({
     if (!superbill) return;
     setPdfLoading(true);
     try {
-      const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
-      if (!res.ok) return;
-      const blob = await res.blob();
+      const blob = await fetchSuperbillPdfBlob(encounterId);
+      if (!blob) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

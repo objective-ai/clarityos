@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { CreditCard } from "lucide-react";
 import { useEntitlements } from "@/hooks/useEntitlements";
@@ -341,10 +342,12 @@ function GeneralSettingsSection() {
             <div className="text-overline mb-2">Clinic Logo</div>
             {logoUrl ? (
               <div className="flex items-center gap-4">
-                <img
+                <Image
                   src={logoUrl}
                   alt="Clinic logo"
-                  className="w-16 h-16 rounded-xl object-cover border border-[var(--border-default)]"
+                  width={64}
+                  height={64}
+                  className="rounded-xl object-cover border border-[var(--border-default)]"
                 />
                 <div className="flex gap-2">
                   <Button

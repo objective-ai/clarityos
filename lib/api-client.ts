@@ -126,3 +126,24 @@ export async function apiFetch<T = unknown>(
     return camelizeKeys<T>(json);
   }, retries);
 }
+
+/**
+ * Fetch a patient's insurance plans from the BFF.
+ * Returns raw snake_case response as PatientInsurance[] (no key conversion).
+ */
+export async function fetchPatientInsurance(patientId: string): Promise<unknown[]> {
+  const res = await fetch(`/api/patients/${patientId}/insurance`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Fetch the superbill PDF blob for a given encounter.
+ * Returns null if the request fails.
+ */
+export async function fetchSuperbillPdfBlob(encounterId: string): Promise<Blob | null> {
+  const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
+  if (!res.ok) return null;
+  return res.blob();
+}

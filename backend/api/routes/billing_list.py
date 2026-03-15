@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -58,7 +58,10 @@ async def list_superbills(
             Superbill.created_at <= datetime.combine(date_to, datetime.max.time(), tzinfo=timezone.utc)
         )
 
-    rows = (await db.execute(stmt)).scalars().all()
+    try:
+        rows = (await db.execute(stmt)).scalars().all()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to retrieve superbills") from exc
 
     result = []
     for sb in rows:
