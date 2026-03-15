@@ -34,7 +34,7 @@ export function PatientChartModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg overflow-hidden">
         <DialogHeader>
           <DialogTitle>Patient Chart</DialogTitle>
           <DialogDescription>
@@ -42,7 +42,7 @@ export function PatientChartModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col items-center justify-center py-10 gap-4 px-6 pb-6">
+        <div className="flex flex-col items-center justify-center py-10 gap-4 px-7 pb-6">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <circle cx="10" cy="7" r="3.5" stroke="var(--text-muted)" strokeWidth="1.4" />

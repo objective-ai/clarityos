@@ -8,6 +8,7 @@ import { SidebarProvider } from "@/contexts/SidebarContext";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { SessionTimeoutModal } from "@/components/auth/SessionTimeoutModal";
 import { useEncounterStore } from "@/store/encounterStore";
+import { useTenantCustomizationStore } from "@/store/tenantCustomizationStore";
 import type { PatientHeaderData } from "@/types/session";
 
 export default function TenantLayout({
@@ -19,6 +20,11 @@ export default function TenantLayout({
 }) {
   const pathname = usePathname();
   const isEncounterRoute = /\/encounter\//.test(pathname);
+  const fontSize = useTenantCustomizationStore((s) => s.fontSize);
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${fontSize}px`;
+  }, [fontSize]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Derive patient for sticky header from encounter store

@@ -48,9 +48,12 @@ export const useBillingDashboardStore = create<BillingDashboardStore>()(
           const qs = status ? `?status=${status}` : "";
           const data = await apiFetch<SuperbillListItem[]>(`/api/superbills${qs}`);
 
-          // Coerce fees
+          // Coerce fees and ensure array fields
           for (const sb of data) {
             sb.totalFee = Number(sb.totalFee) || 0;
+            sb.icdCodes = sb.icdCodes ?? [];
+            sb.billedPayerId = sb.billedPayerId ?? null;
+            sb.isSelfPay = sb.isSelfPay ?? false;
           }
 
           set({ superbills: data, loading: false }, false, "fetchSuperbills/success");
@@ -64,7 +67,6 @@ export const useBillingDashboardStore = create<BillingDashboardStore>()(
 
       setStatusFilter: (status) => {
         set({ statusFilter: status }, false, "setStatusFilter");
-        get().fetchSuperbills(status === "all" ? undefined : status);
       },
 
       updateClaimStatus: async (encounterId, newStatus) => {

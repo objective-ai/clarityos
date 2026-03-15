@@ -64,7 +64,7 @@ export function QuickNav({ activeSections, scrollContainerId }: QuickNavProps) {
   if (visibleSections.length <= 1) return null;
 
   return (
-    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center justify-center gap-1.5 py-4 h-full">
       {visibleSections.map((s) => {
         const isActive = activeSection === s.key;
         return (
@@ -82,8 +82,8 @@ export function QuickNav({ activeSections, scrollContainerId }: QuickNavProps) {
             <span className={`text-[9px] font-bold ${isActive ? "" : "text-[8px]"}`}>
               {s.short}
             </span>
-            {/* Tooltip on hover */}
-            <span className="absolute right-full mr-2 px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--glass-border)] shadow-[var(--shadow-sm)] opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+            {/* Tooltip on hover — appears to the left into the conflict table */}
+            <span className="absolute right-full mr-2 px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--glass-border)] shadow-[var(--shadow-sm)] opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
               {s.label}
             </span>
           </button>

@@ -249,7 +249,10 @@ class SuperbillListItem(AppBaseModel):
     provider_name: str
     claim_status: str
     cpt_codes: list[str]
+    icd_codes: list[str] = []
     total_fee: float
+    billed_payer_id: _uuid.UUID | None = None
+    is_self_pay: bool = False
     created_at: datetime
     last_pdf_generated_at: datetime | None = None
 

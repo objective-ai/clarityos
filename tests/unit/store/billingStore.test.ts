@@ -290,28 +290,4 @@ describe("reset", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// openPayerSelection / closePayerSelection
-// ---------------------------------------------------------------------------
 
-describe("openPayerSelection", () => {
-  test("sets payerSelectionOpen to true and stores pendingEncounterId", () => {
-    useBillingStore.getState().openPayerSelection("enc-42");
-
-    const state = useBillingStore.getState();
-    expect(state.payerSelectionOpen).toBe(true);
-    expect(state.pendingEncounterId).toBe("enc-42");
-  });
-});
-
-describe("closePayerSelection", () => {
-  test("resets payerSelectionOpen to false and clears pendingEncounterId", () => {
-    useBillingStore.setState({ payerSelectionOpen: true, pendingEncounterId: "enc-42" });
-
-    useBillingStore.getState().closePayerSelection();
-
-    const state = useBillingStore.getState();
-    expect(state.payerSelectionOpen).toBe(false);
-    expect(state.pendingEncounterId).toBeNull();
-  });
-});

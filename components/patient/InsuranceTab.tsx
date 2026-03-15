@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -416,174 +417,186 @@ function InsuranceFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg overflow-hidden p-0">
         <DialogHeader>
           <DialogTitle>
             {editingRecord ? "Edit Insurance" : `Add ${defaultPriority === "primary" ? "Primary" : "Secondary"} Insurance`}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Payer dropdown */}
-          <div className="space-y-1">
-            <label className="text-caption text-[var(--text-muted)]">
-              Insurance Payer
-            </label>
-            <select
-              value={form.payer_id}
-              onChange={(e) => setField("payer_id", e.target.value)}
-              required
-              className="glass-input w-full text-body"
-            >
-              <option value="">Select payer...</option>
-              {payers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Plan Type */}
-          <div className="space-y-1">
-            <label className="text-caption text-[var(--text-muted)]">
-              Plan Type
-            </label>
-            <select
-              value={form.plan_type}
-              onChange={(e) =>
-                setField("plan_type", e.target.value as InsuranceFormData["plan_type"])
-              }
-              className="glass-input w-full text-body"
-            >
-              <option value="vision">Vision</option>
-              <option value="medical">Medical</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          {/* Priority (read-only in edit mode) */}
-          <div className="space-y-1">
-            <label className="text-caption text-[var(--text-muted)]">
-              Priority
-            </label>
-            {editingRecord ? (
-              <p className="text-body text-[var(--text-primary)] capitalize">
-                {editingRecord.priority}
-              </p>
-            ) : (
-              <p className="text-body text-[var(--text-primary)] capitalize">
-                {defaultPriority}
-              </p>
-            )}
-          </div>
-
-          {/* Subscriber ID + Group Number */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-caption text-[var(--text-muted)]">
-                Subscriber ID
+        <form onSubmit={handleSubmit}>
+          <div className="px-7 py-4 space-y-5 overflow-y-auto max-h-[55vh]">
+            {/* Payer dropdown */}
+            <div className="space-y-2">
+              <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                Insurance Payer
               </label>
-              <input
-                type="text"
-                value={form.subscriber_id}
-                onChange={(e) => setField("subscriber_id", e.target.value)}
-                placeholder="Member ID"
-                className="glass-input w-full text-body"
-              />
+              <select
+                value={form.payer_id}
+                onChange={(e) => setField("payer_id", e.target.value)}
+                required
+                className="glass-input w-full text-body h-11 px-4 rounded-xl"
+              >
+                <option value="">Select payer...</option>
+                {payers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="space-y-1">
-              <label className="text-caption text-[var(--text-muted)]">
-                Group Number
+
+            {/* Plan Type */}
+            <div className="space-y-2">
+              <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                Plan Type
               </label>
-              <input
-                type="text"
-                value={form.group_number}
-                onChange={(e) => setField("group_number", e.target.value)}
-                placeholder="Group #"
-                className="glass-input w-full text-body"
-              />
+              <select
+                value={form.plan_type}
+                onChange={(e) =>
+                  setField("plan_type", e.target.value as InsuranceFormData["plan_type"])
+                }
+                className="glass-input w-full text-body h-11 px-4 rounded-xl"
+              >
+                <option value="vision">Vision</option>
+                <option value="medical">Medical</option>
+                <option value="other">Other</option>
+              </select>
             </div>
-          </div>
 
-          {/* Plan Name */}
-          <div className="space-y-1">
-            <label className="text-caption text-[var(--text-muted)]">
-              Plan Name
-            </label>
-            <input
-              type="text"
-              value={form.plan_name}
-              onChange={(e) => setField("plan_name", e.target.value)}
-              placeholder="e.g. VSP Choice Plan"
-              className="glass-input w-full text-body"
-            />
-          </div>
+            {/* Priority (read-only) */}
+            <div className="space-y-2">
+              <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                Priority
+              </label>
+              <p className="text-body text-[var(--text-primary)] capitalize">
+                {editingRecord ? editingRecord.priority : defaultPriority}
+              </p>
+            </div>
 
-          {/* Relationship to Subscriber */}
-          <div className="space-y-1">
-            <label className="text-caption text-[var(--text-muted)]">
-              Relationship to Subscriber
-            </label>
-            <select
-              value={form.relationship_to_subscriber}
-              onChange={(e) =>
-                setField(
-                  "relationship_to_subscriber",
-                  e.target.value as InsuranceFormData["relationship_to_subscriber"],
-                )
-              }
-              className="glass-input w-full text-body"
-            >
-              <option value="self">Self</option>
-              <option value="spouse">Spouse</option>
-              <option value="child">Child</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          {/* Subscriber Name + DOB (shown when not self) */}
-          {showSubscriberFields && (
+            {/* Subscriber ID + Group Number */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-caption text-[var(--text-muted)]">
-                  Subscriber Name
+              <div className="space-y-2">
+                <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                  Subscriber ID
                 </label>
                 <input
                   type="text"
-                  value={form.subscriber_name}
-                  onChange={(e) => setField("subscriber_name", e.target.value)}
-                  placeholder="Full name"
-                  className="glass-input w-full text-body"
+                  value={form.subscriber_id}
+                  onChange={(e) => setField("subscriber_id", e.target.value)}
+                  placeholder="Member ID"
+                  className="glass-input w-full text-body h-11 px-4 rounded-xl"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-caption text-[var(--text-muted)]">
-                  Subscriber DOB
+              <div className="space-y-2">
+                <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                  Group Number
                 </label>
                 <input
-                  type="date"
-                  value={form.subscriber_dob}
-                  onChange={(e) => setField("subscriber_dob", e.target.value)}
-                  className="glass-input w-full text-body"
+                  type="text"
+                  value={form.group_number}
+                  onChange={(e) => setField("group_number", e.target.value)}
+                  placeholder="Group #"
+                  className="glass-input w-full text-body h-11 px-4 rounded-xl"
                 />
               </div>
             </div>
-          )}
 
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              <X className="h-3.5 w-3.5 mr-1.5" />
+            {/* Plan Name */}
+            <div className="space-y-2">
+              <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                Plan Name
+              </label>
+              <input
+                type="text"
+                value={form.plan_name}
+                onChange={(e) => setField("plan_name", e.target.value)}
+                placeholder="e.g. VSP Choice Plan"
+                className="glass-input w-full text-body h-11 px-4 rounded-xl"
+              />
+            </div>
+
+            {/* Relationship to Subscriber */}
+            <div className="space-y-2">
+              <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                Relationship to Subscriber
+              </label>
+              <select
+                value={form.relationship_to_subscriber}
+                onChange={(e) =>
+                  setField(
+                    "relationship_to_subscriber",
+                    e.target.value as InsuranceFormData["relationship_to_subscriber"],
+                  )
+                }
+                className="glass-input w-full text-body h-11 px-4 rounded-xl"
+              >
+                <option value="self">Self</option>
+                <option value="spouse">Spouse</option>
+                <option value="child">Child</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Subscriber Name + DOB (shown when not self) */}
+            {showSubscriberFields && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                    Subscriber Name
+                  </label>
+                  <input
+                    type="text"
+                    value={form.subscriber_name}
+                    onChange={(e) => setField("subscriber_name", e.target.value)}
+                    placeholder="Full name"
+                    className="glass-input w-full text-body h-11 px-4 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-caption uppercase tracking-widest font-medium text-[var(--text-muted)]">
+                    Subscriber DOB
+                  </label>
+                  <input
+                    type="date"
+                    value={form.subscriber_dob}
+                    onChange={(e) => setField("subscriber_dob", e.target.value)}
+                    className="glass-input w-full text-body h-11 px-4 rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="py-5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+              style={{
+                background: "var(--bg-glass)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--glass-border)",
+              }}
+            >
               Cancel
-            </Button>
-            <Button type="submit" disabled={saving || !form.payer_id}>
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !form.payer_id}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              style={{
+                background: "var(--accent)",
+                color: "var(--text-inverse)",
+              }}
+            >
               {saving ? (
-                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
               ) : null}
               {editingRecord ? "Save Changes" : "Add Insurance"}
-            </Button>
-          </div>
+            </button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

@@ -11,8 +11,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useEncounterStore } from "@/store/encounterStore";
-import { useBillingStore } from "@/store/billingStore";
-import SuperbillEditor from "@/components/billing/SuperbillEditor";
+import { BillingWorkflow } from "@/components/billing/BillingWorkflow";
 import { useVitalsDraft } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
 import { useDiagnoses } from "@/store/diagnosisStore";
@@ -112,7 +111,6 @@ export function FinalizeModal({
   );
   const finalizeEncounter = useEncounterStore((s) => s.finalizeEncounter);
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
-  const updateBillingStatus = useBillingStore((s) => s.updateStatus);
 
   const vitalsDraft = useVitalsDraft(encounterId);
   const allDiagnoses = useDiagnoses(encounterId);
@@ -192,20 +190,6 @@ export function FinalizeModal({
       setErrorMessage(
         err instanceof Error ? err.message : "Failed to finalize encounter"
       );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  // ── Post to billing handler ─────────────────────────────────────────────
-  async function handlePostToBilling() {
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    try {
-      await updateBillingStatus(encounterId, "ready_to_bill");
-      setFinalizeModalOpen(false);
-    } catch {
-      setErrorMessage("Failed to post superbill to billing.");
     } finally {
       setIsSubmitting(false);
     }
@@ -512,51 +496,29 @@ export function FinalizeModal({
         {step === "billing" && (
           <>
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              <SuperbillEditor encounterId={encounterId} patientId={patientId} />
+              <BillingWorkflow
+                encounterId={encounterId}
+                patientId={patientId}
+                onDone={() => setFinalizeModalOpen(false)}
+              />
             </div>
 
             <div
-              className="flex-shrink-0 px-6 pb-6 pt-4 space-y-3"
+              className="flex-shrink-0 px-6 pb-5 pt-3 flex justify-end"
               style={{ borderTop: "1px solid var(--border-subtle)" }}
             >
-              {errorMessage && (
-                <p className="text-xs" style={{ color: "var(--state-critical)" }}>
-                  {errorMessage}
-                </p>
-              )}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handlePostToBilling}
-                  disabled={isSubmitting}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  style={{
-                    background: "var(--accent)",
-                    color: "var(--text-inverse)",
-                  }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
-                      Posting...
-                    </>
-                  ) : (
-                    "Post to Billing & Seal"
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFinalizeModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium hover-btn"
-                  style={{
-                    background: "var(--bg-glass)",
-                    color: "var(--text-secondary)",
-                    border: "1px solid var(--glass-border)",
-                  }}
-                >
-                  Skip Billing
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setFinalizeModalOpen(false)}
+                className="px-5 py-2 rounded-xl text-sm font-medium transition-colors hover:bg-[var(--bg-glass)]"
+                style={{
+                  background: "var(--bg-glass)",
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--glass-border)",
+                }}
+              >
+                Skip Billing
+              </button>
             </div>
           </>
         )}

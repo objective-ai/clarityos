@@ -99,6 +99,7 @@ from backend.db.models.tenant.intake import IntakeToken
 from backend.db.models.tenant.clinical import (
     InsurancePayer,
     FeeScheduleItem,
+    PatientInsurance,
 )
 
 from backend.core.entitlements import Entitlement
@@ -176,8 +177,20 @@ APPT_IDS = [uuid.UUID(f"a0000000-0006-0000-0000-{str(i).zfill(12)}") for i in ra
 # Encounters (8)
 ENC_IDS = [uuid.UUID(f"e0000000-0007-0000-0000-{str(i).zfill(12)}") for i in range(1, 9)]
 
-# Superbills (3)
-SB_IDS = [uuid.UUID(f"50000000-0008-0000-0000-{str(i).zfill(12)}") for i in range(1, 4)]
+# Superbills (6 — one per status: accepted, ready_to_bill, submitted, draft, rejected, submitted)
+SB_IDS = [uuid.UUID(f"50000000-0008-0000-0000-{str(i).zfill(12)}") for i in range(1, 7)]
+
+# Insurance Payers (fixed IDs so superbills can reference them)
+PAYER_VSP_ID        = uuid.UUID("b0000000-0010-0000-0000-000000000001")
+PAYER_EYEMED_ID     = uuid.UUID("b0000000-0010-0000-0000-000000000002")
+PAYER_DAVIS_ID      = uuid.UUID("b0000000-0010-0000-0000-000000000003")
+PAYER_MEDICARE_ID   = uuid.UUID("b0000000-0010-0000-0000-000000000004")
+PAYER_MEDICAID_ID   = uuid.UUID("b0000000-0010-0000-0000-000000000005")
+PAYER_AETNA_ID      = uuid.UUID("b0000000-0010-0000-0000-000000000006")
+PAYER_BLUESHIELD_ID = uuid.UUID("b0000000-0010-0000-0000-000000000007")
+PAYER_ANTHEM_ID     = uuid.UUID("b0000000-0010-0000-0000-000000000008")
+PAYER_UHC_ID        = uuid.UUID("b0000000-0010-0000-0000-000000000009")
+PAYER_HUMANA_ID     = uuid.UUID("b0000000-0010-0000-0000-000000000010")
 
 # Intake Tokens (2)
 IT_IDS = [uuid.UUID(f"10000000-0009-0000-0000-{str(i).zfill(12)}") for i in range(1, 3)]
@@ -335,9 +348,10 @@ def seed_tenant_schema(session: Session) -> None:
     _seed_patients(session)
     _seed_appointments(session)
     _seed_encounters(session)
+    _seed_insurance_payers(session)
+    _seed_patient_insurance(session)
     _seed_superbills(session)
     _seed_intake_tokens(session)
-    _seed_insurance_payers(session)
 
     session.commit()
     ok("Tenant schema committed.")
@@ -1378,37 +1392,109 @@ def _seed_enc_donovan_today(session: Session) -> None:
     ok("Encounter 8 (Donovan — in progress) created")
 
 
+# ── Patient Insurance ────────────────────────────────────────────────────
+
+def _seed_patient_insurance(session: Session) -> None:
+    step("Seeding Patient Insurance")
+
+    from sqlalchemy import select as _select
+    existing = session.execute(
+        _select(PatientInsurance).where(PatientInsurance.tenant_id == TENANT_ID)
+    ).first()
+    if existing:
+        warn("Patient insurance already exists — skipping")
+        return
+
+    records = [
+        # Hargrove (65, diabetic) — Medicare primary
+        dict(patient_id=PATIENT_IDS[0], payer_id=PAYER_MEDICARE_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="1EG4-TE5-MK72", plan_name="Medicare Part B",
+             relationship_to_subscriber="self"),
+        # Vasquez (52, CL wearer) — VSP Vision primary
+        dict(patient_id=PATIENT_IDS[1], payer_id=PAYER_VSP_ID,
+             priority="primary", plan_type="vision",
+             subscriber_id="VSP-8821047", group_number="GRP-4401",
+             plan_name="VSP Signature Plan", relationship_to_subscriber="self"),
+        # Thornton (58, glaucoma suspect) — Aetna primary
+        dict(patient_id=PATIENT_IDS[2], payer_id=PAYER_AETNA_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="W123456789", group_number="AET-8801",
+             plan_name="Aetna Choice POS II", relationship_to_subscriber="self"),
+        # Patel (28) — United Healthcare primary
+        dict(patient_id=PATIENT_IDS[3], payer_id=PAYER_UHC_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="UHC-44918273", group_number="UHC-2200",
+             plan_name="UHC Choice Plus", relationship_to_subscriber="self"),
+        # Donovan (55, post-LASIK) — EyeMed primary
+        dict(patient_id=PATIENT_IDS[4], payer_id=PAYER_EYEMED_ID,
+             priority="primary", plan_type="vision",
+             subscriber_id="EYEM-6612009", group_number="EYM-5501",
+             plan_name="EyeMed Access Plan", relationship_to_subscriber="self"),
+        # Santos (45) — Anthem Blue Cross primary
+        dict(patient_id=PATIENT_IDS[5], payer_id=PAYER_ANTHEM_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="ANT-77301928", group_number="ANT-3301",
+             plan_name="Anthem PPO 2000", relationship_to_subscriber="self"),
+        # Kim (32, digital eye strain) — Blue Shield primary
+        dict(patient_id=PATIENT_IDS[6], payer_id=PAYER_BLUESHIELD_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="BSC-10293847", group_number="BSC-7701",
+             plan_name="Blue Shield PPO", relationship_to_subscriber="self"),
+        # Thompson (72, cataracts) — Medicare primary
+        dict(patient_id=PATIENT_IDS[7], payer_id=PAYER_MEDICARE_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="2KL9-TE4-NP81", plan_name="Medicare Part B",
+             relationship_to_subscriber="self"),
+        # Chen (44) — Humana primary
+        dict(patient_id=PATIENT_IDS[8], payer_id=PAYER_HUMANA_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="HUM-55019283", group_number="HUM-9901",
+             plan_name="Humana Gold Plus HMO", relationship_to_subscriber="self"),
+        # Rodriguez (31) — Medi-Cal primary
+        dict(patient_id=PATIENT_IDS[9], payer_id=PAYER_MEDICAID_ID,
+             priority="primary", plan_type="medical",
+             subscriber_id="MC-88271039", plan_name="Medi-Cal Managed Care",
+             relationship_to_subscriber="self"),
+    ]
+
+    for r in records:
+        session.add(PatientInsurance(id=uuid.uuid4(), tenant_id=TENANT_ID, **r))
+    session.flush()
+    ok(f"Created {len(records)} patient insurance records")
+
+
 # ── Superbills ────────────────────────────────────────────────────────────
 
 def _seed_superbills(session: Session) -> None:
-    step("Seeding 3 Superbills")
+    step("Seeding 6 Superbills (one per claim status)")
 
-    # S1: Robert Hargrove (E1) — submitted
+    # S1: Robert Hargrove (E1) — ACCEPTED (Medicare paid)
     if not session.get(Superbill, SB_IDS[0]):
         sb = Superbill(
             id=SB_IDS[0], tenant_id=TENANT_ID,
             encounter_id=ENC_IDS[0], patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
-            claim_status=ClaimStatus.SUBMITTED,
+            claim_status=ClaimStatus.ACCEPTED,
             mdm_level="moderate", suggested_em_code="99214",
             total_fee=Decimal("420.00"), created_by_id=STAFF_SARAH_ID,
+            billed_payer_id=PAYER_MEDICARE_ID, is_self_pay=False,
         )
         session.add(sb)
         session.flush()
-
         for cpt, desc, fee, dx in [
             ("92004", "Comprehensive exam, new patient", Decimal("250.00"), ["H52.11", "H52.12"]),
-            ("92250", "Fundus photography", Decimal("75.00"), ["Z01.01"]),
-            ("92083", "Visual field examination", Decimal("95.00"), ["H52.11", "H52.12"]),
+            ("92250", "Fundus photography",              Decimal("75.00"),  ["Z01.01"]),
+            ("92083", "Visual field examination",         Decimal("95.00"),  ["H52.11", "H52.12"]),
         ]:
             session.add(SuperbillLineItem(
                 id=uuid.uuid4(), tenant_id=TENANT_ID, superbill_id=SB_IDS[0],
                 cpt_code=cpt, description=desc, fee=fee, units=1, diagnosis_pointers=dx, modifiers=[],
             ))
-        ok("Superbill 1 (Hargrove) created")
+        ok("Superbill 1 (Hargrove — ACCEPTED / Medicare)")
     else:
         warn("Superbill 1 exists — skipping")
 
-    # S2: Elena Vasquez (E2) — ready_to_bill
+    # S2: Elena Vasquez (E2) — READY_TO_BILL (posted, waiting to submit to VSP)
     if not session.get(Superbill, SB_IDS[1]):
         sb = Superbill(
             id=SB_IDS[1], tenant_id=TENANT_ID,
@@ -1416,24 +1502,24 @@ def _seed_superbills(session: Session) -> None:
             claim_status=ClaimStatus.READY_TO_BILL,
             mdm_level="low", suggested_em_code="99213",
             total_fee=Decimal("345.00"), created_by_id=STAFF_SARAH_ID,
+            billed_payer_id=PAYER_VSP_ID, is_self_pay=False,
         )
         session.add(sb)
         session.flush()
-
         for cpt, desc, fee, dx in [
             ("92014", "Comprehensive exam, established", Decimal("185.00"), ["H52.4", "H04.123"]),
-            ("92310", "Contact lens fitting", Decimal("110.00"), ["Z46.0"]),
-            ("99213", "E/M level 3", Decimal("50.00"), ["H04.123", "H00.019"]),
+            ("92015", "Determination of refractive state", Decimal("45.00"), ["H52.4"]),
+            ("99213", "E/M level 3",                     Decimal("115.00"), ["H04.123"]),
         ]:
             session.add(SuperbillLineItem(
                 id=uuid.uuid4(), tenant_id=TENANT_ID, superbill_id=SB_IDS[1],
                 cpt_code=cpt, description=desc, fee=fee, units=1, diagnosis_pointers=dx, modifiers=[],
             ))
-        ok("Superbill 2 (Vasquez) created")
+        ok("Superbill 2 (Vasquez — READY_TO_BILL / VSP)")
     else:
         warn("Superbill 2 exists — skipping")
 
-    # S3: James Thornton E5 — submitted
+    # S3: James Thornton (E5) — SUBMITTED (waiting on Aetna)
     if not session.get(Superbill, SB_IDS[2]):
         sb = Superbill(
             id=SB_IDS[2], tenant_id=TENANT_ID,
@@ -1441,22 +1527,96 @@ def _seed_superbills(session: Session) -> None:
             claim_status=ClaimStatus.SUBMITTED,
             mdm_level="moderate", suggested_em_code="99214",
             total_fee=Decimal("375.00"), created_by_id=STAFF_DUY_ID,
+            billed_payer_id=PAYER_AETNA_ID, is_self_pay=False,
         )
         session.add(sb)
         session.flush()
-
         for cpt, desc, fee, dx in [
             ("92014", "Comprehensive exam, established", Decimal("185.00"), ["H40.001", "H40.002"]),
-            ("92083", "Visual field examination", Decimal("95.00"), ["H40.001", "H40.002"]),
-            ("92133", "OCT RNFL scanning", Decimal("95.00"), ["H40.001", "H40.002"]),
+            ("92083", "Visual field examination",         Decimal("95.00"),  ["H40.001", "H40.002"]),
+            ("92134", "Scanning computerized ophthalmic imaging (OCT)", Decimal("95.00"), ["H40.001"]),
         ]:
             session.add(SuperbillLineItem(
                 id=uuid.uuid4(), tenant_id=TENANT_ID, superbill_id=SB_IDS[2],
                 cpt_code=cpt, description=desc, fee=fee, units=1, diagnosis_pointers=dx, modifiers=[],
             ))
-        ok("Superbill 3 (Thornton) created")
+        ok("Superbill 3 (Thornton — SUBMITTED / Aetna)")
     else:
         warn("Superbill 3 exists — skipping")
+
+    # S4: David Kim (E7) — DRAFT, clean (has payer + ICD → "Post" button)
+    if not session.get(Superbill, SB_IDS[3]):
+        sb = Superbill(
+            id=SB_IDS[3], tenant_id=TENANT_ID,
+            encounter_id=ENC_IDS[6], patient_id=PATIENT_IDS[6], provider_id=STAFF_DUY_ID,
+            claim_status=ClaimStatus.DRAFT,
+            mdm_level="low", suggested_em_code="99213",
+            total_fee=Decimal("220.00"), created_by_id=STAFF_DUY_ID,
+            billed_payer_id=PAYER_BLUESHIELD_ID, is_self_pay=False,
+        )
+        session.add(sb)
+        session.flush()
+        for cpt, desc, fee, dx in [
+            ("92014", "Comprehensive exam, established",  Decimal("175.00"), ["H53.14", "H52.4"]),
+            ("92015", "Determination of refractive state", Decimal("45.00"),  ["H52.4"]),
+        ]:
+            session.add(SuperbillLineItem(
+                id=uuid.uuid4(), tenant_id=TENANT_ID, superbill_id=SB_IDS[3],
+                cpt_code=cpt, description=desc, fee=fee, units=1, diagnosis_pointers=dx, modifiers=[],
+            ))
+        ok("Superbill 4 (Kim — DRAFT / Blue Shield)")
+    else:
+        warn("Superbill 4 exists — skipping")
+
+    # S5: William Donovan (E8) — REJECTED (EyeMed denied)
+    if not session.get(Superbill, SB_IDS[4]):
+        sb = Superbill(
+            id=SB_IDS[4], tenant_id=TENANT_ID,
+            encounter_id=ENC_IDS[7], patient_id=PATIENT_IDS[4], provider_id=STAFF_DUY_ID,
+            claim_status=ClaimStatus.REJECTED,
+            mdm_level="low", suggested_em_code="99213",
+            total_fee=Decimal("265.00"), created_by_id=STAFF_DUY_ID,
+            billed_payer_id=PAYER_EYEMED_ID, is_self_pay=False,
+        )
+        session.add(sb)
+        session.flush()
+        for cpt, desc, fee, dx in [
+            ("92014", "Comprehensive exam, established",  Decimal("175.00"), ["H52.4", "Z96.1"]),
+            ("92015", "Determination of refractive state", Decimal("45.00"),  ["H52.4"]),
+            ("92025", "Computerized corneal topography",   Decimal("45.00"),  ["H52.4"]),
+        ]:
+            session.add(SuperbillLineItem(
+                id=uuid.uuid4(), tenant_id=TENANT_ID, superbill_id=SB_IDS[4],
+                cpt_code=cpt, description=desc, fee=fee, units=1, diagnosis_pointers=dx, modifiers=[],
+            ))
+        ok("Superbill 5 (Donovan — REJECTED / EyeMed)")
+    else:
+        warn("Superbill 5 exists — skipping")
+
+    # S6: Barbara Thompson (E6) — SUBMITTED (Medicare pending)
+    if not session.get(Superbill, SB_IDS[5]):
+        sb = Superbill(
+            id=SB_IDS[5], tenant_id=TENANT_ID,
+            encounter_id=ENC_IDS[5], patient_id=PATIENT_IDS[7], provider_id=STAFF_DUY_ID,
+            claim_status=ClaimStatus.SUBMITTED,
+            mdm_level="moderate", suggested_em_code="99214",
+            total_fee=Decimal("310.00"), created_by_id=STAFF_DUY_ID,
+            billed_payer_id=PAYER_MEDICARE_ID, is_self_pay=False,
+        )
+        session.add(sb)
+        session.flush()
+        for cpt, desc, fee, dx in [
+            ("92014", "Comprehensive exam, established", Decimal("175.00"), ["H26.9", "H35.30"]),
+            ("92250", "Fundus photography",              Decimal("85.00"),  ["H35.30"]),
+            ("92015", "Determination of refractive state", Decimal("45.00"), ["H26.9"]),
+        ]:
+            session.add(SuperbillLineItem(
+                id=uuid.uuid4(), tenant_id=TENANT_ID, superbill_id=SB_IDS[5],
+                cpt_code=cpt, description=desc, fee=fee, units=1, diagnosis_pointers=dx, modifiers=[],
+            ))
+        ok("Superbill 6 (Thompson — SUBMITTED / Medicare)")
+    else:
+        warn("Superbill 6 exists — skipping")
 
     session.flush()
 
@@ -1498,48 +1658,40 @@ def _seed_intake_tokens(session: Session) -> None:
 def _seed_insurance_payers(session: Session) -> None:
     step("Seeding Insurance Payers + Base Fee Catalog")
 
-    from sqlalchemy import select as _select
-    existing = session.execute(
-        _select(InsurancePayer).where(InsurancePayer.tenant_id == TENANT_ID)
-    ).first()
-    if existing:
-        warn("Insurance payers already exist — skipping")
-        return
-
     CA_PAYERS = [
-        {"name": "VSP Vision Care", "payer_id": "VSP001"},
-        {"name": "EyeMed Vision Care", "payer_id": "EYEMED"},
-        {"name": "Davis Vision", "payer_id": "DAVIS"},
-        {"name": "Medicare Part B", "payer_id": "MEDICAREB"},
-        {"name": "Medi-Cal", "payer_id": "MEDCAL"},
-        {"name": "Aetna", "payer_id": "AETNA"},
-        {"name": "Blue Shield of California", "payer_id": "BLUESHIELD"},
-        {"name": "Anthem Blue Cross CA", "payer_id": "ANTHEM"},
-        {"name": "United Healthcare", "payer_id": "UHC"},
-        {"name": "Humana", "payer_id": "HUMANA"},
+        {"id": PAYER_VSP_ID,        "name": "VSP Vision Care",          "payer_id": "VSP001"},
+        {"id": PAYER_EYEMED_ID,     "name": "EyeMed Vision Care",        "payer_id": "EYEMED"},
+        {"id": PAYER_DAVIS_ID,      "name": "Davis Vision",              "payer_id": "DAVIS"},
+        {"id": PAYER_MEDICARE_ID,   "name": "Medicare Part B",           "payer_id": "MEDICAREB"},
+        {"id": PAYER_MEDICAID_ID,   "name": "Medi-Cal",                  "payer_id": "MEDCAL"},
+        {"id": PAYER_AETNA_ID,      "name": "Aetna",                     "payer_id": "AETNA"},
+        {"id": PAYER_BLUESHIELD_ID, "name": "Blue Shield of California", "payer_id": "BLUESHIELD"},
+        {"id": PAYER_ANTHEM_ID,     "name": "Anthem Blue Cross CA",      "payer_id": "ANTHEM"},
+        {"id": PAYER_UHC_ID,        "name": "United Healthcare",         "payer_id": "UHC"},
+        {"id": PAYER_HUMANA_ID,     "name": "Humana",                    "payer_id": "HUMANA"},
     ]
     for p_data in CA_PAYERS:
-        session.add(InsurancePayer(id=uuid.uuid4(), tenant_id=TENANT_ID, **p_data))
+        session.add(InsurancePayer(tenant_id=TENANT_ID, **p_data))
     session.flush()
     ok(f"Created {len(CA_PAYERS)} insurance payers")
 
     CPT_CATALOG_SEED = [
-        ("92002", "Medical examination new patient, intermediate", Decimal("120.00")),
-        ("92004", "Medical examination new patient, comprehensive", Decimal("175.00")),
+        ("92002", "Medical examination new patient, intermediate",        Decimal("120.00")),
+        ("92004", "Medical examination new patient, comprehensive",        Decimal("175.00")),
         ("92012", "Medical examination established patient, intermediate", Decimal("95.00")),
-        ("92014", "Medical examination established patient, comprehensive", Decimal("150.00")),
-        ("92015", "Determination of refractive state", Decimal("45.00")),
-        ("92025", "Computerized corneal topography", Decimal("65.00")),
-        ("92081", "Visual field examination, limited", Decimal("55.00")),
-        ("92082", "Visual field examination, intermediate", Decimal("75.00")),
-        ("92083", "Visual field examination, extended", Decimal("95.00")),
-        ("92134", "Scanning computerized ophthalmic imaging (OCT)", Decimal("120.00")),
-        ("92250", "Fundus photography", Decimal("85.00")),
+        ("92014", "Medical examination established patient, comprehensive",Decimal("150.00")),
+        ("92015", "Determination of refractive state",                     Decimal("45.00")),
+        ("92025", "Computerized corneal topography",                       Decimal("65.00")),
+        ("92081", "Visual field examination, limited",                     Decimal("55.00")),
+        ("92082", "Visual field examination, intermediate",                Decimal("75.00")),
+        ("92083", "Visual field examination, extended",                    Decimal("95.00")),
+        ("92134", "Scanning computerized ophthalmic imaging (OCT)",        Decimal("120.00")),
+        ("92250", "Fundus photography",                                    Decimal("85.00")),
     ]
     for cpt, desc, fee in CPT_CATALOG_SEED:
         session.add(FeeScheduleItem(
             id=uuid.uuid4(), tenant_id=TENANT_ID, payer_id=None,
-            cpt_code=cpt, description=desc, fee=fee
+            cpt_code=cpt, description=desc, fee=fee,
         ))
     session.flush()
     ok(f"Created {len(CPT_CATALOG_SEED)} base fee catalog entries")

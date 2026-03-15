@@ -196,6 +196,8 @@ function GeneralSettingsSection() {
   const accentColor = useTenantCustomizationStore((s) => s.accentColor);
   const setLogo = useTenantCustomizationStore((s) => s.setLogo);
   const setAccentColor = useTenantCustomizationStore((s) => s.setAccentColor);
+  const fontSize = useTenantCustomizationStore((s) => s.fontSize);
+  const setFontSize = useTenantCustomizationStore((s) => s.setFontSize);
   const resetToDefaults = useTenantCustomizationStore((s) => s.resetToDefaults);
 
   const [dragOver, setDragOver] = useState(false);
@@ -539,6 +541,38 @@ function GeneralSettingsSection() {
                     }}
                   >
                     {opt.icon}
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Text size selector */}
+          <div>
+            <div className="text-overline mb-3">Text Size</div>
+            <div className="inline-flex rounded-xl overflow-hidden border border-[var(--glass-border)] bg-[var(--bg-glass)]">
+              {([
+                { label: "Small", px: 13 },
+                { label: "Default", px: 14 },
+                { label: "Large", px: 15 },
+                { label: "XL", px: 16 },
+              ] as { label: string; px: number }[]).map((opt, i, arr) => {
+                const active = fontSize === opt.px;
+                return (
+                  <button
+                    key={opt.px}
+                    type="button"
+                    onClick={() => setFontSize(opt.px)}
+                    className={`px-5 py-2.5 text-sm font-medium transition-all ${
+                      active
+                        ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+                    style={{
+                      borderRight: i < arr.length - 1 ? "1px solid var(--glass-border)" : undefined,
+                    }}
+                  >
                     {opt.label}
                   </button>
                 );
@@ -1922,50 +1956,60 @@ function CreatePayerModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Insurance Payer</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-              Name <span className="text-red-400">*</span>
+      <DialogContent className="sm:max-w-lg overflow-hidden p-0">
+        <div className="px-7 pt-6 pb-2">
+          <DialogTitle className="text-xl font-semibold tracking-tight">Add Insurance Payer</DialogTitle>
+          <p className="text-sm text-[var(--text-muted)] mt-1">New payer will be available for billing across all encounters.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-7 pt-4 pb-6 space-y-5">
+          {/* Name — full width */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
+              Payer Name <span className="text-red-400 normal-case tracking-normal">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. VSP Vision"
-              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
+              className="w-full px-4 h-11 rounded-xl text-sm glass-input"
+              autoFocus
               required
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-              Payer ID
-            </label>
-            <input
-              type="text"
-              value={payerId}
-              onChange={(e) => setPayerId(e.target.value)}
-              placeholder="e.g. VSP001"
-              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
-            />
+
+          {/* Payer ID + Phone — 2 columns */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
+                Payer ID
+              </label>
+              <input
+                type="text"
+                value={payerId}
+                onChange={(e) => setPayerId(e.target.value)}
+                placeholder="e.g. VSP001"
+                className="w-full px-4 h-11 rounded-xl text-sm glass-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
+                Phone
+              </label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 800-555-0100"
+                className="w-full px-4 h-11 rounded-xl text-sm glass-input"
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
-              Phone
-            </label>
-            <input
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g. 800-555-0100"
-              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
+
+          {/* Address — full width */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">
               Address
             </label>
             <input
@@ -1973,21 +2017,29 @@ function CreatePayerModal({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="e.g. 123 Main St, Sacramento, CA"
-              className="w-full px-3 h-10 rounded-lg text-sm glass-input"
+              className="w-full px-4 h-11 rounded-xl text-sm glass-input"
             />
           </div>
+
           {error && (
-            <p className="text-xs text-red-400">{error}</p>
+            <p className="text-sm text-red-400 flex items-center gap-1.5">
+              <span className="inline-block w-1 h-1 rounded-full bg-red-400 shrink-0" />
+              {error}
+            </p>
           )}
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => { reset(); onClose(); }}>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--glass-border)]">
+            <Button type="button" variant="ghost" size="sm" onClick={() => { reset(); onClose(); }}
+              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
               Cancel
             </Button>
             <Button
               type="submit"
               size="sm"
               disabled={saving || !name.trim()}
-              style={{ background: "var(--accent)", color: "#0f1a1a" }}
+              className="px-5 font-medium"
+              style={{ background: saving || !name.trim() ? undefined : "var(--accent)", color: saving || !name.trim() ? undefined : "#0a1a18" }}
             >
               {saving ? "Creating…" : "Create Payer"}
             </Button>
@@ -2005,7 +2057,7 @@ function PayerFeeScheduleView({
   payer: InsurancePayer;
   onBack: () => void;
 }) {
-  const { loadPayerFeeSchedule, updatePayerFeeSchedule } = usePayerStore();
+  const { loadPayerFeeSchedule, updatePayerFeeSchedule, feeCatalog, loadFeeCatalog } = usePayerStore();
   const [items, setItems] = useState<FeeScheduleItem[]>([]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -2013,17 +2065,28 @@ function PayerFeeScheduleView({
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    if (feeCatalog.length === 0) loadFeeCatalog();
+  }, [feeCatalog.length, loadFeeCatalog]);
+
+  useEffect(() => {
     setLoading(true);
     loadPayerFeeSchedule(payer.id)
       .then((data) => {
         setItems(data);
-        const init: Record<string, string> = {};
-        data.forEach((item) => { init[item.cpt_code] = String(item.fee); });
-        setOverrides(init);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [payer.id, loadPayerFeeSchedule]);
+
+  // Rebuild overrides whenever catalog or payer items change:
+  // base catalog sets defaults, payer-specific items overlay them
+  useEffect(() => {
+    if (feeCatalog.length === 0) return;
+    const init: Record<string, string> = {};
+    feeCatalog.forEach((base) => { init[base.cpt_code] = String(base.fee); });
+    items.forEach((item) => { init[item.cpt_code] = String(item.fee); });
+    setOverrides(init);
+  }, [feeCatalog, items]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -2061,7 +2124,7 @@ function PayerFeeScheduleView({
       <Card className="glass-card">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+            <CardTitle className="text-[16px] font-semibold">
               Fee Schedule Overrides
             </CardTitle>
             <div className="flex items-center gap-2">
@@ -2083,47 +2146,74 @@ function PayerFeeScheduleView({
           </p>
         </CardHeader>
         <CardContent className="p-0">
-          {loading ? (
-            <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">Loading fee schedule…</div>
-          ) : items.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">
-              No fee schedule configured for this payer. Fees default to the base catalog.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border-subtle)]">
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">CPT Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Description</th>
-                    <th className="px-4 pr-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Payer Fee ($)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.cpt_code} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-white/5 transition-colors">
-                      <td className="px-5 py-3 font-mono text-[var(--accent)] text-xs">{item.cpt_code}</td>
-                      <td className="px-4 py-3 text-[var(--text-secondary)]">{item.description}</td>
-                      <td className="px-4 pr-5 py-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={overrides[item.cpt_code] ?? String(item.fee)}
-                          onChange={(e) =>
-                            setOverrides((prev) => ({ ...prev, [item.cpt_code]: e.target.value }))
-                          }
-                          className="w-24 px-2 py-1 rounded-lg text-sm text-right glass-input ml-auto block"
-                        />
-                      </td>
+          {(() => {
+            // Merge: payer-specific items take precedence; base catalog fills remaining rows
+            const payerMap = new Map(items.map((i) => [i.cpt_code, i]));
+            const displayRows: { cpt_code: string; description: string; baseFee: number; isOverride: boolean }[] =
+              feeCatalog.map((base) => ({
+                cpt_code: base.cpt_code,
+                description: base.description,
+                baseFee: base.fee,
+                isOverride: payerMap.has(base.cpt_code),
+              }));
+
+            if (loading) {
+              return <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">Loading fee schedule…</div>;
+            }
+            if (displayRows.length === 0) {
+              return <div className="px-5 py-8 text-center text-sm text-[var(--text-muted)]">Loading base catalog…</div>;
+            }
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border-subtle)]">
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">CPT Code</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Description</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Base Rate</th>
+                      <th className="px-4 pr-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Payer Fee ($)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {displayRows.map((row) => (
+                      <tr key={row.cpt_code} className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-white/5 transition-colors">
+                        <td className="px-5 py-3 font-mono text-[var(--accent)] text-xs">{row.cpt_code}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)]">{row.description}</td>
+                        <td className="px-4 py-3 text-right text-[var(--text-muted)] text-xs">${row.baseFee.toFixed(2)}</td>
+                        <td className="px-4 pr-5 py-3">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={overrides[row.cpt_code] ?? ""}
+                            placeholder={String(row.baseFee)}
+                            onChange={(e) =>
+                              setOverrides((prev) => ({ ...prev, [row.cpt_code]: e.target.value }))
+                            }
+                            className={`w-24 px-2 py-1 rounded-lg text-sm text-right glass-input ml-auto block ${row.isOverride ? "text-[var(--accent)]" : ""}`}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
+
+      {/* Bottom save bar */}
+      <div className="flex items-center justify-end gap-3 pt-2">
+        {savedMsg && <span className="text-xs text-[var(--accent)]">{savedMsg}</span>}
+        <Button
+          size="sm"
+          disabled={saving || loading}
+          onClick={handleSave}
+          style={{ background: "var(--accent)", color: "#0f1a1a" }}
+        >
+          {saving ? "Saving…" : "Save Changes"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -2180,7 +2270,7 @@ function PayersSection() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+              <CardTitle className="text-[16px] font-semibold">
                 Insurance Payers
               </CardTitle>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
@@ -2270,7 +2360,7 @@ function PayersSection() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base font-semibold text-[var(--text-primary)]">
+              <CardTitle className="text-base font-semibold">
                 Base Fee Catalog
               </CardTitle>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">

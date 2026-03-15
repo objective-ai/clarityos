@@ -147,7 +147,11 @@ export interface SuperbillListItem {
   providerName: string;
   claimStatus: ClaimStatus;
   cptCodes: string[];
+  icdCodes: string[];
   totalFee: number;
+  billedPayerId: string | null;
+  isSelfPay: boolean;
+  rejectionReason?: string | null;
   createdAt: string;
   lastPdfGeneratedAt?: string | null;
 }
@@ -174,6 +178,7 @@ export interface PatientInsurance {
   id: string;
   patient_id: string;
   payer_id: string;
+  payer_name: string;
   payer?: InsurancePayer;
   priority: "primary" | "secondary";
   plan_type: "medical" | "vision" | "other";

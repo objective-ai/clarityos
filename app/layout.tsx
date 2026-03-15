@@ -42,7 +42,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=JSON.parse(localStorage.getItem("clarity-theme"));if(t&&t.state&&t.state.theme){document.documentElement.setAttribute("data-theme",t.state.theme)}else{document.documentElement.setAttribute("data-theme","light")}}catch(e){document.documentElement.setAttribute("data-theme","light")}})()`,
+            __html: `(function(){try{var t=JSON.parse(localStorage.getItem("clarity-theme"));if(t&&t.state&&t.state.theme){document.documentElement.setAttribute("data-theme",t.state.theme)}else{document.documentElement.setAttribute("data-theme","light")}}catch(e){document.documentElement.setAttribute("data-theme","light")}try{var c=JSON.parse(localStorage.getItem("clarity-tenant-customization"));if(c&&c.state&&c.state.fontSize){document.documentElement.style.fontSize=c.state.fontSize+"px"}}catch(e){}})()`,
           }}
         />
       </head>

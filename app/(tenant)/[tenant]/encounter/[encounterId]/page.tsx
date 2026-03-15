@@ -29,8 +29,8 @@ const FinalizeModal = dynamic(
   () => import("@/components/encounter/FinalizeModal").then((m) => ({ default: m.FinalizeModal })),
   { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
 );
-const SuperbillModal = dynamic(
-  () => import("@/components/encounter/SuperbillModal").then((m) => ({ default: m.SuperbillModal })),
+const BillingWorkflowDialog = dynamic(
+  () => import("@/components/billing/BillingWorkflow").then((m) => ({ default: m.BillingWorkflowDialog })),
   { loading: () => <div className="animate-pulse h-32 bg-white/5 rounded-xl" />, ssr: false },
 );
 const VitalsForm = dynamic(
@@ -760,11 +760,12 @@ export default function EncounterPage({
       />
 
       {/* Superbill modal (shown after finalization) */}
-      <SuperbillModal
+      <BillingWorkflowDialog
         open={superbillOpen}
         onOpenChange={setSuperbillOpen}
         encounterId={params.encounterId}
-        patientName="Patient"
+        patientId={encounterState?.patientId ?? ""}
+        patientName={encounterState?.patientName ?? "Patient"}
         providerName={encounterState?.providerName ?? "Unknown Provider"}
         encounterDate={encounterState?.encounterDate ?? clinicToday(clinicTz)}
       />

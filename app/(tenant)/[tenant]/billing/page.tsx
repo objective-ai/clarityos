@@ -1,119 +1,168 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Download, MoreHorizontal, ChevronRight, ExternalLink, FileDown, Eye, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
+  ExternalLink,
+  FileDown,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useBillingDashboardStore } from "@/store/billingDashboardStore";
+import { usePayerStore } from "@/store/payerStore";
+import { BillingWorkflowDialog } from "@/components/billing/BillingWorkflow";
 import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
-import { formatClinicDate } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
-// Status badge styling + descriptions
+// Status config
 // ---------------------------------------------------------------------------
 
-const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  draft:         { bg: "rgba(156,163,175,0.10)", text: "#9CA3AF", border: "rgba(156,163,175,0.25)", label: "Draft" },
-  ready_to_bill: { bg: "rgba(45,212,191,0.10)",  text: "#2DD4BF", border: "rgba(45,212,191,0.25)",  label: "Posted" },
-  submitted:     { bg: "rgba(96,165,250,0.10)",  text: "#60A5FA", border: "rgba(96,165,250,0.25)",  label: "Submitted" },
-  accepted:      { bg: "rgba(74,222,128,0.10)",  text: "#4ADE80", border: "rgba(74,222,128,0.25)",  label: "Accepted" },
-  rejected:      { bg: "rgba(251,113,133,0.10)", text: "#FB7185", border: "rgba(251,113,133,0.25)", label: "Rejected" },
+const STATUS_CONFIG: Record<ClaimStatus, { dot: string; label: string; description: string }> = {
+  draft:         { dot: "#9CA3AF", label: "Draft",        description: "Not yet reviewed or posted" },
+  ready_to_bill: { dot: "#2DD4BF", label: "Ready to Bill", description: "Posted — ready for claim submission" },
+  submitted:     { dot: "#60A5FA", label: "Submitted",    description: "Claim submitted to payer" },
+  accepted:      { dot: "#4ADE80", label: "Accepted",     description: "Claim accepted" },
+  rejected:      { dot: "#FB7185", label: "Rejected",     description: "Claim rejected — review required" },
 };
 
-const STATUS_DESCRIPTIONS: Record<string, string> = {
-  draft:         "Superbill created but not yet reviewed or posted",
-  ready_to_bill: "Posted to billing — ready for claim submission",
-  submitted:     "Claim submitted to insurance/payer",
-  accepted:      "Claim accepted and payment received or approved",
-  rejected:      "Claim rejected — review and resubmit or appeal",
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
+function StatusBadge({ status }: { status: ClaimStatus }) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.draft;
   return (
-    <Badge
-      className="text-[10px]"
-      style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}` }}
-      title={STATUS_DESCRIPTIONS[status] ?? ""}
-    >
-      {style.label}
-    </Badge>
+    <span className="inline-flex items-center gap-1.5">
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
+      <span className="text-xs" style={{ color: cfg.dot }}>{cfg.label}</span>
+    </span>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Status action transitions
+// Age badge
 // ---------------------------------------------------------------------------
 
-const NEXT_ACTIONS: Record<ClaimStatus, { label: string; value: ClaimStatus }[]> = {
-  draft:         [{ label: "Mark Ready to Bill", value: "ready_to_bill" }],
-  ready_to_bill: [{ label: "Mark Submitted", value: "submitted" }],
-  submitted:     [
-    { label: "Mark Accepted", value: "accepted" },
-    { label: "Mark Rejected", value: "rejected" },
-  ],
-  accepted:      [],
-  rejected:      [{ label: "Resubmit", value: "submitted" }],
-};
-
-function StatusActionsMenu({ encounterId, currentStatus }: { encounterId: string; currentStatus: ClaimStatus }) {
-  const updateClaimStatus = useBillingDashboardStore((s) => s.updateClaimStatus);
-  const actions = NEXT_ACTIONS[currentStatus] ?? [];
-
-  if (actions.length === 0) return <span className="inline-block w-[26px]" />;
-
+function AgeBadge({ createdAt }: { createdAt: string }) {
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  const color = days >= 30 ? "#FB7185" : days >= 14 ? "#FBBF24" : "var(--text-muted)";
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="p-1.5 rounded-md hover:bg-[var(--accent-dim)] transition-colors"
-          title="Status actions"
-        >
-          <MoreHorizontal size={14} className="text-[var(--text-muted)]" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[180px]">
-        <DropdownMenuLabel className="text-[10px] uppercase text-[var(--text-muted)]">
-          Change Status
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {actions.map((action) => (
-          <DropdownMenuItem
-            key={action.value}
-            onClick={() => updateClaimStatus(encounterId, action.value)}
-            className="text-xs cursor-pointer"
-          >
-            <ChevronRight size={12} className="mr-1.5 text-[var(--accent)]" />
-            {action.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <span className="text-[10px]" style={{ color }}>
+      {days === 0 ? "today" : `${days}d ago`}
+    </span>
   );
+}
+
+// ---------------------------------------------------------------------------
+// PDF download
+// ---------------------------------------------------------------------------
+
+async function downloadPdf(encounterId: string, setLoading: (v: boolean) => void) {
+  setLoading(true);
+  try {
+    const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `claim-${encounterId.slice(0, 8)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Primary action button
+// ---------------------------------------------------------------------------
+
+function PrimaryAction({
+  sb,
+  onOpenWorkflow,
+  onUpdateStatus,
+  isUpdating,
+}: {
+  sb: SuperbillListItem;
+  onOpenWorkflow: () => void;
+  onUpdateStatus: (status: ClaimStatus) => void;
+  isUpdating: boolean;
+}) {
+  const missingPayer = !sb.billedPayerId && !sb.isSelfPay;
+  const missingIcd = sb.icdCodes.every((c) => !c) || sb.icdCodes.length === 0;
+  const isDraftIncomplete = missingPayer || missingIcd;
+
+  if (sb.claimStatus === "draft") {
+    if (isDraftIncomplete) {
+      return (
+        <button
+          onClick={onOpenWorkflow}
+          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors"
+          style={{ background: "rgba(251,191,36,0.1)", color: "#FBBF24", border: "1px solid rgba(251,191,36,0.3)" }}
+          title="Missing payer or diagnosis codes"
+        >
+          <AlertTriangle size={11} />
+          Finalize
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={() => onUpdateStatus("ready_to_bill")}
+        disabled={isUpdating}
+        className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+        style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
+      >
+        {isUpdating ? <Loader2 size={11} className="animate-spin" /> : null}
+        Post
+      </button>
+    );
+  }
+
+  if (sb.claimStatus === "ready_to_bill") {
+    return (
+      <button
+        onClick={() => onUpdateStatus("submitted")}
+        disabled={isUpdating}
+        className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+        style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
+      >
+        {isUpdating ? <Loader2 size={11} className="animate-spin" /> : null}
+        Submit
+      </button>
+    );
+  }
+
+  if (sb.claimStatus === "rejected") {
+    return (
+      <button
+        onClick={onOpenWorkflow}
+        className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors"
+        style={{ background: "rgba(251,113,133,0.1)", color: "#FB7185", border: "1px solid rgba(251,113,133,0.3)" }}
+      >
+        Review
+      </button>
+    );
+  }
+
+  // submitted / accepted — no primary action button
+  return null;
 }
 
 // ---------------------------------------------------------------------------
 // Filter tabs
 // ---------------------------------------------------------------------------
 
-const FILTERS: { label: string; value: ClaimStatus | "all" }[] = [
-  { label: "All", value: "all" },
-  { label: "Draft", value: "draft" },
-  { label: "Posted", value: "ready_to_bill" },
-  { label: "Submitted", value: "submitted" },
-  { label: "Accepted", value: "accepted" },
-  { label: "Rejected", value: "rejected" },
+const FILTER_OPTIONS: { label: string; value: ClaimStatus | "all" }[] = [
+  { label: "All",          value: "all" },
+  { label: "Draft",        value: "draft" },
+  { label: "Ready to Bill", value: "ready_to_bill" },
+  { label: "Submitted",    value: "submitted" },
+  { label: "Accepted",     value: "accepted" },
+  { label: "Rejected",     value: "rejected" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -125,7 +174,7 @@ function downloadCsv(superbills: SuperbillListItem[]) {
   const header = "Date,Patient,Provider,CPT Codes,Total Fee,Status";
   const rows = posted.map((sb) =>
     [
-      formatClinicDate(sb.createdAt),
+      new Date(sb.createdAt).toLocaleDateString(),
       `"${sb.patientName}"`,
       `"${sb.providerName}"`,
       `"${sb.cptCodes.join(", ")}"`,
@@ -144,33 +193,6 @@ function downloadCsv(superbills: SuperbillListItem[]) {
 }
 
 // ---------------------------------------------------------------------------
-// PDF Download
-// ---------------------------------------------------------------------------
-
-async function downloadPdf(encounterId: string, setLoading: (v: boolean) => void) {
-  setLoading(true);
-  try {
-    const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("PDF download failed:", err);
-      return;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `claim-${encounterId.slice(0, 8)}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } finally {
-    setLoading(false);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -179,27 +201,59 @@ export default function BillingPage() {
   const { requireRole } = useEntitlements();
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
 
-  const superbills = useBillingDashboardStore((s) => s.superbills);
+  const allSuperbills = useBillingDashboardStore((s) => s.superbills);
   const loading = useBillingDashboardStore((s) => s.loading);
   const error = useBillingDashboardStore((s) => s.error);
   const statusFilter = useBillingDashboardStore((s) => s.statusFilter);
   const fetchSuperbills = useBillingDashboardStore((s) => s.fetchSuperbills);
   const setStatusFilter = useBillingDashboardStore((s) => s.setStatusFilter);
+  const updateClaimStatus = useBillingDashboardStore((s) => s.updateClaimStatus);
+
+  const payers = usePayerStore((s) => s.payers);
+  const loadPayers = usePayerStore((s) => s.loadPayers);
 
   const [pdfLoading, setPdfLoading] = useState<Record<string, boolean>>({});
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [workflowSb, setWorkflowSb] = useState<SuperbillListItem | null>(null);
 
-  // Initial load
   useEffect(() => {
     fetchSuperbills();
+    loadPayers();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Subtitle
   useEffect(() => {
-    setSubtitle(`${superbills.length} superbill${superbills.length !== 1 ? "s" : ""}`);
+    setSubtitle(`${allSuperbills.length} superbill${allSuperbills.length !== 1 ? "s" : ""}`);
     return () => setSubtitle(null);
-  }, [superbills.length, setSubtitle]);
+  }, [allSuperbills.length, setSubtitle]);
 
-  // Role gate
+  // Client-side filter
+  const superbills = useMemo(
+    () => statusFilter === "all" ? allSuperbills : allSuperbills.filter((sb) => sb.claimStatus === statusFilter),
+    [allSuperbills, statusFilter],
+  );
+
+  // Counts for filter tabs
+  const counts = useMemo(() => ({
+    all: allSuperbills.length,
+    draft: allSuperbills.filter((s) => s.claimStatus === "draft").length,
+    ready_to_bill: allSuperbills.filter((s) => s.claimStatus === "ready_to_bill").length,
+    submitted: allSuperbills.filter((s) => s.claimStatus === "submitted").length,
+    accepted: allSuperbills.filter((s) => s.claimStatus === "accepted").length,
+    rejected: allSuperbills.filter((s) => s.claimStatus === "rejected").length,
+  }), [allSuperbills]);
+
+  async function handleUpdateStatus(sb: SuperbillListItem, newStatus: ClaimStatus) {
+    setUpdatingId(sb.id);
+    await updateClaimStatus(sb.encounterId, newStatus);
+    setUpdatingId(null);
+  }
+
+  function resolvePayerName(sb: SuperbillListItem): string {
+    if (sb.isSelfPay) return "Self-pay";
+    if (!sb.billedPayerId) return "—";
+    return payers.find((p) => p.id === sb.billedPayerId)?.name ?? "—";
+  }
+
   if (!requireRole("doctor", "admin", "owner")) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -213,45 +267,57 @@ export default function BillingPage() {
     );
   }
 
-  function formatDate(dateStr: string) {
-    return formatClinicDate(dateStr);
-  }
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
 
   return (
     <div className="flex flex-col gap-6 stagger">
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setStatusFilter(f.value)}
-              className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
-              style={{
-                background: statusFilter === f.value ? "var(--accent-dim)" : "transparent",
-                color: statusFilter === f.value ? "var(--accent)" : "var(--text-secondary)",
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* Filter tabs with counts */}
+        <div className="flex items-center gap-0.5 p-1 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+          {FILTER_OPTIONS.map((f) => {
+            const count = counts[f.value];
+            const isActive = statusFilter === f.value;
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setStatusFilter(f.value)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                style={{
+                  background: isActive ? "var(--accent-dim)" : "transparent",
+                  color: isActive ? "var(--accent)" : "var(--text-secondary)",
+                }}
+              >
+                {f.label}
+                {count > 0 && (
+                  <span
+                    className="text-[10px] font-semibold px-1 rounded-full min-w-[16px] text-center"
+                    style={{
+                      background: isActive ? "rgba(45,212,191,0.2)" : "var(--bg-surface)",
+                      color: isActive ? "var(--accent)" : "var(--text-muted)",
+                    }}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Export */}
         <button
           type="button"
-          onClick={() => downloadCsv(superbills)}
+          onClick={() => downloadCsv(allSuperbills)}
           className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors hover-btn"
-          style={{
-            background: "var(--bg-glass)",
-            color: "var(--text-secondary)",
-            border: "1px solid var(--glass-border)",
-          }}
+          style={{ background: "var(--bg-glass)", color: "var(--text-secondary)", border: "1px solid var(--glass-border)" }}
         >
-          <Download size={12} />
-          Export Posted Claims (CSV)
+          <FileDown size={12} />
+          Export Posted (CSV)
         </button>
       </div>
 
@@ -263,7 +329,7 @@ export default function BillingPage() {
       )}
 
       {/* Loading */}
-      {loading && superbills.length === 0 && (
+      {loading && allSuperbills.length === 0 && (
         <div className="flex items-center justify-center py-20">
           <div className="flex items-center gap-3 text-[var(--text-muted)]">
             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
@@ -285,7 +351,7 @@ export default function BillingPage() {
             </svg>
           </div>
           <div className="text-center">
-            <p className="text-subhead">No superbills yet</p>
+            <p className="text-subhead">No superbills{statusFilter !== "all" ? ` with status "${STATUS_CONFIG[statusFilter as ClaimStatus]?.label}"` : ""}</p>
             <p className="text-caption text-[var(--text-muted)] mt-1">
               Superbills are created when encounters are finalized.
             </p>
@@ -299,14 +365,14 @@ export default function BillingPage() {
           <table className="w-full text-body">
             <thead>
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
-                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Date</th>
+                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-24">Date</th>
                 <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Patient</th>
-                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Provider</th>
-                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">CPT Codes</th>
-                <th className="px-4 py-3 text-right text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Total</th>
+                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Payer</th>
+                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Codes</th>
+                <th className="px-4 py-3 text-right text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-24">Total</th>
+                <th className="px-4 py-3 text-left text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-32">Status</th>
+                <th className="px-4 py-3 w-28"></th>
                 <th className="px-4 py-3 w-16"></th>
-                <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium">Status</th>
-                <th className="px-4 py-3 text-center text-caption text-[var(--text-muted)] uppercase tracking-wider font-medium w-12"></th>
               </tr>
             </thead>
             <tbody>
@@ -317,20 +383,31 @@ export default function BillingPage() {
                     idx % 2 === 0 ? "bg-[var(--bg-surface)]" : "bg-[var(--bg-elevated)]"
                   } hover:bg-[var(--accent-dim)] transition-colors`}
                 >
-                  <td className="px-4 py-3 text-[var(--text-secondary)]">
-                    {formatDate(sb.createdAt)}
+                  {/* Date + Age */}
+                  <td className="px-4 py-3">
+                    <div className="text-xs text-[var(--text-secondary)] font-medium">{formatDate(sb.createdAt)}</div>
+                    <AgeBadge createdAt={sb.createdAt} />
                   </td>
+
+                  {/* Patient */}
                   <td className="px-4 py-3">
                     <Link
                       href={`/${tenant}/patients/${sb.patientId}`}
-                      className="text-body font-medium text-[var(--text-primary)] hover:text-[var(--accent)] transition-colors"
+                      className="text-xs font-medium text-[var(--text-primary)] hover:text-[var(--accent)] transition-colors"
                     >
                       {sb.patientName}
                     </Link>
+                    {sb.claimStatus === "rejected" && sb.rejectionReason && (
+                      <p className="text-[10px] text-red-400 italic mt-0.5">{sb.rejectionReason}</p>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-[var(--text-secondary)]">
-                    {sb.providerName}
+
+                  {/* Payer */}
+                  <td className="px-4 py-3 text-xs text-[var(--text-secondary)]">
+                    {resolvePayerName(sb)}
                   </td>
+
+                  {/* CPT + ICD chips */}
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {sb.cptCodes.map((code) => (
@@ -338,49 +415,64 @@ export default function BillingPage() {
                           {code}
                         </Badge>
                       ))}
+                      {sb.icdCodes.map((code) => (
+                        <Badge
+                          key={code}
+                          variant="outline"
+                          className="text-[10px] font-mono"
+                          style={{ color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}
+                        >
+                          {code}
+                        </Badge>
+                      ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-sm text-[var(--text-primary)]">
+
+                  {/* Total */}
+                  <td className="px-4 py-3 text-right font-mono text-xs text-[var(--text-primary)]">
                     ${sb.totalFee.toFixed(2)}
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <Link
-                      href={`/${tenant}/encounter/${sb.encounterId}`}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
-                    >
-                      View <ExternalLink size={11} />
-                    </Link>
+
+                  {/* Status */}
+                  <td className="px-4 py-3">
+                    <StatusBadge status={sb.claimStatus} />
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <StatusBadge status={sb.claimStatus} />
-                      {sb.lastPdfGeneratedAt && (
-                        <span className="text-[10px] text-gray-500">
-                          Last printed: {Math.floor((Date.now() - new Date(sb.lastPdfGeneratedAt).getTime()) / 86400000)}d ago
-                        </span>
-                      )}
-                    </div>
+
+                  {/* Primary action */}
+                  <td className="px-4 py-3">
+                    <PrimaryAction
+                      sb={sb}
+                      onOpenWorkflow={() => setWorkflowSb(sb)}
+                      onUpdateStatus={(status) => handleUpdateStatus(sb, status)}
+                      isUpdating={updatingId === sb.id}
+                    />
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
+
+                  {/* Icon buttons */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/${tenant}/encounter/${sb.encounterId}`}
+                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        title="View Encounter"
+                      >
+                        <ExternalLink size={14} />
+                      </Link>
                       <button
                         onClick={() => downloadPdf(
                           sb.encounterId,
                           (v) => setPdfLoading((prev) => ({ ...prev, [sb.id]: v }))
                         )}
                         disabled={pdfLoading[sb.id]}
-                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white disabled:opacity-40"
-                        title={sb.claimStatus === "draft" ? "Preview PDF (Draft)" : "Download PDF"}
+                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40"
+                        title="Download PDF"
                       >
                         {pdfLoading[sb.id] ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : sb.claimStatus === "draft" ? (
-                          <Eye className="w-4 h-4" />
+                          <Loader2 size={14} className="animate-spin" />
                         ) : (
-                          <FileDown className="w-4 h-4" />
+                          <FileDown size={14} />
                         )}
                       </button>
-                      <StatusActionsMenu encounterId={sb.encounterId} currentStatus={sb.claimStatus} />
                     </div>
                   </td>
                 </tr>
@@ -390,53 +482,29 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Billing future features marketing banner */}
+      {/* BillingWorkflow dialog */}
+      {workflowSb && (
+        <BillingWorkflowDialog
+          open={!!workflowSb}
+          onOpenChange={(v) => { if (!v) setWorkflowSb(null); }}
+          encounterId={workflowSb.encounterId}
+          patientId={workflowSb.patientId}
+          patientName={workflowSb.patientName}
+          providerName={workflowSb.providerName}
+          onDone={() => { setWorkflowSb(null); fetchSuperbills(); }}
+        />
+      )}
+
+      {/* Coming soon banner */}
       <div
         className="relative overflow-hidden rounded-2xl px-8 pt-12 pb-14 mt-8 mb-2 text-center"
-        style={{
-          background: "var(--bg-glass)",
-          border: "1px solid var(--glass-border)",
-          backdropFilter: "blur(12px)",
-        }}
+        style={{ background: "var(--bg-glass)", border: "1px solid var(--glass-border)", backdropFilter: "blur(12px)" }}
       >
-        {/* Left accent bar */}
-        <div
-          className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
-          style={{ background: "linear-gradient(to bottom, #2DD4BF, #8B5CF6)" }}
-        />
-
-        {/* Radial glow */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at 80% 50%, rgba(45,212,191,0.07) 0%, transparent 60%)" }}
-        />
-
-        {/* Decorative SVG — claim routing illustration */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.12] pointer-events-none hidden sm:block">
-          <svg width="140" height="100" viewBox="0 0 140 100" fill="none">
-            {/* Document */}
-            <rect x="8" y="10" width="60" height="76" rx="6" stroke="var(--accent)" strokeWidth="1.5" />
-            <line x1="20" y1="28" x2="56" y2="28" stroke="var(--accent)" strokeWidth="1.2" />
-            <line x1="20" y1="38" x2="56" y2="38" stroke="var(--accent)" strokeWidth="1.2" />
-            <line x1="20" y1="48" x2="44" y2="48" stroke="var(--accent)" strokeWidth="1.2" />
-            <polyline points="20,68 28,76 44,60" stroke="#8B5CF6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Routing nodes */}
-            <circle cx="100" cy="22" r="10" stroke="var(--accent)" strokeWidth="1.3" />
-            <circle cx="128" cy="50" r="10" stroke="#8B5CF6" strokeWidth="1.3" />
-            <circle cx="100" cy="78" r="10" stroke="var(--accent)" strokeWidth="1.3" />
-            <line x1="78" y1="38" x2="91" y2="28" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 2" />
-            <line x1="110" y1="28" x2="120" y2="42" stroke="#8B5CF6" strokeWidth="1" strokeDasharray="3 2" />
-            <line x1="120" y1="58" x2="110" y2="70" stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 2" />
-          </svg>
-        </div>
-
-        {/* Content */}
+        <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ background: "linear-gradient(to bottom, #2DD4BF, #8B5CF6)" }} />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse at 80% 50%, rgba(45,212,191,0.07) 0%, transparent 60%)" }} />
         <div className="relative">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span
-              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}
-            >
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(45,212,191,0.1)", color: "#2DD4BF", border: "1px solid rgba(45,212,191,0.3)" }}>
               ⚡ COMING SOON
             </span>
           </div>
@@ -446,11 +514,7 @@ export default function BillingPage() {
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             {["Direct Claim Submission", "ERA/EOB Auto-posting", "Denial Workflow"].map((pill) => (
-              <span
-                key={pill}
-                className="text-[11px] font-medium px-2.5 py-1 rounded-lg"
-                style={{ background: "var(--bg-elevated)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)" }}
-              >
+              <span key={pill} className="text-[11px] font-medium px-2.5 py-1 rounded-lg" style={{ background: "var(--bg-elevated)", border: "1px solid var(--glass-border)", color: "var(--text-secondary)" }}>
                 {pill}
               </span>
             ))}

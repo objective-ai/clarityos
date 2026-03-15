@@ -292,20 +292,29 @@ export function InlineReviewSection({
           <StickySoapNote soapText={soapText} generatedAt={generatedAt} />
         </div>
 
-        {/* Right: Conflict Table (60%) */}
-        <div
-          id={SCROLL_CONTAINER_ID}
-          className="w-3/5 overflow-y-auto max-h-[calc(100vh-160px)]"
-        >
-          <ConflictTable
-            rows={reviewRows}
-            onToggle={handleToggle}
-            focusedIndex={focusedIndex}
-            autoCount={autoStagedCount}
-            confirmedCount={confirmedCount}
-            conflictCount={reviewConflictCount}
-            newDxCount={newDxCount}
-          />
+        {/* Right: Conflict Table (60%) + QuickNav column */}
+        <div className="w-3/5 flex overflow-hidden">
+          <div
+            id={SCROLL_CONTAINER_ID}
+            className="flex-1 overflow-y-auto max-h-[calc(100vh-160px)]"
+          >
+            <ConflictTable
+              rows={reviewRows}
+              onToggle={handleToggle}
+              focusedIndex={focusedIndex}
+              autoCount={autoStagedCount}
+              confirmedCount={confirmedCount}
+              conflictCount={reviewConflictCount}
+              newDxCount={newDxCount}
+            />
+          </div>
+          {/* QuickNav: sticky column, does not scroll */}
+          <div className="w-10 flex-shrink-0 border-l border-[var(--glass-border)] flex items-center justify-center">
+            <QuickNav
+              activeSections={activeSections}
+              scrollContainerId={SCROLL_CONTAINER_ID}
+            />
+          </div>
         </div>
       </div>
 
@@ -348,11 +357,6 @@ export function InlineReviewSection({
         </div>
       </div>
 
-      {/* QuickNav floating dots */}
-      <QuickNav
-        activeSections={activeSections}
-        scrollContainerId={SCROLL_CONTAINER_ID}
-      />
     </div>
   );
 }

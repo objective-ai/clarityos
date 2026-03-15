@@ -60,8 +60,17 @@ async def list_superbills(
 
     rows = (await db.execute(stmt)).scalars().all()
 
-    return [
-        SuperbillListItem(
+    result = []
+    for sb in rows:
+        active_items = [li for li in (sb.line_items or []) if not li.is_deleted]
+        seen: set[str] = set()
+        icd_codes: list[str] = []
+        for li in active_items:
+            for code in (li.diagnosis_pointers or []):
+                if code not in seen:
+                    seen.add(code)
+                    icd_codes.append(code)
+        result.append(SuperbillListItem(
             id=sb.id,
             encounter_id=sb.encounter_id,
             patient_id=sb.patient_id,
@@ -71,12 +80,12 @@ async def list_superbills(
             ),
             provider_name=sb.provider.full_name if sb.provider else "Unknown",
             claim_status=sb.claim_status.value,
-            cpt_codes=[
-                li.cpt_code for li in (sb.line_items or []) if not li.is_deleted
-            ],
+            cpt_codes=[li.cpt_code for li in active_items],
+            icd_codes=icd_codes,
             total_fee=float(sb.total_fee or 0),
+            billed_payer_id=sb.billed_payer_id,
+            is_self_pay=sb.is_self_pay,
             created_at=sb.created_at,
             last_pdf_generated_at=sb.last_pdf_generated_at,
-        )
-        for sb in rows
-    ]
+        ))
+    return result

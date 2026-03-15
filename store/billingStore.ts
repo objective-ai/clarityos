@@ -63,10 +63,6 @@ interface BillingSlice {
 
 interface BillingStoreState {
   encounters: Record<string, BillingSlice>;
-  /** Is the payer selection modal open? */
-  payerSelectionOpen: boolean;
-  /** The encounterId that triggered payer selection */
-  pendingEncounterId: string | null;
 }
 
 interface BillingStoreActions {
@@ -97,13 +93,7 @@ interface BillingStoreActions {
   /** Reset billing state for an encounter */
   reset: (encounterId: string) => void;
 
-  /** Open payer selection modal for a given encounter */
-  openPayerSelection: (encounterId: string) => void;
-
-  /** Close payer selection modal and clear pending encounter */
-  closePayerSelection: () => void;
-
-  /** Create superbill with a selected payer (called after payer selection modal confirms) */
+  /** Create superbill with a selected payer */
   createSuperbillWithPayer: (
     encounterId: string,
     payerId: string | null,
@@ -149,8 +139,6 @@ export const useBillingStore = create<BillingStore>()(
   devtools(
     (set, get) => ({
       encounters: {},
-      payerSelectionOpen: false,
-      pendingEncounterId: null,
 
       // ── Load ──────────────────────────────────────────────────────────
       loadSuperbill: async (encounterId: string) => {
@@ -513,23 +501,6 @@ export const useBillingStore = create<BillingStore>()(
         }
       },
 
-      // ── Payer Selection ───────────────────────────────────────────────
-      openPayerSelection: (encounterId) => {
-        set(
-          { payerSelectionOpen: true, pendingEncounterId: encounterId },
-          false,
-          "openPayerSelection",
-        );
-      },
-
-      closePayerSelection: () => {
-        set(
-          { payerSelectionOpen: false, pendingEncounterId: null },
-          false,
-          "closePayerSelection",
-        );
-      },
-
       // ── Create Superbill With Payer ────────────────────────────────────
       createSuperbillWithPayer: async (encounterId, payerId, isSelfPay) => {
         const current = getSlice(get(), encounterId);
@@ -585,7 +556,6 @@ export const useBillingStore = create<BillingStore>()(
             "createSuperbillWithPayer/success",
           );
 
-          get().closePayerSelection();
         } catch (err) {
           set(
             {
@@ -608,7 +578,7 @@ export const useBillingStore = create<BillingStore>()(
       },
 
       // ── Change Billed Payer ────────────────────────────────────────────
-      changeBilledPayer: async (superbillId, encounterId, newPayerId, isSelfPay) => {
+      changeBilledPayer: async (_superbillId, encounterId, newPayerId, isSelfPay) => {
         const current = getSlice(get(), encounterId);
         if (!current.superbill) return;
 

@@ -1,0 +1,37 @@
+# ClarityOS — Cline Project Rules
+
+## BFF Pattern (Next.js → FastAPI)
+- All JSON API calls from the frontend go through `app/api/` BFF routes using `proxyToFastAPI()` from `@/lib/bff`
+- FastAPI upstream URLs MUST have a trailing slash: `/api/payers/` not `/api/payers`
+- **EXCEPTION — PDF binary routes**: do NOT use `proxyToFastAPI()` for binary responses. Use raw `fetch()` + `res.arrayBuffer()` + `new NextResponse(buffer, { headers: { "Content-Type": "application/pdf" } })`. `proxyToFastAPI()` corrupts binary.
+
+## SQLAlchemy (Python)
+- NEVER call `db.refresh()` after `db.flush()` — it throws `MissingGreenlet` in async context
+- Always re-fetch with `selectinload` after flush:
+  ```python
+  result = await db.execute(select(Model).where(Model.id == obj.id).options(selectinload(Model.relation)))
+  obj = result.scalar_one()
+  ```
+- Enum columns: always `native_enum=False` (store as VARCHAR, not PG enum type)
+- Decimal fields: always `float(val)` before passing to reportlab or arithmetic — never pass raw `Decimal`
+
+## Frontend Components
+- `components/` are presentational only — no `fetch()` calls, no DB access, no business logic
+- State goes in Zustand stores under `store/`
+- Imports: always use `@/` path alias, never relative (`../../`) imports
+- Glass CSS classes (from globals.css): `.glass-card`, `.glass-input`, `.glass-card-hover`
+
+## Zustand Stores
+- Always use 3-argument `set()`, `devtools` middleware, and a `{ name: "storeName" }` devtools label
+- Export selector hooks: `usePayerStore`, `useBillingStore` (not raw store object)
+
+## FastAPI Router Registration
+- `/fee-catalog` routes MUST be registered BEFORE `/{payer_id}` in the payer router — order matters
+- Check `backend/api/main.py` for existing `include_router` calls before adding new ones at the same prefix
+- If `/api/patients` already has a router with a `/{patient_id}` catch-all, add new sub-routes to THAT file — do NOT add a second `include_router` at the same prefix
+
+## General Rules
+- Never add npm or pip packages without user approval — check if an existing dep can do it first
+- Never log patient data — not even `console.log` in dev
+- `@/` alias always — check `tsconfig.json` `paths` if unsure
+- Auth middleware is required on every clinical route — never add an unguarded endpoint

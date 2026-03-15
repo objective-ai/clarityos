@@ -46,6 +46,10 @@ case "${1:-help}" in
     echo "--- Killing existing uvicorn ---"
     taskkill //F //IM uvicorn.exe 2>/dev/null || true
     pkill -f uvicorn 2>/dev/null || true
+    # Also kill any process still holding port 8000 (uvicorn runs as python.exe on Windows)
+    for PID in $(netstat -ano 2>/dev/null | grep ":8000 " | grep "LISTENING" | awk '{print $NF}' | sort -u); do
+      [ -n "$PID" ] && [ "$PID" != "0" ] && taskkill //F //PID "$PID" 2>/dev/null || true
+    done
     sleep 1
 
     echo "--- Verifying imports ---"

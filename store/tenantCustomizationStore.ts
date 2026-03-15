@@ -19,6 +19,7 @@ const isDev = process.env.NODE_ENV === "development";
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_ACCENT = "#2DD4BF";
+export const DEFAULT_FONT_SIZE = 14;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,8 +28,10 @@ export const DEFAULT_ACCENT = "#2DD4BF";
 interface TenantCustomizationState {
   logoUrl: string | null;
   accentColor: string;
+  fontSize: number;
   setLogo: (url: string | null) => void;
   setAccentColor: (hex: string) => void;
+  setFontSize: (px: number) => void;
   resetToDefaults: () => void;
 }
 
@@ -42,15 +45,18 @@ export const useTenantCustomizationStore = create<TenantCustomizationState>()(
       (set) => ({
         logoUrl: null,
         accentColor: DEFAULT_ACCENT,
+        fontSize: DEFAULT_FONT_SIZE,
 
         setLogo: (url) => set({ logoUrl: url }, false, "setLogo"),
 
         setAccentColor: (hex) =>
           set({ accentColor: hex }, false, "setAccentColor"),
 
+        setFontSize: (px) => set({ fontSize: px }, false, "setFontSize"),
+
         resetToDefaults: () =>
           set(
-            { logoUrl: null, accentColor: DEFAULT_ACCENT },
+            { logoUrl: null, accentColor: DEFAULT_ACCENT, fontSize: DEFAULT_FONT_SIZE },
             false,
             "resetToDefaults"
           ),
