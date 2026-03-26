@@ -150,8 +150,8 @@ Build order: Phase 8 → 9 → 9.1 → 9.2 → 10 → 11 → 12 → 13 → 14 �
 
 - [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
 - [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
-- [ ] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix mock import, auth gaps, fee catalog wiring from v1.0 audit
-- [ ] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts
+- [ ] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix auth gaps, fee catalog wiring from v1.0 audit
+- [ ] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts
  (completed 2026-03-14)
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
@@ -201,18 +201,19 @@ Plans:
 - [ ] 09-07-PLAN.md — Download PDF buttons on billing dashboard + SuperbillEditor; human verification checkpoint (INS-06)
 
 ### Phase 9.1: Security & Integration Hardening (INSERTED — Gap Closure)
-**Goal:** Fix 3 integration code issues and 1 partial requirement identified by v1.0 milestone audit
+**Goal:** Fix auth gaps in api-client and middleware, wire payer fee schedules into BillingWorkflow
 **Depends on:** Phase 9 (existing code to fix)
 **Requirements:** API-07
 **Gap Closure:** Closes gaps from v1.0 audit
 **Success Criteria** (what must be TRUE):
-  1. No mock data imports in production bundle — TopNav.tsx mock import removed
-  2. fetchPatientInsurance uses apiFetch with proper auth headers (not raw fetch())
-  3. Middleware applies auth check to /api/* routes (defense-in-depth alongside proxyToFastAPI)
-  4. Fee catalog data pre-populates in BillingWorkflow UI from patient's payer fee schedule
+  1. fetchPatientInsurance and fetchSuperbillPdfBlob use auth headers (not raw fetch())
+  2. Middleware applies auth check to /api/* routes (defense-in-depth alongside proxyToFastAPI)
+  3. Fee catalog data pre-populates in BillingWorkflow UI from patient's payer fee schedule
+**Plans:** 2 plans
 
 Plans:
-- [ ] 9.1-01-PLAN.md — Mock cleanup, auth hardening, fee catalog wiring (API-07, SEC-01/02, BILL-04, INS-03, INS-05/06)
+- [ ] 9.1-01-PLAN.md — Auth hardening: apiFetch in api-client, middleware /api/* auth (API-07)
+- [ ] 9.1-02-PLAN.md — Fee catalog wiring: payer fee schedule overlay in BillingWorkflow (API-07)
 
 ### Phase 9.2: Requirements & Traceability Repair (INSERTED — Gap Closure)
 **Goal:** Repair requirements tracking infrastructure — update stale traceability, add orphaned requirements, create missing GSD artifacts
@@ -264,7 +265,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
-| 9.1 Security & Integration Hardening | 0/1 | Not started | — |
+| 9.1 Security & Integration Hardening | 0/2 | Not started | — |
 | 9.2 Requirements & Traceability Repair | 0/1 | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
