@@ -24,16 +24,19 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 - ✓ Patient list with search and patient chart modal — Phase 2
 - ✓ Schedule page with timeline glass cards — Phase 2
 - ✓ Dashboard command center with stat cards and quick actions — Phase 2
+- ✓ Real authentication (Supabase Auth) with JWT hook, RLS, and middleware — Phase 4
+- ✓ Frontend connected to FastAPI backend (all mock data replaced) — Phase 3-5
+- ✓ Patient detail page with Rx history, insurance, and encounter timeline — Phase 5-6
+- ✓ Real-time scheduling with appointment booking and calendar workflow — Phase 7
+- ✓ Analytics dashboard with 7 charts + 4 KPIs from real data — Phase 8
+- ✓ Billing workflow with superbill, E/M crosswalk, and payer fee schedules — Phase 9
+- ✓ Auth hardening (api-client auth gaps, middleware defense-in-depth) — Phase 9.1
+- ✓ Payer fee schedule wiring into billing workflow — Phase 9.1
 
 ### Active
 
-- [ ] Real authentication (Supabase Auth) replacing mock sessions
-- [ ] Connect frontend to FastAPI backend (replace all mock data with real API calls)
-- [ ] Patient detail page with Rx history and encounter timeline
 - [ ] Encounter addenda (timestamped amendments without reopening finalized encounters)
-- [ ] Real-time scheduling with appointment booking and calendar workflow
 - [ ] FHIR R4 export endpoints (Patient, Encounter, Condition, Observation)
-- [ ] Analytics dashboard pulling from real encounter/patient data
 
 ### Out of Scope
 
@@ -47,7 +50,7 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 ## Context
 
 ### Current State
-The frontend is fully built with rich clinical UI but runs entirely on **mock data**. Nine Zustand stores seed from `lib/mock/personas.ts` on encounter mount. The FastAPI backend exists with SQLAlchemy models, Pydantic schemas, and route handlers for encounters, vitals, refractions, diagnoses, exam findings, and MPPL — but the frontend doesn't call it yet.
+Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Approaching pilot launch with solo optometrist target.
 
 ### Technical Debt (from codebase audit)
 - **5 critical security issues**: dev auth bypass, hardcoded SECRET_KEY, no Next.js route middleware, unconditional mock session, hardcoded Supabase ref in config
@@ -85,4 +88,4 @@ California solo and small-group optometry practices (1-4 providers). The product
 | Move Python backend out of `app/` directory | Resolves Next.js App Router namespace conflict | — Pending |
 
 ---
-*Last updated: 2026-03-05 after initialization*
+*Last updated: 2026-03-26 after Phase 9.1 completion*
