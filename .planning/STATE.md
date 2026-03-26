@@ -70,8 +70,8 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 09.1 (security-integration-hardening) — EXECUTING
-Plan: 2 of 2
+Phase: 09.1 (security-integration-hardening) — COMPLETE
+Plan: 2 of 2 (DONE)
 
 ## Performance Metrics
 
@@ -163,6 +163,8 @@ Recent decisions affecting current work:
 - [Phase 09-claims-basics]: PayerSelectionModal reads open/encounterId from billingStore directly (no props) — only patientId needed at call site
 - [Phase 09-claims-basics]: openPayerSelection intercepts auto-superbill-create path in SuperbillEditor — user must pick payer first
 - [Phase 09-claims-basics]: 09-07: Per-row PDF loading state uses Record<string, boolean> so multiple rows can download PDFs in parallel without blocking each other
+- [Phase 9.1-02]: fetchPayerFeeSchedule uses raw fetch + getAuthHeaders (not apiFetch) to preserve snake_case FeeScheduleItem keys
+- [Phase 9.1-02]: Returns Map<string, number> for O(1) CPT lookups; empty map on error or self-pay; payer fee overlay uses ?? fallback to CPT_CATALOG defaultFee
 - [Phase 09.1-01]: Use getAuthHeaders() directly (not apiFetch) for insurance/PDF fetches — preserves snake_case keys and supports Blob responses
 - [Phase 09.1-01]: Middleware allowlist enumerates /api/public/ and /api/address/ as public; all other /api/* routes require auth (defense-in-depth)
 
@@ -176,8 +178,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-14T17:22:29.368Z
-Stopped at: Completed 9.1-01-PLAN.md (Auth hardening — api-client + middleware)
+Last session: 2026-03-26T18:10:00.000Z
+Stopped at: Completed 9.1-02-PLAN.md (Payer fee schedule wiring) — phase 09.1 complete
 Resume file: None
 
 **Phase 9 Overview:**

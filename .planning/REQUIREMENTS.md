@@ -37,7 +37,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **API-04**: examFindingsStore migrated from mock data to real apiFetch() calls
 - [x] **API-05**: diagnosisStore migrated from mock data to real apiFetch() calls
 - [x] **API-06**: problemListStore migrated from mock data to real apiFetch() calls
-- [ ] **API-07**: Mock persona seed imports removed from all 9 production pages
+- [x] **API-07**: Mock persona seed imports removed from all 9 production pages
 - [x] **API-08**: apiFetch() updated to use Supabase session token for Authorization header
 
 ### Scheduling
@@ -159,7 +159,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | API-04 | Phase 2 | Complete |
 | API-05 | Phase 2 | Complete |
 | API-06 | Phase 2 | Complete |
-| API-07 | Phase 9.1 | Pending |
+| API-07 | Phase 9.1 | Complete |
 | API-08 | Phase 2 | Complete |
 | HIPAA-01 | Phase 2 | Complete |
 | HIPAA-02 | Phase 2 | Complete |

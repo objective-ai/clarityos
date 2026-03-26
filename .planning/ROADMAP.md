@@ -150,7 +150,7 @@ Build order: Phase 8 → 9 → 9.1 → 9.2 → 10 → 11 → 12 → 13 → 14 �
 
 - [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
 - [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
-- [ ] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix auth gaps, fee catalog wiring from v1.0 audit
+- [x] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix auth gaps, fee catalog wiring from v1.0 audit (completed 2026-03-26)
 - [ ] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts
  (completed 2026-03-14)
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
@@ -209,7 +209,7 @@ Plans:
   1. fetchPatientInsurance and fetchSuperbillPdfBlob use auth headers (not raw fetch())
   2. Middleware applies auth check to /api/* routes (defense-in-depth alongside proxyToFastAPI)
   3. Fee catalog data pre-populates in BillingWorkflow UI from patient's payer fee schedule
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 9.1-01-PLAN.md — Auth hardening: apiFetch in api-client, middleware /api/* auth (API-07)
@@ -265,7 +265,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
-| 9.1 Security & Integration Hardening | 0/2 | Not started | — |
+| 9.1 Security & Integration Hardening | 2/2 | Complete   | 2026-03-26 |
 | 9.2 Requirements & Traceability Repair | 0/1 | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
