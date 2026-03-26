@@ -45,7 +45,7 @@ import {
   downloadCms1500Json,
   validateCms1500Claim,
 } from "@/lib/utils/cms1500";
-import { fetchPatientInsurance, fetchSuperbillPdfBlob } from "@/lib/api-client";
+import { fetchPatientInsurance, fetchPayerFeeSchedule, fetchSuperbillPdfBlob } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // MDM colour map
@@ -66,10 +66,12 @@ function CptAddDropdown({
   encounterId,
   existingCodes,
   onAdd,
+  payerFeeMap,
 }: {
   encounterId: string;
   existingCodes: string[];
   onAdd?: (entry: CptEntry) => void;
+  payerFeeMap?: Map<string, number>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -91,10 +93,11 @@ function CptAddDropdown({
     if (onAdd) {
       onAdd(entry);
     } else {
+      const payerFee = payerFeeMap?.get(entry.code);
       await addLineItem(encounterId, {
         cptCode: entry.code,
         description: entry.description,
-        fee: entry.defaultFee,
+        fee: payerFee ?? entry.defaultFee,
         units: 1,
       });
     }
@@ -134,10 +137,10 @@ function CptAddDropdown({
           }
         }}
         placeholder="Search CPT code or description..."
-        className="glass-input w-64 text-sm"
+        className="glass-input w-96 text-sm"
       />
       {filtered.length > 0 && (
-        <ul className="absolute z-50 mt-1 w-80 max-h-56 overflow-y-auto rounded-lg border border-[var(--glass-border)] bg-[var(--bg-elevated)] shadow-xl">
+        <ul className="absolute z-50 mt-1 w-[560px] max-h-56 overflow-y-auto rounded-lg border border-[var(--glass-border)] bg-[var(--bg-elevated)] shadow-xl">
           {filtered.map((entry) => (
             <li key={entry.code}>
               <button
@@ -149,8 +152,16 @@ function CptAddDropdown({
                 <span className="flex-1 truncate text-[var(--text-secondary)]">
                   {entry.description}
                 </span>
-                <span className="text-[var(--text-muted)]">
-                  ${entry.defaultFee.toFixed(2)}
+                <span className="shrink-0 text-[var(--text-muted)]">
+                  {payerFeeMap?.has(entry.code) ? (
+                    <span title="Payer rate">
+                      ${payerFeeMap.get(entry.code)!.toFixed(2)}
+                    </span>
+                  ) : (
+                    <span title="Base rate">
+                      ${entry.defaultFee.toFixed(2)}
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
@@ -158,7 +169,7 @@ function CptAddDropdown({
         </ul>
       )}
       {filtered.length === 0 && search && (
-        <div className="absolute z-50 mt-1 w-80 rounded-lg border border-[var(--glass-border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-muted)]">
+        <div className="absolute z-50 mt-1 w-[560px] rounded-lg border border-[var(--glass-border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-muted)]">
           No matching CPT codes
         </div>
       )}
@@ -273,6 +284,9 @@ export function BillingWorkflow({
   // PDF download
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // Payer fee schedule (CPT code -> payer-specific fee)
+  const [payerFeeMap, setPayerFeeMap] = useState<Map<string, number>>(new Map());
+
   // ── On mount: reset + load + fetch insurance ───────────────────────────
   useEffect(() => {
     reset(encounterId);
@@ -290,6 +304,10 @@ export function BillingWorkflow({
     if (loadStatus !== "loaded") return;
     if (superbill?.billedPayerId || superbill?.isSelfPay) {
       setStep("review");
+      // Load fee schedule for existing payer
+      if (superbill.billedPayerId) {
+        fetchPayerFeeSchedule(superbill.billedPayerId).then(setPayerFeeMap);
+      }
     } else {
       setStep("payer");
       setCameFromPayerStep(true);
@@ -323,6 +341,9 @@ export function BillingWorkflow({
       } else {
         await createSuperbillWithPayer(encounterId, selectedPayerId, isSelfPayStep1);
       }
+      // Fetch payer fee schedule for fee overlay
+      const feeMap = await fetchPayerFeeSchedule(isSelfPayStep1 ? null : selectedPayerId);
+      setPayerFeeMap(feeMap);
       setStep("review");
     } finally {
       setIsConfirming(false);
@@ -335,21 +356,25 @@ export function BillingWorkflow({
     const selfPay = value === "__self_pay__";
     const newPayerId = selfPay || value === "__none__" ? null : value;
     await changeBilledPayer(superbill.id, encounterId, newPayerId, selfPay);
+    // Refresh fee schedule for new payer
+    const feeMap = await fetchPayerFeeSchedule(newPayerId);
+    setPayerFeeMap(feeMap);
   };
 
   const handleAddCpt = useCallback(
     (entry: CptEntry) => {
+      const payerFee = payerFeeMap.get(entry.code);
       const item: LineItemCreateRequest = {
         cptCode: entry.code,
         description: entry.description,
-        fee: entry.defaultFee,
+        fee: payerFee ?? entry.defaultFee,
         units: 1,
         diagnosisPointers: icdCodes.slice(0, 4),
         modifiers: [],
       };
       addLineItem(encounterId, item);
     },
-    [encounterId, addLineItem, icdCodes],
+    [encounterId, addLineItem, icdCodes, payerFeeMap],
   );
 
   const handleMarkReady = async () => {
@@ -758,6 +783,7 @@ export function BillingWorkflow({
               encounterId={encounterId}
               existingCodes={existingCodes}
               onAdd={handleAddCpt}
+              payerFeeMap={payerFeeMap}
             />
           </div>
 
