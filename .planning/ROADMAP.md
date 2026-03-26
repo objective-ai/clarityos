@@ -146,10 +146,13 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 
 ## V2 Milestone (Post-MVP)
 
-Build order: Phase 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
+Build order: Phase 8 → 9 → 9.1 → 9.2 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 
 - [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
-- [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking (completed 2026-03-14)
+- [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
+- [ ] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix mock import, auth gaps, fee catalog wiring from v1.0 audit
+- [ ] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts
+ (completed 2026-03-14)
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
 - [ ] **Phase 12: Mobile/Tablet UX** - Responsive pass on Schedule, Optical, Patients, Dashboard, Encounter; bottom nav on mobile
@@ -197,6 +200,35 @@ Plans:
 - [ ] 09-06-PLAN.md — Payer selection flow: PayerSelectionModal, billingStore extension, fee_source indicators in SuperbillEditor (INS-05)
 - [ ] 09-07-PLAN.md — Download PDF buttons on billing dashboard + SuperbillEditor; human verification checkpoint (INS-06)
 
+### Phase 9.1: Security & Integration Hardening (INSERTED — Gap Closure)
+**Goal:** Fix 3 integration code issues and 1 partial requirement identified by v1.0 milestone audit
+**Depends on:** Phase 9 (existing code to fix)
+**Requirements:** API-07
+**Gap Closure:** Closes gaps from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. No mock data imports in production bundle — TopNav.tsx mock import removed
+  2. fetchPatientInsurance uses apiFetch with proper auth headers (not raw fetch())
+  3. Middleware applies auth check to /api/* routes (defense-in-depth alongside proxyToFastAPI)
+  4. Fee catalog data pre-populates in BillingWorkflow UI from patient's payer fee schedule
+
+Plans:
+- [ ] 9.1-01-PLAN.md — Mock cleanup, auth hardening, fee catalog wiring (API-07, SEC-01/02, BILL-04, INS-03, INS-05/06)
+
+### Phase 9.2: Requirements & Traceability Repair (INSERTED — Gap Closure)
+**Goal:** Repair requirements tracking infrastructure — update stale traceability, add orphaned requirements, create missing GSD artifacts
+**Depends on:** Phase 9.1
+**Requirements:** INS-01 through INS-07, ANAL-V2-01, ANAL-V2-02
+**Gap Closure:** Closes gaps from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. All 24 stale Pending requirements (SCHED, BILL, PAT, OPT, INTAKE) verified and marked Complete
+  2. INS-01 through INS-07 defined in REQUIREMENTS.md with traceability entries
+  3. ANAL-V2-01, ANAL-V2-02 added to traceability table
+  4. Phase 7 (patient-intake) has GSD artifacts directory
+  5. Coverage counts accurate
+
+Plans:
+- [ ] 9.2-01-PLAN.md — Traceability repair, requirement definitions, Phase 7 artifacts (INS-01–07, ANAL-V2-01/02)
+
 ### Phase 10: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
 **Depends on**: Phase 9 (CMS-1500 generation), Phase 8 (aggregate queries)
@@ -232,6 +264,8 @@ Plans:
 |-------|----------------|--------|-----------|
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
+| 9.1 Security & Integration Hardening | 0/1 | Not started | — |
+| 9.2 Requirements & Traceability Repair | 0/1 | Not started | — |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
 | 12. Mobile/Tablet UX | 0/? | Not started | — |

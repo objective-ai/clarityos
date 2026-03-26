@@ -37,7 +37,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **API-04**: examFindingsStore migrated from mock data to real apiFetch() calls
 - [x] **API-05**: diagnosisStore migrated from mock data to real apiFetch() calls
 - [x] **API-06**: problemListStore migrated from mock data to real apiFetch() calls
-- [x] **API-07**: Mock persona seed imports removed from all 9 production pages
+- [ ] **API-07**: Mock persona seed imports removed from all 9 production pages
 - [x] **API-08**: apiFetch() updated to use Supabase session token for Authorization header
 
 ### Scheduling
@@ -84,6 +84,16 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **INTAKE-02**: Intake forms capture demographics, medical history, review of systems (ROS), and chief complaint using shadcn UI
 - [ ] **INTAKE-03**: Intake webhook/API receives submission, creates/updates Patient record, pre-seeds encounterStore for that day's appointment
 - [ ] **INTAKE-04**: AI Triage — async AI check on "Reason for Visit"; flags urgent conditions (e.g., flashing lights → "Possible RD") with red badge on Schedule View
+
+### Insurance & Claims
+
+- [ ] **INS-01**: InsurancePayer model with CRUD API — admin can create, read, update, delete insurance payers
+- [ ] **INS-02**: FeeScheduleItem model with per-payer fee schedule management (CPT code to fee amount mapping)
+- [ ] **INS-03**: Admin Payers tab UI — payer list with CRUD forms and inline fee schedule editor
+- [ ] **INS-04**: PatientInsurance model with CRUD API — patient detail Insurance tab showing primary/secondary coverage with subscriber info
+- [ ] **INS-05**: Superbill auto-populates line item fees from patient's payer fee schedule via fee_service
+- [ ] **INS-06**: CMS-1500 PDF generation — posted superbills generate downloadable PDF forms via reportlab
+- [ ] **INS-07**: Patient Billing/Claims tab — list all superbills for patient with status, E&M code, CPT codes, and total
 
 ## v2 Requirements
 
@@ -149,7 +159,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | API-04 | Phase 2 | Complete |
 | API-05 | Phase 2 | Complete |
 | API-06 | Phase 2 | Complete |
-| API-07 | Phase 2 | Complete |
+| API-07 | Phase 9.1 | Pending |
 | API-08 | Phase 2 | Complete |
 | HIPAA-01 | Phase 2 | Complete |
 | HIPAA-02 | Phase 2 | Complete |
@@ -179,11 +189,21 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INTAKE-03 | Phase 7 | Pending |
 | INTAKE-04 | Phase 7 | Pending |
 
+| INS-01 | Phase 9 | Pending |
+| INS-02 | Phase 9 | Pending |
+| INS-03 | Phase 9 | Pending |
+| INS-04 | Phase 9 | Pending |
+| INS-05 | Phase 9 | Pending |
+| INS-06 | Phase 9 | Pending |
+| INS-07 | Phase 9 | Pending |
+| ANAL-V2-01 | Phase 8 | Pending |
+| ANAL-V2-02 | Phase 8 | Pending |
+
 **Coverage:**
-- v1 requirements: 51 total
-- Mapped to phases: 51
+- v1 requirements: 60 total
+- Mapped to phases: 60
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after roadmap creation (7 phases, 51 requirements mapped)*
+*Last updated: 2026-03-25 after v1.0 milestone audit gap closure (9 phases + 2 gap closure, 60 requirements mapped)*
