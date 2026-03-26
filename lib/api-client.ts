@@ -130,20 +130,56 @@ export async function apiFetch<T = unknown>(
 /**
  * Fetch a patient's insurance plans from the BFF.
  * Returns raw snake_case response as PatientInsurance[] (no key conversion).
+ * Uses getAuthHeaders() directly (not apiFetch) to preserve snake_case keys.
  */
 export async function fetchPatientInsurance(patientId: string): Promise<unknown[]> {
-  const res = await fetch(`/api/patients/${patientId}/insurance`);
-  if (!res.ok) return [];
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/patients/${patientId}/insurance`, { headers });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
  * Fetch the superbill PDF blob for a given encounter.
  * Returns null if the request fails.
+ * Uses getAuthHeaders() directly (not apiFetch) because apiFetch only handles JSON responses.
  */
 export async function fetchSuperbillPdfBlob(encounterId: string): Promise<Blob | null> {
-  const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`);
-  if (!res.ok) return null;
-  return res.blob();
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/encounters/${encounterId}/superbill/pdf`, { headers });
+    if (!res.ok) return null;
+    return res.blob();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch a payer's fee schedule overrides.
+ * Returns a Map of CPT code -> fee for quick lookup.
+ * Returns empty map on error or for self-pay.
+ */
+export async function fetchPayerFeeSchedule(
+  payerId: string | null,
+): Promise<Map<string, number>> {
+  if (!payerId) return new Map();
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`/api/payers/${payerId}/fee-schedule`, { headers });
+    if (!res.ok) return new Map();
+    const data: Array<{ cpt_code: string; fee: number }> = await res.json();
+    const map = new Map<string, number>();
+    for (const item of data) {
+      map.set(item.cpt_code, item.fee);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
 }
