@@ -50,13 +50,17 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Routes that should NOT be protected
+  // Routes that should NOT be protected.
+  // NOTE: /api/* is NOT blanket-excluded — only specific public API routes are exempt.
+  // This provides defense-in-depth: unauthenticated requests to protected /api/* routes
+  // are rejected here even if a BFF handler forgets to call proxyToFastAPI().
   const isPublicRoute =
     pathname === "/login" ||
     pathname === "/health" ||
     pathname.startsWith("/intake") ||
     pathname.startsWith("/book") ||
-    pathname.startsWith("/api") ||
+    pathname.startsWith("/api/public/") ||
+    pathname.startsWith("/api/address/") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico";
 
