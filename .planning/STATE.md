@@ -4,12 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 status: in_progress
 stopped_at: "Completed 09-07-PLAN.md (Download PDF buttons) - checkpoint:human-verify pending"
-last_updated: "2026-03-14T17:22:37.229Z"
-last_activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
+last_updated: "2026-03-26T18:00:48.675Z"
 progress:
-  total_phases: 16
+  total_phases: 18
   completed_phases: 5
-  total_plans: 19
+  total_plans: 21
   completed_plans: 22
   percent: 100
 ---
@@ -67,19 +66,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** MVP complete — all 7 phases done
+**Current focus:** Phase 09.1 — security-integration-hardening
 
 ## Current Position
 
-Phase: 8 of 12 COMPLETE (V2 Milestone)
-Next: Phase 9 (Claims Basics) planning and execution
-Last activity: 2026-03-12 — Phase 8 (Analytics Dashboard) complete
-
-Progress: [======    ] 67%
+Phase: 09.1 (security-integration-hardening) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 11
 - Average duration: ~11min
 - Total execution time: ~2 hours
@@ -96,14 +93,17 @@ Progress: [======    ] 67%
 | 06 | 1/1 | ~10min | ~10min |
 
 **Recent Trend:**
+
 - Last 11 plans: 01-01 (~25min), 01-02 (~5min), 01-03 (~11min), 02-01 (~12min), 02-02 (~8min), 02-03 (~45min), 03-01 (~12min), 03-02 (~13min), 04-01 (~9min), 05-01 (~11min), 06-01 (~10min)
 - Trend: Improving — parallel execution of 3 phases completed in ~10min wall time
+
 | Phase 08-analytics-dashboard P00 | 12 | 2 tasks | 5 files |
 | Phase 08-analytics-dashboard P02 | 25 | 1 tasks | 1 files |
 | Phase 09-claims-basics P05 | 6 | 2 tasks | 8 files |
 | Phase 09-claims-basics P04 | 6 | 2 tasks | 7 files |
 | Phase 09-claims-basics P06 | 4 | 2 tasks | 6 files |
 | Phase 09-claims-basics P07 | 20 | 1 tasks | 5 files |
+| Phase 09.1-security-integration-hardening P01 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -163,6 +163,8 @@ Recent decisions affecting current work:
 - [Phase 09-claims-basics]: PayerSelectionModal reads open/encounterId from billingStore directly (no props) — only patientId needed at call site
 - [Phase 09-claims-basics]: openPayerSelection intercepts auto-superbill-create path in SuperbillEditor — user must pick payer first
 - [Phase 09-claims-basics]: 09-07: Per-row PDF loading state uses Record<string, boolean> so multiple rows can download PDFs in parallel without blocking each other
+- [Phase 09.1-01]: Use getAuthHeaders() directly (not apiFetch) for insurance/PDF fetches — preserves snake_case keys and supports Blob responses
+- [Phase 09.1-01]: Middleware allowlist enumerates /api/public/ and /api/address/ as public; all other /api/* routes require auth (defense-in-depth)
 
 ### Pending Todos
 
@@ -175,10 +177,11 @@ None active.
 ## Session Continuity
 
 Last session: 2026-03-14T17:22:29.368Z
-Stopped at: Completed 09-07-PLAN.md (Download PDF buttons) - checkpoint:human-verify pending
+Stopped at: Completed 9.1-01-PLAN.md (Auth hardening — api-client + middleware)
 Resume file: None
 
 **Phase 9 Overview:**
+
 - Extends Phase 4 (Superbill) with insurance infrastructure: payer CRUD, patient insurance records, per-payer fee schedules
 - New admin tab for payer management + fee schedule editing
 - New Insurance tab on patient detail page (primary/secondary capture)
