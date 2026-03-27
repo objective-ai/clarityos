@@ -244,7 +244,7 @@ Plans:
   5. Tab visibility is driven by encounter status + user role
   6. Expanded preliminary fields: confrontation, motility, color vision, NPC, cover tests, pupils (mm), autorefractor, keratometer, entrance Rx
   7. "All Normal" quick-fill button populates default normal values across pre-test fields
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 10-01-PLAN.md — Backend fields chain: Alembic migration, ORM model, Pydantic schemas, TS types, vitalsStore mapping (EWR-06)
@@ -288,7 +288,7 @@ Plans:
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
 | 9.1 Security & Integration Hardening | 2/2 | Complete   | 2026-03-26 |
 | 9.2 Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
-| 10. Encounter Workflow Redesign | 1/3 | In Progress|  |
+| 10. Encounter Workflow Redesign | 2/3 | In Progress|  |
 | 11. Reporting & Exports | 0/? | Not started | — |
 | 12. AI Scribe Audio | 0/? | Not started | — |
 | 13. Mobile/Tablet UX | 0/? | Not started | — |
