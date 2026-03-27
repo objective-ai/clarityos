@@ -145,6 +145,57 @@ class VitalsCreate(CamelCaseModel):
         description="Free-text notes for the doctor's attention before the exam.",
     )
 
+    # --- Preliminary test fields (Phase 10) ---
+    confrontation: str | None = Field(
+        default=None,
+        max_length=100,
+        description='Confrontation visual field result, e.g. "Full", "Restricted temporal OD".',
+    )
+    motility: str | None = Field(
+        default=None,
+        max_length=100,
+        description='Extraocular motility result, e.g. "Full", "Restricted upgaze OS".',
+    )
+    color_vision: str | None = Field(
+        default=None,
+        max_length=100,
+        description='Color vision test result, e.g. "Normal", "8/14 Ishihara OD".',
+    )
+    npc: str | None = Field(
+        default=None,
+        max_length=100,
+        description='Near point of convergence, e.g. "Normal", "Break 10cm / Recovery 14cm".',
+    )
+    pupils_od_mm: Decimal | None = Field(
+        default=None,
+        ge=Decimal("1.0"),
+        le=Decimal("9.0"),
+        decimal_places=1,
+        description="Right eye pupil diameter in mm (1.0-9.0).",
+    )
+    pupils_os_mm: Decimal | None = Field(
+        default=None,
+        ge=Decimal("1.0"),
+        le=Decimal("9.0"),
+        decimal_places=1,
+        description="Left eye pupil diameter in mm (1.0-9.0).",
+    )
+    autorefractor: str | None = Field(
+        default=None,
+        max_length=2000,
+        description='Autorefractor readings, e.g. "OD: -2.00 -0.75x180, OS: -1.50 -0.50x175".',
+    )
+    keratometer: str | None = Field(
+        default=None,
+        max_length=2000,
+        description='Keratometer readings, e.g. "OD: 43.00/44.25@090, OS: 42.75/43.50@085".',
+    )
+    entrance_rx: str | None = Field(
+        default=None,
+        max_length=2000,
+        description='Current spectacle Rx, e.g. "OD: -2.00 -0.75x180, OS: -1.50 -0.50x175".',
+    )
+
     @field_validator("blood_pressure")
     @classmethod
     def validate_blood_pressure_format(cls, v: str | None) -> str | None:
@@ -219,5 +270,16 @@ class VitalsResponse(TimestampSchema):
     relative_afferent_pupillary_defect: bool | None = None
     cover_test_notes: str | None = None
     technician_notes: str | None = None
+
+    # Preliminary test fields (Phase 10)
+    confrontation: str | None = None
+    motility: str | None = None
+    color_vision: str | None = None
+    npc: str | None = None
+    pupils_od_mm: Decimal | None = None
+    pupils_os_mm: Decimal | None = None
+    autorefractor: str | None = None
+    keratometer: str | None = None
+    entrance_rx: str | None = None
 
     recorded_by_id: uuid.UUID | None = None

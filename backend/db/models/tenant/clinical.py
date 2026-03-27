@@ -575,6 +575,17 @@ class VitalsAndPretest(TimestampMixin, TenantBase):
     # Notes the tech wants the doctor to see
     technician_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Preliminary test fields (Phase 10)
+    confrontation: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    motility: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    color_vision: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    npc: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    pupils_od_mm: Mapped[Decimal | None] = mapped_column(Numeric(4, 1), nullable=True)
+    pupils_os_mm: Mapped[Decimal | None] = mapped_column(Numeric(4, 1), nullable=True)
+    autorefractor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keratometer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entrance_rx: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Who took the measurements
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
