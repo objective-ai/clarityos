@@ -301,7 +301,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
           <Accordion type="multiple" defaultValue={["va", "pupil", "instruments", "systemic"]}>
 
             {/* ── Visual Acuity ─────────────────────────── */}
-            <AccordionItem value="va">
+            <AccordionItem value="va" id="section-pretest-va">
               <AccordionTrigger>Visual Acuity</AccordionTrigger>
               <AccordionContent>
                 <div className="flex justify-end mb-3">
@@ -325,7 +325,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
             </AccordionItem>
 
             {/* ── Pupil & Motility ──────────────────────── */}
-            <AccordionItem value="pupil">
+            <AccordionItem value="pupil" id="section-pretest-pupils">
               <AccordionTrigger>Pupil &amp; Motility</AccordionTrigger>
               <AccordionContent>
                 <div className="flex justify-end mb-3">
@@ -403,7 +403,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
             </AccordionItem>
 
             {/* ── Instrument Readings ───────────────────── */}
-            <AccordionItem value="instruments">
+            <AccordionItem value="instruments" id="section-pretest-instruments">
               <AccordionTrigger>Instrument Readings</AccordionTrigger>
               <AccordionContent>
                 <div className="flex justify-end mb-3">
@@ -474,7 +474,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
             </AccordionItem>
 
             {/* ── Systemic ──────────────────────────────── */}
-            <AccordionItem value="systemic">
+            <AccordionItem value="systemic" id="section-pretest-systemic">
               <AccordionTrigger>Systemic</AccordionTrigger>
               <AccordionContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
