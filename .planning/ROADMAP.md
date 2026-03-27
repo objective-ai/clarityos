@@ -151,7 +151,7 @@ Build order: Phase 8 → 9 → 9.1 → 9.2 → 10 → 11 → 12 → 13 → 14 �
 - [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
 - [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
 - [x] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix auth gaps, fee catalog wiring from v1.0 audit (completed 2026-03-26)
-- [ ] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts
+- [x] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts (completed 2026-03-27)
  (completed 2026-03-14)
 - [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
@@ -227,8 +227,10 @@ Plans:
   4. Phase 7 (patient-intake) has GSD artifacts directory
   5. Coverage counts accurate
 
+**Plans:** 1/1 plan complete
+
 Plans:
-- [ ] 9.2-01-PLAN.md — Traceability repair, requirement definitions, Phase 7 artifacts (INS-01–07, ANAL-V2-01/02)
+- [x] 9.2-01-PLAN.md — Traceability repair, requirement definitions, Phase 7 artifacts (INS-01–07, ANAL-V2-01/02)
 
 ### Phase 10: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
@@ -266,7 +268,7 @@ Plans:
 | 8. Analytics Dashboard | 3/3 | Complete   | 2026-03-12 |
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
 | 9.1 Security & Integration Hardening | 2/2 | Complete   | 2026-03-26 |
-| 9.2 Requirements & Traceability Repair | 0/1 | Not started | — |
+| 9.2 Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
 | 10. Reporting & Exports | 0/? | Not started | — |
 | 11. AI Scribe Audio | 0/? | Not started | — |
 | 12. Mobile/Tablet UX | 0/? | Not started | — |

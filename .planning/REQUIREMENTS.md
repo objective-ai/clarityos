@@ -164,46 +164,46 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | HIPAA-01 | Phase 2 | Complete |
 | HIPAA-02 | Phase 2 | Complete |
 | HIPAA-03 | Phase 2 | Complete |
-| SCHED-01 | Phase 3 | Pending |
-| SCHED-02 | Phase 3 | Pending |
-| SCHED-03 | Phase 3 | Pending |
-| SCHED-04 | Phase 3 | Pending |
-| SCHED-05 | Phase 3 | Pending |
-| BILL-01 | Phase 4 | Pending |
-| BILL-02 | Phase 4 | Pending |
-| BILL-03 | Phase 4 | Pending |
-| BILL-04 | Phase 4 | Pending |
-| BILL-05 | Phase 4 | Pending |
-| BILL-06 | Phase 4 | Pending |
-| PAT-01 | Phase 5 | Pending |
-| PAT-02 | Phase 5 | Pending |
-| PAT-03 | Phase 5 | Pending |
-| PAT-04 | Phase 5 | Pending |
-| PAT-05 | Phase 5 | Pending |
-| OPT-01 | Phase 6 | Pending |
-| OPT-02 | Phase 6 | Pending |
-| OPT-03 | Phase 6 | Pending |
-| OPT-04 | Phase 6 | Pending |
-| INTAKE-01 | Phase 7 | Pending |
-| INTAKE-02 | Phase 7 | Pending |
-| INTAKE-03 | Phase 7 | Pending |
-| INTAKE-04 | Phase 7 | Pending |
-
-| INS-01 | Phase 9 | Pending |
-| INS-02 | Phase 9 | Pending |
-| INS-03 | Phase 9 | Pending |
-| INS-04 | Phase 9 | Pending |
-| INS-05 | Phase 9 | Pending |
-| INS-06 | Phase 9 | Pending |
-| INS-07 | Phase 9 | Pending |
-| ANAL-V2-01 | Phase 8 | Pending |
-| ANAL-V2-02 | Phase 8 | Pending |
+| SCHED-01 | Phase 3 | Complete |
+| SCHED-02 | Phase 3 | Complete |
+| SCHED-03 | Phase 3 | Complete |
+| SCHED-04 | Phase 3 | Complete |
+| SCHED-05 | Phase 3 | Complete |
+| BILL-01 | Phase 4 | Complete |
+| BILL-02 | Phase 4 | Complete |
+| BILL-03 | Phase 4 | Complete |
+| BILL-04 | Phase 4 | Complete |
+| BILL-05 | Phase 4 | Complete |
+| BILL-06 | Phase 4 | Complete |
+| PAT-01 | Phase 5 | Complete |
+| PAT-02 | Phase 5 | Complete |
+| PAT-03 | Phase 5 | Complete |
+| PAT-04 | Phase 5 | Complete |
+| PAT-05 | Phase 5 | Complete |
+| OPT-01 | Phase 6 | Complete |
+| OPT-02 | Phase 6 | Complete |
+| OPT-03 | Phase 6 | Complete |
+| OPT-04 | Phase 6 | Complete |
+| INTAKE-01 | Phase 7 | Complete |
+| INTAKE-02 | Phase 7 | Complete |
+| INTAKE-03 | Phase 7 | Complete |
+| INTAKE-04 | Phase 7 | Complete |
+| INS-01 | Phase 9 | Complete |
+| INS-02 | Phase 9 | Complete |
+| INS-03 | Phase 9 | Complete |
+| INS-04 | Phase 9 | Complete |
+| INS-05 | Phase 9 | Complete |
+| INS-06 | Phase 9 | Complete |
+| INS-07 | Phase 9 | Complete |
+| ANAL-V2-01 | Phase 8 | Complete |
+| ANAL-V2-02 | Phase 8 | Complete |
 
 **Coverage:**
-- v1 requirements: 60 total
-- Mapped to phases: 60
+- Total requirements: 60
+- Complete: 60
+- Pending: 0
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-25 after v1.0 milestone audit gap closure (9 phases + 2 gap closure, 60 requirements mapped)*
+*Last updated: 2026-03-27 — Phase 9.2 traceability repair (33 stale Pending → Complete, all 60 requirements now satisfied)*
