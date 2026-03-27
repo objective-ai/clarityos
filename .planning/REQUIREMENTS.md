@@ -120,6 +120,16 @@ Deferred to future milestone. Tracked but not in current roadmap.
 - **DEP-V2-02**: CI/CD pipeline (GitHub Actions → Vercel + Render)
 - **DEP-V2-03**: Supabase RLS policies as defense-in-depth
 
+### Encounter Workflow Redesign
+
+- [x] **EWR-01**: Encounter page splits into pre-test and doctor exam modes based on encounter status
+- [x] **EWR-02**: Pre-test mode shows only CC/HPI + vitals form — no doctor sections, no tab bar
+- [x] **EWR-03**: AI Scribe widget renders after Plan/Addendum section in doctor exam mode
+- [x] **EWR-04**: Sticky floating mic button visible for doctor/owner roles during in_exam status
+- [x] **EWR-05**: Tab bar removed from DOM (not hidden via CSS) in pre-test mode
+- [x] **EWR-06**: 9 preliminary test fields (confrontation, motility, color vision, NPC, pupils mm, autorefractor, keratometer, entrance Rx) in full data chain
+- [x] **EWR-07**: "All Normal" quick-fill and "Ready for Doctor" transition button in pre-test view
+
 ## Out of Scope
 
 | Feature | Reason |
@@ -197,13 +207,20 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INS-07 | Phase 9 | Complete |
 | ANAL-V2-01 | Phase 8 | Complete |
 | ANAL-V2-02 | Phase 8 | Complete |
+| EWR-01 | Phase 10 | Complete |
+| EWR-02 | Phase 10 | Complete |
+| EWR-03 | Phase 10 | Complete |
+| EWR-04 | Phase 10 | Complete |
+| EWR-05 | Phase 10 | Complete |
+| EWR-06 | Phase 10 | Complete |
+| EWR-07 | Phase 10 | Complete |
 
 **Coverage:**
-- Total requirements: 60
-- Complete: 60
+- Total requirements: 67
+- Complete: 67
 - Pending: 0
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-27 — Phase 9.2 traceability repair (33 stale Pending → Complete, all 60 requirements now satisfied)*
+*Last updated: 2026-03-27 — Phase 10 encounter workflow redesign (7 EWR requirements added, all 67 satisfied)*
