@@ -275,11 +275,11 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className={LABEL_CLASS} htmlFor="cover_test_notes">Cover Test</label>
-          <textarea id="cover_test_notes" rows={2} value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Cover/uncover findings…" className={`${INPUT_CLASS} resize-none`} />
+          <textarea id="cover_test_notes" rows={2} value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Cover/uncover findings…" className={`${INPUT_CLASS} resize-y`} />
         </div>
         <div>
           <label className={LABEL_CLASS} htmlFor="technician_notes">Technician Notes</label>
-          <textarea id="technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_CLASS} resize-none`} />
+          <textarea id="technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_CLASS} resize-y`} />
         </div>
       </div>
     </div>
@@ -449,19 +449,19 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                   {/* Autorefractor */}
                   <div>
                     <label className={LABEL_CLASS} htmlFor="autorefractor">Autorefractor</label>
-                    <textarea id="autorefractor" rows={2} value={draft.autorefractor ?? ""} onChange={(e) => handleChange("autorefractor", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-none`} />
+                    <textarea id="autorefractor" rows={2} value={draft.autorefractor ?? ""} onChange={(e) => handleChange("autorefractor", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-y`} />
                   </div>
 
                   {/* Keratometer */}
                   <div>
                     <label className={LABEL_CLASS} htmlFor="keratometer">Keratometer</label>
-                    <textarea id="keratometer" rows={2} value={draft.keratometer ?? ""} onChange={(e) => handleChange("keratometer", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-none`} />
+                    <textarea id="keratometer" rows={2} value={draft.keratometer ?? ""} onChange={(e) => handleChange("keratometer", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-y`} />
                   </div>
 
                   {/* Entrance Rx */}
                   <div>
                     <label className={LABEL_CLASS} htmlFor="entrance_rx">Entrance Rx</label>
-                    <textarea id="entrance_rx" rows={2} value={draft.entrance_rx ?? ""} onChange={(e) => handleChange("entrance_rx", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-none`} />
+                    <textarea id="entrance_rx" rows={2} value={draft.entrance_rx ?? ""} onChange={(e) => handleChange("entrance_rx", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-y`} />
                   </div>
 
                   {/* Color Vision */}
@@ -493,7 +493,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                   </div>
                   <div className="sm:col-span-2">
                     <label className={LABEL_CLASS} htmlFor="acc_technician_notes">Technician Notes</label>
-                    <textarea id="acc_technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_CLASS} resize-none`} />
+                    <textarea id="acc_technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_CLASS} resize-y`} />
                   </div>
                 </div>
               </AccordionContent>
