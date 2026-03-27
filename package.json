@@ -12,14 +12,20 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:smoke": "npx playwright test --grep @smoke",
     "api:ensure": "bash scripts/dev.sh ensure-api",
     "api:restart": "bash scripts/dev.sh restart-api",
     "api:check": "bash scripts/dev.sh check-api",
     "api:pre-test": "bash scripts/dev.sh pre-test",
     "db:seed": "bash scripts/dev.sh seed",
-    "db:reseed": "bash scripts/dev.sh reseed"
+    "db:reseed": "bash scripts/dev.sh reseed",
+    "db:reseed-clinical": "bash scripts/dev.sh reseed-clinical"
   },
   "dependencies": {
+    "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-slot": "^1.2.4",
@@ -39,6 +45,7 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -50,7 +57,6 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "jsdom": "^28.1.0",
-    "playwright": "^1.58.2",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",
