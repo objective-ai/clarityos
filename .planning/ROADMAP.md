@@ -152,7 +152,7 @@ Build order: Phase 8 → 9 → 9.1 → 9.2 → 10 → 11 → 12 → 13 → 14 �
 - [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking (completed 2026-03-14)
 - [x] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix auth gaps, fee catalog wiring from v1.0 audit (completed 2026-03-26)
 - [x] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts (completed 2026-03-27)
-- [ ] **Phase 10: Encounter Workflow Redesign** - Pre-test/doctor mode split, accordion vitals, sticky mic FAB, AI Scribe relocation
+- [x] **Phase 10: Encounter Workflow Redesign** - Pre-test/doctor mode split, accordion vitals, sticky mic FAB, AI Scribe relocation (completed 2026-03-27)
 - [ ] **Phase 11: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
 - [ ] **Phase 12: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
 - [ ] **Phase 13: Mobile/Tablet UX** - Responsive pass on Schedule, Optical, Patients, Dashboard, Encounter; bottom nav on mobile
@@ -244,7 +244,7 @@ Plans:
   5. Tab visibility is driven by encounter status + user role
   6. Expanded preliminary fields: confrontation, motility, color vision, NPC, cover tests, pupils (mm), autorefractor, keratometer, entrance Rx
   7. "All Normal" quick-fill button populates default normal values across pre-test fields
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md — Backend fields chain: Alembic migration, ORM model, Pydantic schemas, TS types, vitalsStore mapping (EWR-06)
@@ -288,7 +288,7 @@ Plans:
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
 | 9.1 Security & Integration Hardening | 2/2 | Complete   | 2026-03-26 |
 | 9.2 Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
-| 10. Encounter Workflow Redesign | 2/3 | In Progress|  |
+| 10. Encounter Workflow Redesign | 3/3 | Complete   | 2026-03-27 |
 | 11. Reporting & Exports | 0/? | Not started | — |
 | 12. AI Scribe Audio | 0/? | Not started | — |
 | 13. Mobile/Tablet UX | 0/? | Not started | — |
