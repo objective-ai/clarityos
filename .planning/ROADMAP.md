@@ -149,17 +149,17 @@ Note: Phases 3-7 all depend on Phase 2. Phases 3, 4, 5, 6 can execute in paralle
 Build order: Phase 8 → 9 → 9.1 → 9.2 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 
 - [x] **Phase 8: Analytics Dashboard** - 7 real charts (Recharts): encounter volume, revenue trend, top diagnoses, claims pipeline, appointment utilization, patient growth, Rx/optical metrics (completed 2026-03-12)
-- [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking
+- [x] **Phase 9: Claims Basics** - Payer management, patient insurance, fee schedules, CMS-1500 PDF generation, claim tracking (completed 2026-03-14)
 - [x] **Phase 9.1: Security & Integration Hardening** - INSERTED: Fix auth gaps, fee catalog wiring from v1.0 audit (completed 2026-03-26)
 - [x] **Phase 9.2: Requirements & Traceability Repair** - INSERTED: Update stale tracking, add orphaned INS requirements, create Phase 7 artifacts (completed 2026-03-27)
- (completed 2026-03-14)
-- [ ] **Phase 10: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
-- [ ] **Phase 11: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
-- [ ] **Phase 12: Mobile/Tablet UX** - Responsive pass on Schedule, Optical, Patients, Dashboard, Encounter; bottom nav on mobile
-- [ ] **Phase 13: CRM & Patient Engagement** - SMS/email reminders, recall campaigns, manual outreach from patient/schedule views
-- [ ] **Phase 14: Retail Inventory** - Frame/lens/contact product catalog, stock tracking, optical orders linked to Rx
-- [ ] **Phase 15: Optical Order Configuration** - OpticalOrder record, frame/lens/coating selection, ocular measurements, job ticket PDF, AI Scribe optical suggestions
-- [ ] **Phase 16: Point of Sale** - Checkout flow, Stripe payments, receipt PDF, daily close report
+- [ ] **Phase 10: Encounter Workflow Redesign** - Pre-test/doctor mode split, accordion vitals, sticky mic FAB, AI Scribe relocation
+- [ ] **Phase 11: Reporting & Exports** - Daily encounter summary, monthly revenue report, encounter printout, CMS-1500 batch export
+- [ ] **Phase 12: AI Scribe Audio** - Browser mic → Deepgram transcription → existing SOAP pipeline → auto-fill encounter fields
+- [ ] **Phase 13: Mobile/Tablet UX** - Responsive pass on Schedule, Optical, Patients, Dashboard, Encounter; bottom nav on mobile
+- [ ] **Phase 14: CRM & Patient Engagement** - SMS/email reminders, recall campaigns, manual outreach from patient/schedule views
+- [ ] **Phase 15: Retail Inventory** - Frame/lens/contact product catalog, stock tracking, optical orders linked to Rx
+- [ ] **Phase 16: Optical Order Configuration** - OpticalOrder record, frame/lens/coating selection, ocular measurements, job ticket PDF, AI Scribe optical suggestions
+- [ ] **Phase 17: Point of Sale** - Checkout flow, Stripe payments, receipt PDF, daily close report
 
 ### Phase 8: Analytics Dashboard
 **Goal**: Replace placeholder analytics charts with 7 real data visualizations covering clinical and financial metrics
@@ -232,7 +232,26 @@ Plans:
 Plans:
 - [x] 9.2-01-PLAN.md — Traceability repair, requirement definitions, Phase 7 artifacts (INS-01–07, ANAL-V2-01/02)
 
-### Phase 10: Reporting & Exports
+### Phase 10: Encounter Workflow Redesign
+**Goal**: Restructure the encounter page into distinct pre-test and doctor exam modes with role-based visibility, relocate AI Scribe to bottom of page, and add a sticky floating mic button
+**Depends on**: Phase 9 (existing encounter page, AI Scribe, vitals)
+**Requirements**: EWR-01, EWR-02, EWR-03, EWR-04, EWR-05, EWR-06, EWR-07
+**Success Criteria** (what must be TRUE):
+  1. Pre-test mode shows only CC/HPI + expanded vitals/preliminary fields — no AI Scribe, no Exam/Dx/Plan tabs
+  2. "Ready for Doctor" button transitions encounter from pre_test → in_exam
+  3. Doctor exam mode shows all clinical sections with AI Scribe at bottom, pre-test data accessible via tab bar
+  4. Sticky floating mic button (position: fixed, bottom-right) visible at all scroll positions during doctor exam
+  5. Tab visibility is driven by encounter status + user role
+  6. Expanded preliminary fields: confrontation, motility, color vision, NPC, cover tests, pupils (mm), autorefractor, keratometer, entrance Rx
+  7. "All Normal" quick-fill button populates default normal values across pre-test fields
+**Plans:** 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Backend fields chain: Alembic migration, ORM model, Pydantic schemas, TS types, vitalsStore mapping (EWR-06)
+- [ ] 10-02-PLAN.md — VitalsForm accordion + PreTestView: shadcn Accordion, 9 new fields, All Normal, Ready for Doctor (EWR-01, EWR-02, EWR-06, EWR-07)
+- [ ] 10-03-PLAN.md — Page mode split: pre-test/doctor conditional rendering, AI Scribe relocation, tab visibility, StickyMicButton FAB (EWR-01, EWR-02, EWR-03, EWR-04, EWR-05)
+
+### Phase 11: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
 **Depends on**: Phase 9 (CMS-1500 generation), Phase 8 (aggregate queries)
 **Requirements**: reportlab for PDF generation. Existing CSV pattern from audit logs.
@@ -242,18 +261,18 @@ Plans:
   3. Encounter page has "Print Summary" button generating patient-friendly encounter summary
   4. Billing page supports batch CMS-1500 export (select multiple → ZIP download)
 
-### Phase 11: AI Scribe Audio
+### Phase 12: AI Scribe Audio
 **Goal**: Clinicians record audio during encounters, which is transcribed and structured into SOAP notes automatically
-**Depends on**: Phase 2 (existing ai_scribe.py text→SOAP endpoint)
+**Depends on**: Phase 10 (sticky mic button + AI Scribe repositioning), Phase 2 (existing ai_scribe.py text→SOAP endpoint)
 **Requirements**: Deepgram API key. Supabase Storage bucket for audio. Web Audio API / MediaRecorder.
 **Success Criteria** (what must be TRUE):
-  1. Encounter page has mic button that records audio with waveform visualization
+  1. Sticky mic button records audio with waveform visualization
   2. Recorded audio is transcribed via Deepgram and displayed as editable transcript
   3. Transcript feeds into existing AI Scribe pipeline → SOAP + structured JSON
   4. User can review and accept auto-populated encounter fields
   5. Audio files stored in Supabase Storage linked to encounter for audit trail
 
-### Phase 12: Mobile/Tablet UX
+### Phase 13: Mobile/Tablet UX
 **Goal**: Key pages are responsive and usable on tablets and phones with touch-friendly interactions
 **Depends on**: All prior phases (responsive pass on existing pages)
 **Requirements**: Tailwind responsive utilities only — no new framework.
@@ -269,15 +288,16 @@ Plans:
 | 9. Claims Basics | 8/8 | Complete   | 2026-03-14 |
 | 9.1 Security & Integration Hardening | 2/2 | Complete   | 2026-03-26 |
 | 9.2 Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
-| 10. Reporting & Exports | 0/? | Not started | — |
-| 11. AI Scribe Audio | 0/? | Not started | — |
-| 12. Mobile/Tablet UX | 0/? | Not started | — |
-| 13. CRM & Patient Engagement | 0/? | Not started | — |
-| 14. Retail Inventory | 0/? | Not started | — |
-| 15. Optical Order Configuration | 0/? | Not started | — |
-| 16. Point of Sale | 0/? | Not started | — |
+| 10. Encounter Workflow Redesign | 0/3 | Not started | — |
+| 11. Reporting & Exports | 0/? | Not started | — |
+| 12. AI Scribe Audio | 0/? | Not started | — |
+| 13. Mobile/Tablet UX | 0/? | Not started | — |
+| 14. CRM & Patient Engagement | 0/? | Not started | — |
+| 15. Retail Inventory | 0/? | Not started | — |
+| 16. Optical Order Configuration | 0/? | Not started | — |
+| 17. Point of Sale | 0/? | Not started | — |
 
-### Phase 13: CRM & Patient Engagement
+### Phase 14: CRM & Patient Engagement
 **Goal**: Clinics can communicate with patients via SMS and email — appointment reminders fire automatically, recall reminders bring lapsed patients back, and staff can send manual messages from the patient or schedule view
 **Depends on**: Phase 3 (appointment data + `reminder_sent_at` field), Phase 2 (patient `contact_info_jsonb` with phone/email)
 **Requirements**: New models: `CommunicationPreference`, `MessageQueue`. Twilio SMS integration. Scheduled reminder job (cron or Supabase edge function). Opt-in/out tracking.
@@ -288,7 +308,7 @@ Plans:
   4. Patients can opt out of SMS; opt-out is stored and respected on all future sends
   5. Message history (sent, delivered, failed) is viewable per patient
 
-### Phase 14: Retail Inventory
+### Phase 15: Retail Inventory
 **Goal**: Optical staff can manage a product catalog of frames, lenses, and contact lenses with stock quantities, and create optical orders linked to a patient's finalized Rx
 **Depends on**: Phase 6 (Optical Handoff — Rx data and optical queue workflow)
 **Requirements**: New models: `Product` (frame|lens|contact), `OpticalOrder`, `OpticalOrderItem`. New inventory page. Integration point with optical queue (order from Rx).
@@ -299,9 +319,9 @@ Plans:
   4. Inventory page shows stock levels filterable by product type (frames / lenses / contacts)
   5. Patient detail page shows their order history with status and delivery date
 
-### Phase 15: Optical Order Configuration
+### Phase 16: Optical Order Configuration
 **Goal**: Opticians can configure a complete optical order from a finalized encounter — selecting frame, lens type, material, and coatings from the product catalog, recording fitting measurements, capturing vision plan details, and generating a lab job ticket PDF. AI Scribe pre-populates the optician's form with the doctor's verbal recommendations as ghosted suggestions.
-**Depends on**: Phase 6 (Optical Handoff — queue, finalization trigger, Rx data), Phase 14 (Retail Inventory — frame/lens product catalog)
+**Depends on**: Phase 6 (Optical Handoff — queue, finalization trigger, Rx data), Phase 15 (Retail Inventory — frame/lens product catalog)
 **Requirements**: New models: `OpticalOrder`, `OpticalOrderItem`, `OcularMeasurement`. Extend optical queue response to include `HABITUAL` refraction alongside `FINAL` (no new model — `refraction_type = HABITUAL` already exists). Extend `ScribeStructuredDataV2` with `optical_recommendations` node. Job ticket PDF via reportlab (already installed). VisionWeb EDI → V3 (V2 = printable PDF only). VSP/EyeMed real-time eligibility → V3 (V2 = manual plan entry).
 **Success Criteria** (what must be TRUE):
   1. Optician opens an optical order from the queue with Final Rx pre-populated (read-only) and PD pre-filled from refraction (overridable)
@@ -313,13 +333,13 @@ Plans:
   7. When AI Scribe detects the doctor recommending optical options (e.g., "blue light filter," "progressive"), those fields appear pre-selected as ghosted suggestions in the optical order form that the optician can accept or dismiss
 
 **Plans:** (3 planned)
-- [ ] 15-01: Backend — `OpticalOrder`, `OpticalOrderItem`, `OcularMeasurement` models, Alembic migration, CRUD endpoints; extend optical queue endpoint to return both `HABITUAL` and `FINAL` refractions per encounter
-- [ ] 15-02: Frontend — Optical order UI (drawer from queue card), Habitual/Final Rx comparison display, PD pre-population (overridable), frame/lens/coating selectors, fitting measurement fields, vision plan entry, `opticalOrderStore.ts`
-- [ ] 15-03: AI Scribe optical integration + Job Ticket PDF — extend structured output with `optical_recommendations`, ghosted suggestion UX, reportlab job ticket (includes both Habitual and Final Rx columns)
+- [ ] 16-01: Backend — `OpticalOrder`, `OpticalOrderItem`, `OcularMeasurement` models, Alembic migration, CRUD endpoints; extend optical queue endpoint to return both `HABITUAL` and `FINAL` refractions per encounter
+- [ ] 16-02: Frontend — Optical order UI (drawer from queue card), Habitual/Final Rx comparison display, PD pre-population (overridable), frame/lens/coating selectors, fitting measurement fields, vision plan entry, `opticalOrderStore.ts`
+- [ ] 16-03: AI Scribe optical integration + Job Ticket PDF — extend structured output with `optical_recommendations`, ghosted suggestion UX, reportlab job ticket (includes both Habitual and Final Rx columns)
 
-### Phase 16: Point of Sale
+### Phase 17: Point of Sale
 **Goal**: Front desk can collect patient payments for clinical copays and retail purchases at checkout, with receipt generation and a daily transaction summary
-**Depends on**: Phase 15 (optical orders to check out), Phase 9 (fee schedules for service pricing)
+**Depends on**: Phase 16 (optical orders to check out), Phase 9 (fee schedules for service pricing)
 **Requirements**: New models: `Transaction`, `Payment`. Stripe Terminal or manual entry. Receipt PDF (reuse reportlab). POS checkout page. Split payment support (insurance vs. patient portion).
 **Success Criteria** (what must be TRUE):
   1. Front desk can open a checkout for a patient, adding clinical charges and retail/optical items
