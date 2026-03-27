@@ -81,6 +81,10 @@ const StickyMicButton = dynamic(
   () => import("@/components/encounter/StickyMicButton").then((m) => ({ default: m.StickyMicButton })),
   { ssr: false },
 );
+const PreTestBottomBar = dynamic(
+  () => import("@/components/encounter/PreTestBottomBar").then((m) => ({ default: m.PreTestBottomBar })),
+  { ssr: false },
+);
 import { useProblemListStore } from "@/store/problemListStore";
 import {
   Card,
@@ -335,6 +339,7 @@ export default function EncounterPage({
 
   const handleRevertToPretest = useCallback(async () => {
     setStatusError(null);
+    if (encounterState?.status !== "in_exam") return;
     if (!encounterState?.appointmentId) {
       setStatusError("Cannot revert: this encounter has no linked appointment.");
       return;
@@ -345,7 +350,7 @@ export default function EncounterPage({
     } catch (e) {
       setStatusError(e instanceof Error ? e.message : "Failed to revert to pre-test.");
     }
-  }, [encounterState?.appointmentId, loadEncounter, params.encounterId]);
+  }, [encounterState?.status, encounterState?.appointmentId, loadEncounter, params.encounterId]);
 
   // --- Staged Commit: commit handler ---
   const handleCommit = useCallback(async (
@@ -498,10 +503,19 @@ export default function EncounterPage({
             />
           </div>
 
-          {/* Pre-test workflow: accordion vitals + Ready for Doctor */}
+          {/* Pre-test workflow: accordion vitals */}
           <PreTestView
             encounterId={params.encounterId}
             tenantSlug={params.tenant}
+          />
+
+          {/* Bottom padding for fixed bar */}
+          <div className="h-14" />
+
+          {/* Sticky bottom bar with section tabs + Ready for Doctor */}
+          <PreTestBottomBar
+            encounterId={params.encounterId}
+            sidebarCollapsed={sidebarCollapsed}
           />
         </>
       ) : (
@@ -525,7 +539,7 @@ export default function EncounterPage({
               <button
                 type="button"
                 onClick={() => setAuditOpen(true)}
-                className="self-end flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-lg hover-btn"
+                className="self-end flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg hover-btn"
                 style={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)" }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -590,7 +604,7 @@ export default function EncounterPage({
                   <button
                     type="button"
                     onClick={() => unlockEncounter(params.encounterId)}
-                    className="text-[11px] px-2 py-1 rounded-md font-medium border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--state-critical)] hover:border-[var(--state-critical)] transition-colors"
+                    className="text-xs px-2 py-1 rounded-md font-medium border border-dashed border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--state-critical)] hover:border-[var(--state-critical)] transition-colors"
                   >
                     Dev: Unlock
                   </button>
