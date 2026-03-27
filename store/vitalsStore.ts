@@ -126,6 +126,15 @@ async function saveVitalsToAPI(
       relativeAfferentPupillaryDefect: draft.relative_afferent_pupillary_defect,
       coverTestNotes: draft.cover_test_notes,
       technicianNotes: draft.technician_notes,
+      confrontation: draft.confrontation,
+      motility: draft.motility,
+      colorVision: draft.color_vision,
+      npc: draft.npc,
+      pupilsOdMm: draft.pupils_od_mm,
+      pupilsOsMm: draft.pupils_os_mm,
+      autorefractor: draft.autorefractor,
+      keratometer: draft.keratometer,
+      entranceRx: draft.entrance_rx,
     };
 
     // Real API call — no mock fallback
@@ -222,6 +231,15 @@ const vitalsStoreImpl = subscribeWithSelector(devtools<VitalsStore>((set, get) =
             relative_afferent_pupillary_defect: (data.relativeAfferentPupillaryDefect as boolean) ?? false,
             cover_test_notes: (data.coverTestNotes as string) ?? null,
             technician_notes: (data.technicianNotes as string) ?? null,
+            confrontation: (data.confrontation as string) ?? null,
+            motility: (data.motility as string) ?? null,
+            color_vision: (data.colorVision as string) ?? null,
+            npc: (data.npc as string) ?? null,
+            pupils_od_mm: data.pupilsOdMm != null ? Number(data.pupilsOdMm) : null,
+            pupils_os_mm: data.pupilsOsMm != null ? Number(data.pupilsOsMm) : null,
+            autorefractor: (data.autorefractor as string) ?? null,
+            keratometer: (data.keratometer as string) ?? null,
+            entrance_rx: (data.entranceRx as string) ?? null,
           };
           set(
             (state) => ({

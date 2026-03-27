@@ -32,6 +32,17 @@ export interface VitalsDraft {
   // Notes
   cover_test_notes: string | null;
   technician_notes: string | null;
+
+  // Preliminary test fields (Phase 10)
+  confrontation: string | null;
+  motility: string | null;
+  color_vision: string | null;
+  npc: string | null;
+  pupils_od_mm: number | null;
+  pupils_os_mm: number | null;
+  autorefractor: string | null;
+  keratometer: string | null;
+  entrance_rx: string | null;
 }
 
 export type VitalsSaveStatus = "idle" | "loading" | "dirty" | "saving" | "saved" | "error";
@@ -72,6 +83,15 @@ export function blankVitalsDraft(encounterId: string): VitalsDraft {
     relative_afferent_pupillary_defect: false,
     cover_test_notes: null,
     technician_notes: null,
+    confrontation: null,
+    motility: null,
+    color_vision: null,
+    npc: null,
+    pupils_od_mm: null,
+    pupils_os_mm: null,
+    autorefractor: null,
+    keratometer: null,
+    entrance_rx: null,
   };
 }
 
