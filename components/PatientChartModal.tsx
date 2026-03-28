@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import dynamic from "next/dynamic";
 import {
   Dialog,
   DialogContent,
@@ -14,68 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { usePatientStore } from "@/store/patientStore";
 import type { PatientEncounterSummary } from "@/types/patient";
 import { formatClinicDate } from "@/lib/timezone";
-
-// Lazy-load tab content to keep initial bundle small
-const ProblemListCard = dynamic(
-  () =>
-    import("@/components/patient/ProblemListCard").then((m) => ({
-      default: m.ProblemListCard,
-    })),
-  {
-    loading: () => (
-      <div className="animate-pulse h-32 bg-white/5 rounded-xl" />
-    ),
-    ssr: false,
-  },
-);
-const EncounterTimeline = dynamic(
-  () =>
-    import("@/components/patient/EncounterTimeline").then((m) => ({
-      default: m.EncounterTimeline,
-    })),
-  {
-    loading: () => (
-      <div className="animate-pulse h-48 bg-white/5 rounded-xl" />
-    ),
-    ssr: false,
-  },
-);
-const RxHistoryTable = dynamic(
-  () =>
-    import("@/components/patient/RxHistoryTable").then((m) => ({
-      default: m.RxHistoryTable,
-    })),
-  {
-    loading: () => (
-      <div className="animate-pulse h-48 bg-white/5 rounded-xl" />
-    ),
-    ssr: false,
-  },
-);
-const ClinicalFlowsheet = dynamic(
-  () =>
-    import("@/components/patient/ClinicalFlowsheet").then((m) => ({
-      default: m.ClinicalFlowsheet,
-    })),
-  {
-    loading: () => (
-      <div className="animate-pulse h-48 bg-white/5 rounded-xl" />
-    ),
-    ssr: false,
-  },
-);
-const InsuranceTab = dynamic(
-  () =>
-    import("@/components/patient/InsuranceTab").then((m) => ({
-      default: m.InsuranceTab,
-    })),
-  {
-    loading: () => (
-      <div className="animate-pulse h-48 bg-white/5 rounded-xl" />
-    ),
-    ssr: false,
-  },
-);
+import { ProblemListCard } from "@/components/patient/ProblemListCard";
+import { EncounterTimeline } from "@/components/patient/EncounterTimeline";
+import { RxHistoryTable } from "@/components/patient/RxHistoryTable";
+import { ClinicalFlowsheet } from "@/components/patient/ClinicalFlowsheet";
+import { InsuranceTab } from "@/components/patient/InsuranceTab";
 
 // ---------------------------------------------------------------------------
 // Tab definitions

@@ -12,20 +12,6 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ tenant: "sunview" }),
 }));
 
-// Mock next/dynamic to render components synchronously in tests
-vi.mock("next/dynamic", () => ({
-  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) => {
-    let Component: React.ComponentType<unknown> | null = null;
-    loader().then((mod) => {
-      Component = mod.default;
-    });
-    return (props: Record<string, unknown>) => {
-      if (!Component) return null;
-      return <Component {...props} />;
-    };
-  },
-}));
-
 // Mock apiFetch so store actions don't hit network
 vi.mock("@/lib/api-client", () => ({
   apiFetch: vi.fn(),
