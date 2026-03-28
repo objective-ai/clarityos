@@ -81,7 +81,6 @@ export function PreTestBottomBar({
   const flushSave = useVitalsStore((s) => s.flushSave);
   const advanceStatus = useEncounterStore((s) => s.advanceStatus);
 
-  const allComplete = TABS.every((tab) => tab.isComplete(draft));
   const isSaving = saveStatus === "saving";
 
   // Scroll-spy: track which section is in view
@@ -167,13 +166,12 @@ export function PreTestBottomBar({
         <button
           type="button"
           onClick={handleReadyForDoctor}
-          disabled={!allComplete || isSaving}
+          disabled={isSaving}
           className={`text-xs px-4 py-2 rounded-xl font-semibold transition-all ${
-            !allComplete || isSaving
+            isSaving
               ? "bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border-default)] opacity-70 cursor-not-allowed"
               : "bg-[var(--accent)] text-[var(--text-inverse)] hover:brightness-110 shadow-[var(--shadow-sm)]"
           }`}
-          title={!allComplete ? "Complete all sections to continue" : undefined}
         >
           Ready for Doctor &rarr;
         </button>
