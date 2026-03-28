@@ -499,7 +499,7 @@ export default function EncounterPage({
   }
 
   return (
-    <div className="flex flex-col gap-6 stagger">
+    <div className="flex flex-col gap-3 stagger">
 
       {/* ------------------------------------------------------------------ */}
       {/* PRE-TEST MODE                                                        */}
@@ -646,7 +646,7 @@ export default function EncounterPage({
               {/* Refraction */}
               <div id="section-rx">
                 <Card>
-                  <CardContent className="p-6">
+                  <CardContent className="p-3">
                     <RefractionGrid
                       encounterId={params.encounterId}
                       isReadOnly={clinicalReadOnly}
@@ -664,9 +664,9 @@ export default function EncounterPage({
 
               {/* Exam Findings -- always normal side-by-side view */}
               <div id="section-exam">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   <Card>
-                    <CardContent className="p-6">
+                    <CardContent className="p-3">
                       {isFinalized || !canEditClinical ? (
                         <ExamFindingsCard encounterId={params.encounterId} section="anterior_segment" />
                       ) : (
@@ -680,7 +680,7 @@ export default function EncounterPage({
                   </Card>
 
                   <Card>
-                    <CardContent className="p-6">
+                    <CardContent className="p-3">
                       {isFinalized || !canEditClinical ? (
                         <ExamFindingsCard encounterId={params.encounterId} section="posterior_segment" />
                       ) : (
@@ -699,7 +699,7 @@ export default function EncounterPage({
               <div id="section-dx">
                 <PermissionGate roles={["doctor", "owner"]}>
                   <Card>
-                    <CardContent className="p-6">
+                    <CardContent className="p-3">
                       <DiagnosisPicker encounterId={params.encounterId} isReadOnly={isFinalized} columns={2} />
                     </CardContent>
                   </Card>

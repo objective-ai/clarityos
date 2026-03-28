@@ -61,14 +61,9 @@ export function ExamFindings({
     : SECTIONS;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {!filterSection && (
-        <>
-          <h2 className="section-title">Exam Findings</h2>
-          <p className="text-caption mt-0.5 text-[var(--text-muted)]">
-            Slit lamp &amp; fundus examination
-          </p>
-        </>
+        <h2 className="text-xs font-semibold text-[var(--text-primary)]">Exam Findings</h2>
       )}
 
       {sections.map((sec) => (
@@ -144,48 +139,48 @@ function SectionPanel({
   return (
     <div className="rounded-xl overflow-hidden bg-[var(--bg-glass)] border border-[var(--glass-border)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border-subtle)]">
-        <div className="flex items-center gap-3">
-          <span className="text-overline text-[var(--text-primary)]">{label}</span>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-subtle)]">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)]">{label}</span>
           {draft.is_normal_wnl && (
-            <Badge variant="success">WNL</Badge>
+            <Badge variant="success" className="text-xs py-0">WNL</Badge>
           )}
           {saveStatus !== "idle" && saveStatus !== "dirty" && (
-            <Badge variant={saveStatus === "saving" ? "info" : saveStatus === "saved" ? "success" : "destructive"}>
+            <Badge variant={saveStatus === "saving" ? "info" : saveStatus === "saved" ? "success" : "destructive"} className="text-xs py-0">
               {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : "Error"}
             </Badge>
           )}
         </div>
 
         {!isReadOnly && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleWNL}
-              className="text-xs"
+              className="text-xs h-6 px-2"
             >
-              Set WNL
+              WNL
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={handleCopyOdToOs}
-              className="text-xs"
+              className="text-xs h-6 px-2"
             >
-              OD → OS
+              OD→OS
             </Button>
           </div>
         )}
       </div>
 
       {/* OD / OS Grid */}
-      <div className="px-5 pb-4">
+      <div className="px-3 pb-2">
         {/* Column headers */}
-        <div className="grid grid-cols-[140px_1fr_1fr] gap-3 py-2 border-b border-[var(--border-subtle)]">
-          <span className="text-overline text-[var(--text-muted)]">Structure</span>
-          <span className="text-overline text-center text-[var(--text-muted)]">OD (Right)</span>
-          <span className="text-overline text-center text-[var(--text-muted)]">OS (Left)</span>
+        <div className="grid grid-cols-[100px_1fr_1fr] gap-2 py-1.5 border-b border-[var(--border-subtle)]">
+          <span className="text-xs uppercase tracking-wider text-[var(--text-muted)]">Structure</span>
+          <span className="text-xs uppercase tracking-wider text-center text-[var(--text-muted)]">OD</span>
+          <span className="text-xs uppercase tracking-wider text-center text-[var(--text-muted)]">OS</span>
         </div>
 
         {/* Field rows */}
@@ -207,19 +202,19 @@ function SectionPanel({
           return (
             <div
               key={field.key}
-              className="grid grid-cols-[140px_1fr_1fr] gap-3 py-2 border-b border-[var(--border-subtle)] last:border-b-0"
+              className="grid grid-cols-[100px_1fr_1fr] gap-2 py-1 border-b border-[var(--border-subtle)] last:border-b-0"
             >
               <label className="text-xs font-medium text-[var(--text-secondary)] self-center">
                 {field.label}
               </label>
 
               {/* OD cell */}
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <select
                   value={odFinding.status}
                   onChange={(e) => handleStatusChange("od", field.key, e.target.value)}
                   disabled={isReadOnly}
-                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs glass-input ${
+                  className={`w-full px-2 py-1 rounded-lg text-xs glass-input ${
                     odAbnormal ? "ring-1 ring-[var(--state-warning)]" : ""
                   }`}
                 >
@@ -234,18 +229,18 @@ function SectionPanel({
                     onChange={(e) => handleFindingChange("od", field.key, e.target.value)}
                     disabled={isReadOnly}
                     placeholder="Details…"
-                    className="w-full px-2.5 py-1 rounded-lg text-xs glass-input"
+                    className="w-full px-2 py-0.5 rounded-lg text-xs glass-input"
                   />
                 )}
               </div>
 
               {/* OS cell */}
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <select
                   value={osFinding.status}
                   onChange={(e) => handleStatusChange("os", field.key, e.target.value)}
                   disabled={isReadOnly}
-                  className={`w-full px-2.5 py-1.5 rounded-lg text-xs glass-input ${
+                  className={`w-full px-2 py-1 rounded-lg text-xs glass-input ${
                     osAbnormal ? "ring-1 ring-[var(--state-warning)]" : ""
                   }`}
                 >
@@ -260,7 +255,7 @@ function SectionPanel({
                     onChange={(e) => handleFindingChange("os", field.key, e.target.value)}
                     disabled={isReadOnly}
                     placeholder="Details…"
-                    className="w-full px-2.5 py-1 rounded-lg text-xs glass-input"
+                    className="w-full px-2 py-0.5 rounded-lg text-xs glass-input"
                   />
                 )}
               </div>
@@ -269,16 +264,15 @@ function SectionPanel({
         })}
 
         {/* Provider notes */}
-        <div className="mt-3">
-          <label className="block text-overline mb-1.5">Provider Notes</label>
+        <div className="mt-2">
+          <label className="block text-xs uppercase tracking-wider text-[var(--text-muted)] mb-1">Provider Notes</label>
           <textarea
             value={draft.provider_notes}
             onChange={(e) => handleNotesChange(e.target.value)}
             disabled={isReadOnly}
-            rows={2}
-            placeholder="Additional notes for this section…"
-            className="w-full px-3 py-2 rounded-xl text-xs glass-input resize-none"
-            style={{ minHeight: "60px" }}
+            rows={1}
+            placeholder="Additional notes…"
+            className="w-full px-2 py-1.5 rounded-lg text-xs glass-input resize-y"
           />
         </div>
       </div>

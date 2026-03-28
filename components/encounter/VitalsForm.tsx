@@ -145,9 +145,9 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
   // ── Flat sections (doctor mode — existing behavior) ──────────────────────
 
   const iopSection = (
-    <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-4">Intraocular Pressure</div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+      <div className="text-overline mb-2">Intraocular Pressure</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {/* IOP OD */}
         <div>
           <label className={LABEL_CLASS} htmlFor="iop_od">OD (Right)</label>
@@ -219,9 +219,9 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
   );
 
   const vaSection = (
-    <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-4">Visual Acuity</div>
-      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-3 items-center">
+    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+      <div className="text-overline mb-2">Visual Acuity</div>
+      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-2 items-center">
         <div /><div className="text-overline text-center">OD</div><div className="text-overline text-center">OS</div>
         <div className="text-overline" style={{ textTransform: "none" }}>UCVA</div>
         <input id="ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
@@ -237,9 +237,9 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
   );
 
   const systemicSection = (
-    <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-4">Systemic</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+      <div className="text-overline mb-2">Systemic</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <label className={LABEL_CLASS} htmlFor="blood_pressure">Blood Pressure</label>
           <input id="blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_CLASS} />
@@ -258,14 +258,14 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
   );
 
   const pupilsSection = (
-    <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-4">Pupils &amp; Notes</div>
-      <div className="flex items-center gap-3 mb-4">
+    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+      <div className="text-overline mb-2">Pupils &amp; Notes</div>
+      <div className="flex items-center gap-2 mb-2">
         <button
           type="button"
           onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)}
           onBlur={handleBlur}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all border min-h-[var(--touch-target)] ${
+          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
             draft.pupils_equal_round_reactive
               ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]"
               : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
@@ -277,7 +277,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
           type="button"
           onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)}
           onBlur={handleBlur}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all border min-h-[var(--touch-target)] ${
+          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
             draft.relative_afferent_pupillary_defect
               ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]"
               : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
@@ -286,7 +286,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
           RAPD {draft.relative_afferent_pupillary_defect ? "+" : "–"}
         </button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <label className={LABEL_CLASS} htmlFor="cover_test_notes">Cover Test</label>
           <textarea id="cover_test_notes" rows={2} value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Cover/uncover findings…" className={`${INPUT_CLASS} resize-y`} />
@@ -323,7 +323,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                     Normal
                   </button>
                 </div>
-                <div className="grid grid-cols-[auto_1fr_1fr] gap-x-4 gap-y-3 items-center">
+                <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-2 items-center">
                   <div /><div className="text-overline text-center">OD</div><div className="text-overline text-center">OS</div>
                   <div className="text-overline" style={{ textTransform: "none" }}>UCVA</div>
                   <input id="acc_ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
@@ -349,12 +349,12 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                 </div>
 
                 {/* PERRL / RAPD toggles */}
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-2 mb-2">
                   <button
                     type="button"
                     onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)}
                     onBlur={handleBlur}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all border min-h-[var(--touch-target)] ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
                       draft.pupils_equal_round_reactive
                         ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]"
                         : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
@@ -366,7 +366,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                     type="button"
                     onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)}
                     onBlur={handleBlur}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all border min-h-[var(--touch-target)] ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
                       draft.relative_afferent_pupillary_defect
                         ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]"
                         : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
@@ -376,7 +376,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {/* Confrontation */}
                   <div>
                     <label className={LABEL_CLASS} htmlFor="confrontation">Confrontation Fields</label>
@@ -426,7 +426,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
                   {/* IOP OD */}
                   <div>
                     <label className={LABEL_CLASS} htmlFor="acc_iop_od">IOP OD</label>
@@ -459,7 +459,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {/* Autorefractor */}
                   <div>
                     <label className={LABEL_CLASS} htmlFor="autorefractor">Autorefractor</label>
@@ -491,7 +491,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
             <AccordionItem value="systemic" id="section-pretest-systemic">
               <AccordionTrigger>Systemic</AccordionTrigger>
               <AccordionContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className={LABEL_CLASS} htmlFor="acc_blood_pressure">Blood Pressure</label>
                     <input id="acc_blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_CLASS} />
@@ -523,14 +523,14 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
 
   return (
     <Card className="glass-card-accent">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between py-2 px-3">
         <div>
           <CardTitle>Vitals &amp; Pre-Test</CardTitle>
           <CardDescription>Technician data entry</CardDescription>
         </div>
         <SaveStatusBadge status={saveStatus} />
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-3 px-3 pb-3 pt-0">
         {iopSection}
         {vaSection}
         {systemicSection}
