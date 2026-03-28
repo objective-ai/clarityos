@@ -12,6 +12,20 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ tenant: "sunview" }),
 }));
 
+// Mock next/dynamic to render components synchronously in tests
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) => {
+    let Component: React.ComponentType<unknown> | null = null;
+    loader().then((mod) => {
+      Component = mod.default;
+    });
+    return (props: Record<string, unknown>) => {
+      if (!Component) return null;
+      return <Component {...props} />;
+    };
+  },
+}));
+
 // Mock apiFetch so store actions don't hit network
 vi.mock("@/lib/api-client", () => ({
   apiFetch: vi.fn(),
@@ -76,7 +90,7 @@ describe("PatientChartModal", () => {
   test("shows loading spinner when patient data is loading", () => {
     usePatientStore.setState({ detailLoading: true });
 
-    const { container } = render(
+    render(
       <PatientChartModal
         patientId="pat-1"
         open={true}
@@ -84,7 +98,8 @@ describe("PatientChartModal", () => {
       />
     );
 
-    expect(container.querySelector(".animate-spin")).toBeTruthy();
+    // Dialog renders in a portal, so query on document instead of container
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
   });
 
   test("renders patient header with name, chart number, DOB, sex", () => {
