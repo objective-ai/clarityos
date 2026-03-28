@@ -233,6 +233,7 @@ export default function EncounterPage({
   const setFinalizeModalOpen = useEncounterStore((s) => s.setFinalizeModalOpen);
   const [superbillOpen, setSuperbillOpen] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [reviewMode, setReviewMode] = useState(false);
   const undoRef = useRef<UndoSnapshot | null>(null);
   const [undoToast, setUndoToast] = useState<{ count: number; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -277,12 +278,20 @@ export default function EncounterPage({
   // Parallel fetch all encounter sections on mount
   useEffect(() => {
     const encId = params.encounterId;
-    loadEncounter(encId);
-    loadVitals(encId);
-    loadRefractions(encId);
-    loadFindings(encId, "anterior_segment");
-    loadFindings(encId, "posterior_segment");
-    loadDiagnoses(encId);
+    const tracked = [
+      { name: "Encounter", fn: () => loadEncounter(encId) },
+      { name: "Vitals", fn: () => loadVitals(encId) },
+      { name: "Refractions", fn: () => loadRefractions(encId) },
+      { name: "Anterior exam", fn: () => loadFindings(encId, "anterior_segment") },
+      { name: "Posterior exam", fn: () => loadFindings(encId, "posterior_segment") },
+      { name: "Diagnoses", fn: () => loadDiagnoses(encId) },
+    ];
+    Promise.allSettled(tracked.map((t) => t.fn())).then((results) => {
+      const failed = results
+        .map((r, i) => (r.status === "rejected" ? tracked[i].name : null))
+        .filter(Boolean) as string[];
+      if (failed.length) setLoadErrors(failed);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.encounterId]);
 
@@ -502,6 +511,22 @@ export default function EncounterPage({
   return (
     <div className="flex flex-col gap-3 stagger">
 
+      {/* Load error banner — surfaces silent API failures */}
+      {loadErrors.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-[var(--state-critical)]">
+          <span className="font-medium">Failed to load:</span>
+          <span>{loadErrors.join(", ")}</span>
+          <button
+            type="button"
+            onClick={() => { setLoadErrors([]); loadEncounter(params.encounterId); }}
+            className="ml-auto px-2 py-0.5 rounded-lg font-medium border border-[rgba(239,68,68,0.3)] hover:bg-[rgba(239,68,68,0.1)] transition-colors"
+          >
+            Retry
+          </button>
+          <button type="button" onClick={() => setLoadErrors([])} className="opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+
       {/* ------------------------------------------------------------------ */}
       {/* PRE-TEST MODE                                                        */}
       {/* ------------------------------------------------------------------ */}
@@ -528,6 +553,7 @@ export default function EncounterPage({
           <PreTestBottomBar
             encounterId={params.encounterId}
             sidebarCollapsed={sidebarCollapsed}
+            onReadyForDoctor={handleAdvanceStatus}
           />
         </>
       ) : (

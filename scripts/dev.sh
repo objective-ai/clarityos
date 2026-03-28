@@ -5,10 +5,14 @@
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$PROJECT_DIR/venv/Scripts/activate"
 
+# Read ports from .env.local (single source of truth)
+API_PORT=$(grep -oP '(?<=FASTAPI_URL=http://127\.0\.0\.1:)\d+' "$PROJECT_DIR/.env.local" 2>/dev/null || echo "8080")
+NEXT_PORT=$(grep -oP '(?<=FRONTEND_URL=http://localhost:)\d+' "$PROJECT_DIR/.env.local" 2>/dev/null || echo "3001")
+
 case "${1:-help}" in
   ensure-api)
     # Only restart if API is not responding — prevents wasteful restart loops
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "000")
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$API_PORT/docs 2>/dev/null || echo "000")
     if [ "$STATUS" = "200" ]; then
       echo "FastAPI already UP (HTTP $STATUS) — no restart needed"
       exit 0
@@ -18,22 +22,22 @@ case "${1:-help}" in
     ;&
 
   restart-next)
-    echo "--- Killing Next.js on port 3001 ---"
-    PID=$(netstat -ano 2>/dev/null | grep ":3001 " | grep "LISTENING" | awk '{print $NF}' | head -1)
+    echo "--- Killing Next.js on port $NEXT_PORT ---"
+    PID=$(netstat -ano 2>/dev/null | grep ":$NEXT_PORT" | grep "LISTENING" | awk '{print $NF}' | head -1)
     if [ -n "$PID" ] && [ "$PID" != "0" ]; then
       taskkill //F //PID "$PID" 2>/dev/null || true
       echo "Killed PID $PID"
     else
-      echo "No process found on port 3001"
+      echo "No process found on port $NEXT_PORT"
     fi
     sleep 1
 
     echo "--- Starting Next.js ---"
     cd "$PROJECT_DIR"
-    npm run dev &
+    npx next dev -p $NEXT_PORT &
     sleep 5
 
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "000")
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEXT_PORT 2>/dev/null || echo "000")
     if [ "$STATUS" = "200" ] || [ "$STATUS" = "307" ]; then
       echo "Next.js is UP (HTTP $STATUS)"
     else
@@ -46,8 +50,8 @@ case "${1:-help}" in
     echo "--- Killing existing uvicorn ---"
     taskkill //F //IM uvicorn.exe 2>/dev/null || true
     pkill -f uvicorn 2>/dev/null || true
-    # Also kill any process still holding port 8000 (uvicorn runs as python.exe on Windows)
-    for PID in $(netstat -ano 2>/dev/null | grep ":8000 " | grep "LISTENING" | awk '{print $NF}' | sort -u); do
+    # Also kill any process still holding the API port (uvicorn runs as python.exe on Windows)
+    for PID in $(netstat -ano 2>/dev/null | grep ":$API_PORT" | grep "LISTENING" | awk '{print $NF}' | sort -u); do
       [ -n "$PID" ] && [ "$PID" != "0" ] && taskkill //F //PID "$PID" 2>/dev/null || true
     done
     sleep 1
@@ -58,10 +62,10 @@ case "${1:-help}" in
     python -c "from backend.main import app; print('FastAPI imports OK')"
 
     echo "--- Starting uvicorn ---"
-    uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
+    uvicorn backend.main:app --host 0.0.0.0 --port $API_PORT --reload &
     sleep 3
 
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs)
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$API_PORT/docs)
     if [ "$STATUS" = "200" ]; then
       echo "FastAPI is UP (HTTP $STATUS)"
     else
@@ -79,15 +83,15 @@ case "${1:-help}" in
     ;;
 
   check-api)
-    API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "down")
-    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "down")
+    API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$API_PORT/docs 2>/dev/null || echo "down")
+    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEXT_PORT 2>/dev/null || echo "down")
     echo "FastAPI: $API | Next.js: $NEXT"
     ;;
 
   pre-test)
     # Quick gate: ensure both servers are up before any test run
-    API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs 2>/dev/null || echo "000")
-    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null || echo "000")
+    API=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$API_PORT/docs 2>/dev/null || echo "000")
+    NEXT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$NEXT_PORT 2>/dev/null || echo "000")
     FAIL=0
     if [ "$API" != "200" ]; then echo "FAIL: FastAPI not responding ($API)"; FAIL=1; fi
     if [ "$NEXT" != "200" ] && [ "$NEXT" != "307" ]; then echo "FAIL: Next.js not responding ($NEXT)"; FAIL=1; fi
@@ -128,7 +132,7 @@ case "${1:-help}" in
     echo "Commands:"
     echo "  ensure-api    Start FastAPI only if not already running (idempotent)"
     echo "  restart-api   Kill uvicorn, verify imports, start fresh, health-check"
-    echo "  restart-next  Kill Next.js, start fresh on port 3001, health-check"
+    echo "  restart-next  Kill Next.js, start fresh on \$NEXT_PORT, health-check"
     echo "  restart-all   Restart both FastAPI and Next.js"
     echo "  check-api     Quick health-check of FastAPI + Next.js"
     echo "  pre-test      Gate: verify both servers up before tests (exits 1 if not)"

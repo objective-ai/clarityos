@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Eye, Scan, HeartPulse, Activity, Check } from "lucide-react";
 import { useVitalsStore, useVitalsState } from "@/store/vitalsStore";
-import { useEncounterStore } from "@/store/encounterStore";
 import type { VitalsDraft } from "@/types/vitals";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +60,7 @@ const TABS: TabDef[] = [
 interface PreTestBottomBarProps {
   encounterId: string;
   sidebarCollapsed: boolean;
+  onReadyForDoctor: () => Promise<void> | void;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +70,7 @@ interface PreTestBottomBarProps {
 export function PreTestBottomBar({
   encounterId,
   sidebarCollapsed,
+  onReadyForDoctor,
 }: PreTestBottomBarProps) {
   const [activeTab, setActiveTab] = useState(TABS[0].id);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -79,7 +80,6 @@ export function PreTestBottomBar({
   const saveStatus = vitalsState?.saveStatus;
 
   const flushSave = useVitalsStore((s) => s.flushSave);
-  const advanceStatus = useEncounterStore((s) => s.advanceStatus);
 
   const isSaving = saveStatus === "saving";
 
@@ -113,7 +113,7 @@ export function PreTestBottomBar({
 
   const handleReadyForDoctor = async () => {
     flushSave(encounterId);
-    advanceStatus(encounterId);
+    await onReadyForDoctor();
   };
 
   return (
