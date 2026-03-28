@@ -3,6 +3,20 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
+stopped_at: Phase 10.1 context gathered
+last_updated: "2026-03-28T10:02:22.148Z"
+progress:
+  total_phases: 10
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: in_progress
 stopped_at: Completed 10-03-PLAN.md — encounter mode split and StickyMicButton FAB
 last_updated: "2026-03-27T21:49:17.472Z"
 progress:
@@ -77,6 +91,10 @@ Plan: 2 of 3
 ### Roadmap Evolution
 
 - Phase 10 added: Encounter Workflow Redesign — pre-test/doctor mode split, sticky mic, AI Scribe at bottom, role-based tab visibility. Old Phases 10-16 renumbered to 11-17.
+- Phase 10.2 inserted after Phase 10: Revamp Schedule & Booking Page (URGENT)
+- Phase 10.5 inserted after Phase 10: Error Monitoring & System Status — Sentry integration (FastAPI + Next.js) + admin status page (URGENT)
+- Phase 10.1 inserted after Phase 10: Insurance Revamp — enrich insurance fields (copay, auth code, eligibility, position, active) (URGENT)
+- Patient Document Management moved back to V3-08 — research captured in memory (research_document_management.md)
 
 ### Decisions
 
@@ -149,9 +167,9 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-27T21:49:17.462Z
-Stopped at: Completed 10-03-PLAN.md — encounter mode split and StickyMicButton FAB
-Resume file: None
+Last session: 2026-03-28T10:02:22.144Z
+Stopped at: Phase 10.1 context gathered
+Resume file: .planning/phases/10.1-insurance-revamp/10.1-CONTEXT.md
 
 **Phase 9 Overview:**
 
