@@ -171,9 +171,18 @@ export function PrepMeCard({ patientId }: PrepMeCardProps) {
           )}
 
           {status === "loaded" && summary && (
-            <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-              {summary}
-            </p>
+            <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+              {summary
+                .split("\n")
+                .map((line) => line.replace(/^[-•]\s*/, "").trim())
+                .filter(Boolean)
+                .map((line, i) => (
+                  <li key={i} className="flex gap-2 leading-snug">
+                    <span className="text-[var(--accent)] mt-0.5 shrink-0">•</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+            </ul>
           )}
 
           {status === "error" && (

@@ -667,14 +667,15 @@ async def prep_me(
     try:
         message = client.messages.create(
             model=ai_model,
-            max_tokens=300,
+            max_tokens=400,
             system=(
                 "You are a clinical decision support assistant for optometry. "
-                "Given the patient's recent SOAP notes, produce EXACTLY 2 sentences "
-                "summarizing the key clinical context a doctor needs before seeing "
-                "this patient. Focus on: active conditions, trending measurements "
-                "(IOP, Rx changes), and any pending follow-ups. "
-                "Be concise and clinically precise. No headers or formatting."
+                "Given the patient's recent SOAP notes, produce 3-5 bullet points "
+                "of the key clinical facts a doctor needs before seeing this patient. "
+                "Each bullet must be one short line (under 15 words). "
+                "Focus on: active diagnoses, trending measurements (IOP, VA, Rx changes), "
+                "medications, and pending follow-ups. "
+                "Use a dash (- ) to start each bullet. No headers, no paragraphs."
             ),
             messages=[{
                 "role": "user",
