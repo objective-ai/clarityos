@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useVitalsStore, useVitalsState } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
 import type { VitalsDraft, IopMethod } from "@/types/vitals";
@@ -27,6 +27,8 @@ interface VitalsFormProps {
   encounterId: string;
   accordionMode?: boolean;
   onNormalSection?: (section: string) => void;
+  /** Increment to trigger all-normal from parent (avoids cross-component reactivity issues) */
+  allNormalTrigger?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ const NORMAL_BTN_CLASS =
 // Component
 // ---------------------------------------------------------------------------
 
-export function VitalsForm({ encounterId, accordionMode = false, onNormalSection }: VitalsFormProps) {
+export function VitalsForm({ encounterId, accordionMode = false, onNormalSection, allNormalTrigger }: VitalsFormProps) {
   const vitalsState = useVitalsState(encounterId);
   const setField = useVitalsStore((s) => s.setField);
   const flushSave = useVitalsStore((s) => s.flushSave);
@@ -123,6 +125,18 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
     onNormalSection?.("instruments");
   }, [encounterId, setField, onNormalSection]);
 
+  // All Normal trigger from parent — runs all section handlers within this component's context
+  const prevTrigger = useRef(allNormalTrigger);
+  useEffect(() => {
+    if (allNormalTrigger !== undefined && allNormalTrigger !== prevTrigger.current) {
+      prevTrigger.current = allNormalTrigger;
+      handleVaNormal();
+      handlePupilNormal();
+      handleInstrumentsNormal();
+      flushSave(encounterId);
+    }
+  }, [allNormalTrigger, handleVaNormal, handlePupilNormal, handleInstrumentsNormal, flushSave, encounterId]);
+
   if (!draft) return null;
 
   const odElevated = isIopElevated(draft.iop_od);
@@ -152,10 +166,10 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
               placeholder="—"
               className={`${INPUT_CLASS} pr-14 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">mmHg</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
           </div>
-          {odElevated && <Badge variant="warning" className="mt-1.5 text-[10px]">elevated</Badge>}
-          {getError("iop_od") && <p className="text-[11px] text-[var(--state-critical)] mt-1">{getError("iop_od")}</p>}
+          {odElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
+          {getError("iop_od") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("iop_od")}</p>}
         </div>
 
         {/* IOP OS */}
@@ -176,10 +190,10 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
               placeholder="—"
               className={`${INPUT_CLASS} pr-14 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`}
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">mmHg</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
           </div>
-          {osElevated && <Badge variant="warning" className="mt-1.5 text-[10px]">elevated</Badge>}
-          {getError("iop_os") && <p className="text-[11px] text-[var(--state-critical)] mt-1">{getError("iop_os")}</p>}
+          {osElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
+          {getError("iop_os") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("iop_os")}</p>}
         </div>
 
         {/* IOP Method */}
@@ -229,15 +243,15 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
         <div>
           <label className={LABEL_CLASS} htmlFor="blood_pressure">Blood Pressure</label>
           <input id="blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_CLASS} />
-          {getError("blood_pressure") && <p className="text-[11px] text-[var(--state-critical)] mt-1">{getError("blood_pressure")}</p>}
+          {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("blood_pressure")}</p>}
         </div>
         <div>
           <label className={LABEL_CLASS} htmlFor="pulse">Pulse</label>
           <div className="relative">
             <input id="pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-12`} />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">bpm</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span>
           </div>
-          {getError("pulse") && <p className="text-[11px] text-[var(--state-critical)] mt-1">{getError("pulse")}</p>}
+          {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("pulse")}</p>}
         </div>
       </div>
     </div>
@@ -418,9 +432,9 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                     <label className={LABEL_CLASS} htmlFor="acc_iop_od">IOP OD</label>
                     <div className="relative">
                       <input id="acc_iop_od" type="number" min={0} max={80} step={0.5} value={draft.iop_od ?? ""} onChange={(e) => handleChange("iop_od", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-14 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">mmHg</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
                     </div>
-                    {odElevated && <Badge variant="warning" className="mt-1.5 text-[10px]">elevated</Badge>}
+                    {odElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
                   </div>
 
                   {/* IOP OS */}
@@ -428,9 +442,9 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                     <label className={LABEL_CLASS} htmlFor="acc_iop_os">IOP OS</label>
                     <div className="relative">
                       <input id="acc_iop_os" type="number" min={0} max={80} step={0.5} value={draft.iop_os ?? ""} onChange={(e) => handleChange("iop_os", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-14 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">mmHg</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
                     </div>
-                    {osElevated && <Badge variant="warning" className="mt-1.5 text-[10px]">elevated</Badge>}
+                    {osElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
                   </div>
 
                   {/* IOP Method */}
@@ -481,15 +495,15 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
                   <div>
                     <label className={LABEL_CLASS} htmlFor="acc_blood_pressure">Blood Pressure</label>
                     <input id="acc_blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_CLASS} />
-                    {getError("blood_pressure") && <p className="text-[11px] text-[var(--state-critical)] mt-1">{getError("blood_pressure")}</p>}
+                    {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("blood_pressure")}</p>}
                   </div>
                   <div>
                     <label className={LABEL_CLASS} htmlFor="acc_pulse">Pulse</label>
                     <div className="relative">
                       <input id="acc_pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-12`} />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[var(--text-muted)]">bpm</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span>
                     </div>
-                    {getError("pulse") && <p className="text-[11px] text-[var(--state-critical)] mt-1">{getError("pulse")}</p>}
+                    {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("pulse")}</p>}
                   </div>
                   <div className="sm:col-span-2">
                     <label className={LABEL_CLASS} htmlFor="acc_technician_notes">Technician Notes</label>
