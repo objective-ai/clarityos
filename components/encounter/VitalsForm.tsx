@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { CheckCircle } from "lucide-react";
 import { useVitalsStore, useVitalsState } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
 import type { VitalsDraft, IopMethod } from "@/types/vitals";
@@ -12,12 +13,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,6 +64,11 @@ const LABEL_CLASS = "text-overline mb-1.5 block";
 
 const NORMAL_BTN_CLASS =
   "text-xs px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 transition-colors";
+
+const INPUT_COMPACT =
+  "w-full px-2 py-1.5 rounded-lg text-xs glass-input";
+
+const LABEL_COMPACT = "text-xs uppercase tracking-wider text-[var(--text-muted)] mb-0.5 block";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -299,223 +299,120 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
     </div>
   );
 
-  // ── Accordion mode (technician / pre-test) ───────────────────────────────
+  // ── Dense grid mode (technician / pre-test) — all sections visible ────────
 
   if (accordionMode) {
     return (
-      <Card className="glass-card-accent">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Vitals &amp; Pre-Test</CardTitle>
-            <CardDescription>Technician data entry</CardDescription>
+      <div className="flex flex-col gap-3">
+        {/* Header row — title + All Normal + save status */}
+        <div className="flex items-center gap-3">
+          <h3 className="text-xs font-semibold text-[var(--text-primary)]">Pre-Test</h3>
+          <button type="button" onClick={() => { handleVaNormal(); handlePupilNormal(); handleInstrumentsNormal(); flushSave(encounterId); }} className={NORMAL_BTN_CLASS}>All Normal</button>
+          <div className="ml-auto"><SaveStatusBadge status={saveStatus} /></div>
+        </div>
+
+        {/* 2-column grid — all 4 sections visible at once */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+          {/* ── Visual Acuity ─────────────────────────── */}
+          <div id="section-pretest-va" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Visual Acuity</span>
+              <button type="button" onClick={handleVaNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
+            </div>
+            <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1.5 items-center">
+              <div /><div className="text-xs uppercase tracking-wider text-[var(--text-muted)] text-center">OD</div><div className="text-xs uppercase tracking-wider text-[var(--text-muted)] text-center">OS</div>
+              <div className="text-xs text-[var(--text-secondary)]">UCVA</div>
+              <input id="acc_ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+              <input id="acc_ucva_os" type="text" value={draft.ucva_os ?? ""} onChange={(e) => handleChange("ucva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+              <div className="text-xs text-[var(--text-secondary)]">BCVA</div>
+              <input id="acc_bcva_od" type="text" value={draft.bcva_od ?? ""} onChange={(e) => handleChange("bcva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+              <input id="acc_bcva_os" type="text" value={draft.bcva_os ?? ""} onChange={(e) => handleChange("bcva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+              <div className="text-xs text-[var(--text-secondary)]">Near</div>
+              <input id="acc_near_va_od" type="text" value={draft.near_va_od ?? ""} onChange={(e) => handleChange("near_va_od", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_COMPACT} />
+              <input id="acc_near_va_os" type="text" value={draft.near_va_os ?? ""} onChange={(e) => handleChange("near_va_os", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_COMPACT} />
+            </div>
           </div>
-          <SaveStatusBadge status={saveStatus} />
-        </CardHeader>
-        <CardContent>
-          <Accordion type="multiple" defaultValue={["va", "pupil", "instruments", "systemic"]}>
 
-            {/* ── Visual Acuity ─────────────────────────── */}
-            <AccordionItem value="va" id="section-pretest-va">
-              <AccordionTrigger>Visual Acuity</AccordionTrigger>
-              <AccordionContent>
-                <div className="flex justify-end mb-3">
-                  <button type="button" onClick={handleVaNormal} className={NORMAL_BTN_CLASS}>
-                    Normal
-                  </button>
-                </div>
-                <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-2 items-center">
-                  <div /><div className="text-overline text-center">OD</div><div className="text-overline text-center">OS</div>
-                  <div className="text-overline" style={{ textTransform: "none" }}>UCVA</div>
-                  <input id="acc_ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-                  <input id="acc_ucva_os" type="text" value={draft.ucva_os ?? ""} onChange={(e) => handleChange("ucva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-                  <div className="text-overline" style={{ textTransform: "none" }}>BCVA</div>
-                  <input id="acc_bcva_od" type="text" value={draft.bcva_od ?? ""} onChange={(e) => handleChange("bcva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-                  <input id="acc_bcva_os" type="text" value={draft.bcva_os ?? ""} onChange={(e) => handleChange("bcva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-                  <div className="text-overline" style={{ textTransform: "none" }}>Near</div>
-                  <input id="acc_near_va_od" type="text" value={draft.near_va_od ?? ""} onChange={(e) => handleChange("near_va_od", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_CLASS} />
-                  <input id="acc_near_va_os" type="text" value={draft.near_va_os ?? ""} onChange={(e) => handleChange("near_va_os", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_CLASS} />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+          {/* ── Pupil & Motility ──────────────────────── */}
+          <div id="section-pretest-pupils" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Pupils &amp; Motility</span>
+              <button type="button" onClick={handlePupilNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
+            </div>
+            <div className="flex items-center gap-2 mb-2">
+              <button type="button" onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)} onBlur={handleBlur}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${draft.pupils_equal_round_reactive ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]" : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"}`}>
+                PERRL {draft.pupils_equal_round_reactive ? "\u2713" : "\u2717"}
+              </button>
+              <button type="button" onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)} onBlur={handleBlur}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${draft.relative_afferent_pupillary_defect ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]" : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"}`}>
+                RAPD {draft.relative_afferent_pupillary_defect ? "+" : "–"}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className={LABEL_COMPACT} htmlFor="confrontation">Confrontation</label><input id="confrontation" type="text" value={draft.confrontation ?? ""} onChange={(e) => handleChange("confrontation", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="motility">Motility</label><input id="motility" type="text" value={draft.motility ?? ""} onChange={(e) => handleChange("motility", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="npc">NPC</label><input id="npc" type="text" value={draft.npc ?? ""} onChange={(e) => handleChange("npc", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="acc_cover_test_notes">Cover Test</label><input id="acc_cover_test_notes" type="text" value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Ortho" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="pupils_od_mm">Pupil OD</label><input id="pupils_od_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_od_mm ?? ""} onChange={(e) => handleChange("pupils_od_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="pupils_os_mm">Pupil OS</label><input id="pupils_os_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_os_mm ?? ""} onChange={(e) => handleChange("pupils_os_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_COMPACT} /></div>
+            </div>
+          </div>
 
-            {/* ── Pupil & Motility ──────────────────────── */}
-            <AccordionItem value="pupil" id="section-pretest-pupils">
-              <AccordionTrigger>Pupil &amp; Motility</AccordionTrigger>
-              <AccordionContent>
-                <div className="flex justify-end mb-3">
-                  <button type="button" onClick={handlePupilNormal} className={NORMAL_BTN_CLASS}>
-                    Normal
-                  </button>
-                </div>
+          {/* ── Instrument Readings ───────────────────── */}
+          <div id="section-pretest-instruments" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Instruments</span>
+              <button type="button" onClick={handleInstrumentsNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <div>
+                <label className={LABEL_COMPACT} htmlFor="acc_iop_od">IOP OD</label>
+                <div className="relative"><input id="acc_iop_od" type="number" min={0} max={80} step={0.5} value={draft.iop_od ?? ""} onChange={(e) => handleChange("iop_od", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-10 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span></div>
+                {odElevated && <span className="text-xs text-[var(--state-warning)]">elevated</span>}
+              </div>
+              <div>
+                <label className={LABEL_COMPACT} htmlFor="acc_iop_os">IOP OS</label>
+                <div className="relative"><input id="acc_iop_os" type="number" min={0} max={80} step={0.5} value={draft.iop_os ?? ""} onChange={(e) => handleChange("iop_os", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-10 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span></div>
+                {osElevated && <span className="text-xs text-[var(--state-warning)]">elevated</span>}
+              </div>
+              <div>
+                <label className={LABEL_COMPACT} htmlFor="acc_iop_method">Method</label>
+                <select id="acc_iop_method" value={draft.iop_method ?? ""} onChange={(e) => handleChange("iop_method", e.target.value === "" ? null : (e.target.value as IopMethod))} onBlur={handleBlur} className={INPUT_COMPACT}><option value="">Select…</option><option value="goldmann">Goldmann</option><option value="icare">iCare</option><option value="air_puff">Air Puff</option></select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className={LABEL_COMPACT} htmlFor="autorefractor">Autorefractor</label><input id="autorefractor" type="text" value={draft.autorefractor ?? ""} onChange={(e) => handleChange("autorefractor", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="keratometer">Keratometer</label><input id="keratometer" type="text" value={draft.keratometer ?? ""} onChange={(e) => handleChange("keratometer", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="entrance_rx">Entrance Rx</label><input id="entrance_rx" type="text" value={draft.entrance_rx ?? ""} onChange={(e) => handleChange("entrance_rx", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
+              <div><label className={LABEL_COMPACT} htmlFor="color_vision">Color Vision</label><input id="color_vision" type="text" value={draft.color_vision ?? ""} onChange={(e) => handleChange("color_vision", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_COMPACT} /></div>
+            </div>
+          </div>
 
-                {/* PERRL / RAPD toggles */}
-                <div className="flex items-center gap-2 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)}
-                    onBlur={handleBlur}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                      draft.pupils_equal_round_reactive
-                        ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]"
-                        : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
-                    }`}
-                  >
-                    PERRL {draft.pupils_equal_round_reactive ? "\u2713" : "\u2717"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)}
-                    onBlur={handleBlur}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-                      draft.relative_afferent_pupillary_defect
-                        ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]"
-                        : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
-                    }`}
-                  >
-                    RAPD {draft.relative_afferent_pupillary_defect ? "+" : "–"}
-                  </button>
-                </div>
+          {/* ── Systemic ──────────────────────────────── */}
+          <div id="section-pretest-systemic" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="mb-2"><span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Systemic</span></div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className={LABEL_COMPACT} htmlFor="acc_blood_pressure">Blood Pressure</label>
+                <input id="acc_blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_COMPACT} />
+                {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-0.5">{getError("blood_pressure")}</p>}
+              </div>
+              <div>
+                <label className={LABEL_COMPACT} htmlFor="acc_pulse">Pulse</label>
+                <div className="relative"><input id="acc_pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-8`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span></div>
+                {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-0.5">{getError("pulse")}</p>}
+              </div>
+            </div>
+            <div>
+              <label className={LABEL_COMPACT} htmlFor="acc_technician_notes">Technician Notes</label>
+              <textarea id="acc_technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_COMPACT} resize-y`} />
+            </div>
+          </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {/* Confrontation */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="confrontation">Confrontation Fields</label>
-                    <input id="confrontation" type="text" value={draft.confrontation ?? ""} onChange={(e) => handleChange("confrontation", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_CLASS} />
-                  </div>
-
-                  {/* Motility */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="motility">Motility</label>
-                    <input id="motility" type="text" value={draft.motility ?? ""} onChange={(e) => handleChange("motility", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_CLASS} />
-                  </div>
-
-                  {/* NPC */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="npc">NPC</label>
-                    <input id="npc" type="text" value={draft.npc ?? ""} onChange={(e) => handleChange("npc", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_CLASS} />
-                  </div>
-
-                  {/* Cover Test */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="acc_cover_test_notes">Cover Test</label>
-                    <input id="acc_cover_test_notes" type="text" value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Ortho" className={INPUT_CLASS} />
-                  </div>
-
-                  {/* Pupils OD mm */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="pupils_od_mm">Pupils OD (mm)</label>
-                    <input id="pupils_od_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_od_mm ?? ""} onChange={(e) => handleChange("pupils_od_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_CLASS} />
-                  </div>
-
-                  {/* Pupils OS mm */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="pupils_os_mm">Pupils OS (mm)</label>
-                    <input id="pupils_os_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_os_mm ?? ""} onChange={(e) => handleChange("pupils_os_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_CLASS} />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* ── Instrument Readings ───────────────────── */}
-            <AccordionItem value="instruments" id="section-pretest-instruments">
-              <AccordionTrigger>Instrument Readings</AccordionTrigger>
-              <AccordionContent>
-                <div className="flex justify-end mb-3">
-                  <button type="button" onClick={handleInstrumentsNormal} className={NORMAL_BTN_CLASS}>
-                    Normal
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                  {/* IOP OD */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="acc_iop_od">IOP OD</label>
-                    <div className="relative">
-                      <input id="acc_iop_od" type="number" min={0} max={80} step={0.5} value={draft.iop_od ?? ""} onChange={(e) => handleChange("iop_od", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-14 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
-                    </div>
-                    {odElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
-                  </div>
-
-                  {/* IOP OS */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="acc_iop_os">IOP OS</label>
-                    <div className="relative">
-                      <input id="acc_iop_os" type="number" min={0} max={80} step={0.5} value={draft.iop_os ?? ""} onChange={(e) => handleChange("iop_os", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-14 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
-                    </div>
-                    {osElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
-                  </div>
-
-                  {/* IOP Method */}
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className={LABEL_CLASS} htmlFor="acc_iop_method">Method</label>
-                    <select id="acc_iop_method" value={draft.iop_method ?? ""} onChange={(e) => handleChange("iop_method", e.target.value === "" ? null : (e.target.value as IopMethod))} onBlur={handleBlur} className={INPUT_CLASS}>
-                      <option value="">Select…</option>
-                      <option value="goldmann">Goldmann</option>
-                      <option value="icare">iCare</option>
-                      <option value="air_puff">Air Puff</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {/* Autorefractor */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="autorefractor">Autorefractor</label>
-                    <textarea id="autorefractor" rows={2} value={draft.autorefractor ?? ""} onChange={(e) => handleChange("autorefractor", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-y`} />
-                  </div>
-
-                  {/* Keratometer */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="keratometer">Keratometer</label>
-                    <textarea id="keratometer" rows={2} value={draft.keratometer ?? ""} onChange={(e) => handleChange("keratometer", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-y`} />
-                  </div>
-
-                  {/* Entrance Rx */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="entrance_rx">Entrance Rx</label>
-                    <textarea id="entrance_rx" rows={2} value={draft.entrance_rx ?? ""} onChange={(e) => handleChange("entrance_rx", e.target.value || null)} onBlur={handleBlur} placeholder={"OD: ...\nOS: ..."} className={`${INPUT_CLASS} resize-y`} />
-                  </div>
-
-                  {/* Color Vision */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="color_vision">Color Vision</label>
-                    <input id="color_vision" type="text" value={draft.color_vision ?? ""} onChange={(e) => handleChange("color_vision", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_CLASS} />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* ── Systemic ──────────────────────────────── */}
-            <AccordionItem value="systemic" id="section-pretest-systemic">
-              <AccordionTrigger>Systemic</AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="acc_blood_pressure">Blood Pressure</label>
-                    <input id="acc_blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_CLASS} />
-                    {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("blood_pressure")}</p>}
-                  </div>
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="acc_pulse">Pulse</label>
-                    <div className="relative">
-                      <input id="acc_pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-12`} />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span>
-                    </div>
-                    {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("pulse")}</p>}
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={LABEL_CLASS} htmlFor="acc_technician_notes">Technician Notes</label>
-                    <textarea id="acc_technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_CLASS} resize-y`} />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-          </Accordion>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
