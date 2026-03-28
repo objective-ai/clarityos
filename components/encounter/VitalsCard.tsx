@@ -60,11 +60,11 @@ export function VitalsCard({ encounterId, isReadOnly = false }: VitalsCardProps)
         )}
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* IOP */}
-          <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-overline">Intraocular Pressure</div>
+          <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Intraocular Pressure</div>
               {draft.iop_method && (
                 <span className="text-[11px] text-[var(--text-muted)]">
                   {IOP_METHOD_LABELS[draft.iop_method] ?? draft.iop_method}
@@ -78,7 +78,7 @@ export function VitalsCard({ encounterId, isReadOnly = false }: VitalsCardProps)
               ].map(({ eye, val, elevated }) => (
                 <div
                   key={eye}
-                  className={`flex flex-col items-center p-4 rounded-xl border ${
+                  className={`flex flex-col items-center p-3 rounded-xl border ${
                     elevated
                       ? "bg-[rgba(251,191,36,0.06)] border-[rgba(251,191,36,0.20)]"
                       : "bg-[var(--bg-elevated)] border-[var(--border-subtle)]"
@@ -106,8 +106,8 @@ export function VitalsCard({ encounterId, isReadOnly = false }: VitalsCardProps)
           </div>
 
           {/* Visual Acuity */}
-          <div className="rounded-xl p-5 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="text-overline mb-4">Visual Acuity</div>
+          <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-2">Visual Acuity</div>
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -123,30 +123,30 @@ export function VitalsCard({ encounterId, isReadOnly = false }: VitalsCardProps)
                   { label: "Near", od: draft.near_va_od, os: draft.near_va_os },
                 ].map((row) => (
                   <tr key={row.label} className="border-t border-[var(--border-subtle)]">
-                    <td className="py-2.5 text-overline" style={{ textTransform: "none" }}>
+                    <td className="py-1.5 text-overline" style={{ textTransform: "none" }}>
                       {row.label}
                     </td>
-                    <td className="py-2.5 text-center text-base data-value">
+                    <td className="py-1.5 text-center text-base data-value">
                       {row.od ?? "—"}
                     </td>
-                    <td className="py-2.5 text-center text-base data-value">
+                    <td className="py-1.5 text-center text-base data-value">
                       {row.os ?? "—"}
                     </td>
                   </tr>
                 ))}
                 <tr className="border-t border-[var(--border-subtle)]">
-                  <td className="py-2.5 text-overline" style={{ textTransform: "none" }}>
+                  <td className="py-1.5 text-overline" style={{ textTransform: "none" }}>
                     BP
                   </td>
-                  <td colSpan={2} className="py-2.5 text-center text-base data-value">
+                  <td colSpan={2} className="py-1.5 text-center text-base data-value">
                     {draft.blood_pressure ?? "—"}
                   </td>
                 </tr>
                 <tr className="border-t border-[var(--border-subtle)]">
-                  <td className="py-2.5 text-overline" style={{ textTransform: "none" }}>
+                  <td className="py-1.5 text-overline" style={{ textTransform: "none" }}>
                     Pulse
                   </td>
-                  <td colSpan={2} className="py-2.5 text-center text-base data-value">
+                  <td colSpan={2} className="py-1.5 text-center text-base data-value">
                     {draft.pulse != null ? `${draft.pulse} bpm` : "—"}
                   </td>
                 </tr>
@@ -160,7 +160,7 @@ export function VitalsCard({ encounterId, isReadOnly = false }: VitalsCardProps)
           draft.relative_afferent_pupillary_defect ||
           draft.cover_test_notes ||
           draft.technician_notes) && (
-          <div className="flex items-center gap-3 flex-wrap mt-4 pt-4 border-t border-[var(--border-subtle)]">
+          <div className="flex items-center gap-3 flex-wrap mt-3 pt-3 border-t border-[var(--border-subtle)]">
             <Badge variant={draft.pupils_equal_round_reactive ? "default" : "warning"}>
               PERRL: {draft.pupils_equal_round_reactive ? "Yes" : "No"}
             </Badge>

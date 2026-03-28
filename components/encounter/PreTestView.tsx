@@ -27,7 +27,7 @@ interface PreTestViewProps {
 export function PreTestView({ encounterId }: PreTestViewProps) {
   return (
     <div id="section-vitals">
-      <VitalsForm encounterId={encounterId} accordionMode={true} />
+      <VitalsForm encounterId={encounterId} />
     </div>
   );
 }

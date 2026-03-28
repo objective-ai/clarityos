@@ -117,7 +117,7 @@ export function PrepMeCard({ patientId }: PrepMeCardProps) {
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center w-full px-5 py-3 hover-row transition-colors gap-3"
+        className="flex items-center w-full px-3 py-2 hover-row transition-colors gap-3"
       >
         {/* Chevron */}
         <svg
@@ -138,7 +138,7 @@ export function PrepMeCard({ patientId }: PrepMeCardProps) {
           />
         </svg>
 
-        <span className="text-overline text-[var(--accent)]">Prep Me</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Prep Me</span>
 
         {formattedDate && (
           <>
@@ -162,7 +162,7 @@ export function PrepMeCard({ patientId }: PrepMeCardProps) {
 
       {/* Body */}
       {!collapsed && (
-        <div className="border-t border-[var(--border-subtle)] px-5 py-4">
+        <div className="border-t border-[var(--border-subtle)] px-3 py-3">
           {status === "loading" && (
             <div className="space-y-2 animate-pulse">
               <div className="h-3 rounded bg-[var(--bg-elevated)] w-full" />

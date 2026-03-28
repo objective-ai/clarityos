@@ -5,13 +5,6 @@ import { CheckCircle } from "lucide-react";
 import { useVitalsStore, useVitalsState } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
 import type { VitalsDraft, IopMethod } from "@/types/vitals";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
@@ -20,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 
 interface VitalsFormProps {
   encounterId: string;
-  accordionMode?: boolean;
   onNormalSection?: (section: string) => void;
   /** Increment to trigger all-normal from parent (avoids cross-component reactivity issues) */
   allNormalTrigger?: number;
@@ -57,11 +49,6 @@ function SaveStatusBadge({ status }: { status: string }) {
 // Shared input styles
 // ---------------------------------------------------------------------------
 
-const INPUT_CLASS =
-  "w-full px-3 py-2.5 rounded-xl text-xs glass-input min-h-[var(--touch-target)]";
-
-const LABEL_CLASS = "text-overline mb-1.5 block";
-
 const NORMAL_BTN_CLASS =
   "text-xs px-2.5 py-1 rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 transition-colors";
 
@@ -74,7 +61,7 @@ const LABEL_COMPACT = "text-xs uppercase tracking-wider text-[var(--text-muted)]
 // Component
 // ---------------------------------------------------------------------------
 
-export function VitalsForm({ encounterId, accordionMode = false, onNormalSection, allNormalTrigger }: VitalsFormProps) {
+export function VitalsForm({ encounterId, onNormalSection, allNormalTrigger }: VitalsFormProps) {
   const vitalsState = useVitalsState(encounterId);
   const setField = useVitalsStore((s) => s.setField);
   const flushSave = useVitalsStore((s) => s.flushSave);
@@ -142,167 +129,7 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
   const odElevated = isIopElevated(draft.iop_od);
   const osElevated = isIopElevated(draft.iop_os);
 
-  // ── Flat sections (doctor mode — existing behavior) ──────────────────────
-
-  const iopSection = (
-    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-2">Intraocular Pressure</div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {/* IOP OD */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="iop_od">OD (Right)</label>
-          <div className="relative">
-            <input
-              id="iop_od"
-              type="number"
-              min={0}
-              max={80}
-              step={0.5}
-              value={draft.iop_od ?? ""}
-              onChange={(e) =>
-                handleChange("iop_od", e.target.value === "" ? null : parseFloat(e.target.value))
-              }
-              onBlur={handleBlur}
-              placeholder="—"
-              className={`${INPUT_CLASS} pr-14 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
-          </div>
-          {odElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
-          {getError("iop_od") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("iop_od")}</p>}
-        </div>
-
-        {/* IOP OS */}
-        <div>
-          <label className={LABEL_CLASS} htmlFor="iop_os">OS (Left)</label>
-          <div className="relative">
-            <input
-              id="iop_os"
-              type="number"
-              min={0}
-              max={80}
-              step={0.5}
-              value={draft.iop_os ?? ""}
-              onChange={(e) =>
-                handleChange("iop_os", e.target.value === "" ? null : parseFloat(e.target.value))
-              }
-              onBlur={handleBlur}
-              placeholder="—"
-              className={`${INPUT_CLASS} pr-14 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span>
-          </div>
-          {osElevated && <Badge variant="warning" className="mt-1.5 text-xs">elevated</Badge>}
-          {getError("iop_os") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("iop_os")}</p>}
-        </div>
-
-        {/* IOP Method */}
-        <div className="col-span-2 sm:col-span-1">
-          <label className={LABEL_CLASS} htmlFor="iop_method">Method</label>
-          <select
-            id="iop_method"
-            value={draft.iop_method ?? ""}
-            onChange={(e) =>
-              handleChange("iop_method", e.target.value === "" ? null : (e.target.value as IopMethod))
-            }
-            onBlur={handleBlur}
-            className={INPUT_CLASS}
-          >
-            <option value="">Select…</option>
-            <option value="goldmann">Goldmann</option>
-            <option value="icare">iCare</option>
-            <option value="air_puff">Air Puff</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-
-  const vaSection = (
-    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-2">Visual Acuity</div>
-      <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-2 items-center">
-        <div /><div className="text-overline text-center">OD</div><div className="text-overline text-center">OS</div>
-        <div className="text-overline" style={{ textTransform: "none" }}>UCVA</div>
-        <input id="ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-        <input id="ucva_os" type="text" value={draft.ucva_os ?? ""} onChange={(e) => handleChange("ucva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-        <div className="text-overline" style={{ textTransform: "none" }}>BCVA</div>
-        <input id="bcva_od" type="text" value={draft.bcva_od ?? ""} onChange={(e) => handleChange("bcva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-        <input id="bcva_os" type="text" value={draft.bcva_os ?? ""} onChange={(e) => handleChange("bcva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_CLASS} />
-        <div className="text-overline" style={{ textTransform: "none" }}>Near</div>
-        <input id="near_va_od" type="text" value={draft.near_va_od ?? ""} onChange={(e) => handleChange("near_va_od", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_CLASS} />
-        <input id="near_va_os" type="text" value={draft.near_va_os ?? ""} onChange={(e) => handleChange("near_va_os", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_CLASS} />
-      </div>
-    </div>
-  );
-
-  const systemicSection = (
-    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-2">Systemic</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className={LABEL_CLASS} htmlFor="blood_pressure">Blood Pressure</label>
-          <input id="blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_CLASS} />
-          {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("blood_pressure")}</p>}
-        </div>
-        <div>
-          <label className={LABEL_CLASS} htmlFor="pulse">Pulse</label>
-          <div className="relative">
-            <input id="pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_CLASS} pr-12`} />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span>
-          </div>
-          {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-1">{getError("pulse")}</p>}
-        </div>
-      </div>
-    </div>
-  );
-
-  const pupilsSection = (
-    <div className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-      <div className="text-overline mb-2">Pupils &amp; Notes</div>
-      <div className="flex items-center gap-2 mb-2">
-        <button
-          type="button"
-          onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)}
-          onBlur={handleBlur}
-          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-            draft.pupils_equal_round_reactive
-              ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]"
-              : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
-          }`}
-        >
-          PERRL {draft.pupils_equal_round_reactive ? "\u2713" : "\u2717"}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)}
-          onBlur={handleBlur}
-          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${
-            draft.relative_afferent_pupillary_defect
-              ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]"
-              : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"
-          }`}
-        >
-          RAPD {draft.relative_afferent_pupillary_defect ? "+" : "–"}
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className={LABEL_CLASS} htmlFor="cover_test_notes">Cover Test</label>
-          <textarea id="cover_test_notes" rows={2} value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Cover/uncover findings…" className={`${INPUT_CLASS} resize-y`} />
-        </div>
-        <div>
-          <label className={LABEL_CLASS} htmlFor="technician_notes">Technician Notes</label>
-          <textarea id="technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_CLASS} resize-y`} />
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Dense grid mode (technician / pre-test) — all sections visible ────────
-
-  if (accordionMode) {
-    return (
+  return (
       <div className="flex flex-col gap-3">
         {/* Header row — title + All Normal + save status */}
         <div className="flex items-center gap-3">
@@ -311,130 +138,119 @@ export function VitalsForm({ encounterId, accordionMode = false, onNormalSection
           <div className="ml-auto"><SaveStatusBadge status={saveStatus} /></div>
         </div>
 
-        {/* 2-column grid — all 4 sections visible at once */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* 2-column grid with bordered sections */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
-          {/* ── Visual Acuity ─────────────────────────── */}
-          <div id="section-pretest-va" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Visual Acuity</span>
-              <button type="button" onClick={handleVaNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
+          {/* ── Left Column: VA + Instruments ─────────── */}
+          <div className="flex flex-col gap-3">
+
+            {/* Visual Acuity */}
+            <div id="section-pretest-va" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Visual Acuity</span>
+                <button type="button" onClick={handleVaNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
+              </div>
+              <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1.5 items-center">
+                <div /><div className="text-xs uppercase tracking-wider text-[var(--text-muted)] text-center">OD</div><div className="text-xs uppercase tracking-wider text-[var(--text-muted)] text-center">OS</div>
+                <div className="text-xs text-[var(--text-secondary)]">UCVA</div>
+                <input id="acc_ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+                <input id="acc_ucva_os" type="text" value={draft.ucva_os ?? ""} onChange={(e) => handleChange("ucva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+                <div className="text-xs text-[var(--text-secondary)]">BCVA</div>
+                <input id="acc_bcva_od" type="text" value={draft.bcva_od ?? ""} onChange={(e) => handleChange("bcva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+                <input id="acc_bcva_os" type="text" value={draft.bcva_os ?? ""} onChange={(e) => handleChange("bcva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
+                <div className="text-xs text-[var(--text-secondary)]">Near</div>
+                <input id="acc_near_va_od" type="text" value={draft.near_va_od ?? ""} onChange={(e) => handleChange("near_va_od", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_COMPACT} />
+                <input id="acc_near_va_os" type="text" value={draft.near_va_os ?? ""} onChange={(e) => handleChange("near_va_os", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_COMPACT} />
+              </div>
             </div>
-            <div className="grid grid-cols-[auto_1fr_1fr] gap-x-3 gap-y-1.5 items-center">
-              <div /><div className="text-xs uppercase tracking-wider text-[var(--text-muted)] text-center">OD</div><div className="text-xs uppercase tracking-wider text-[var(--text-muted)] text-center">OS</div>
-              <div className="text-xs text-[var(--text-secondary)]">UCVA</div>
-              <input id="acc_ucva_od" type="text" value={draft.ucva_od ?? ""} onChange={(e) => handleChange("ucva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
-              <input id="acc_ucva_os" type="text" value={draft.ucva_os ?? ""} onChange={(e) => handleChange("ucva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
-              <div className="text-xs text-[var(--text-secondary)]">BCVA</div>
-              <input id="acc_bcva_od" type="text" value={draft.bcva_od ?? ""} onChange={(e) => handleChange("bcva_od", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
-              <input id="acc_bcva_os" type="text" value={draft.bcva_os ?? ""} onChange={(e) => handleChange("bcva_os", e.target.value || null)} onBlur={handleBlur} placeholder="20/" className={INPUT_COMPACT} />
-              <div className="text-xs text-[var(--text-secondary)]">Near</div>
-              <input id="acc_near_va_od" type="text" value={draft.near_va_od ?? ""} onChange={(e) => handleChange("near_va_od", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_COMPACT} />
-              <input id="acc_near_va_os" type="text" value={draft.near_va_os ?? ""} onChange={(e) => handleChange("near_va_os", e.target.value || null)} onBlur={handleBlur} placeholder="J1" className={INPUT_COMPACT} />
+
+            {/* Instruments */}
+            <div id="section-pretest-instruments" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Instruments</span>
+                <button type="button" onClick={handleInstrumentsNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <div>
+                  <label className={LABEL_COMPACT} htmlFor="acc_iop_od">IOP OD</label>
+                  <div className="relative"><input id="acc_iop_od" type="number" min={0} max={80} step={0.5} value={draft.iop_od ?? ""} onChange={(e) => handleChange("iop_od", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-10 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span></div>
+                  {odElevated && <span className="text-xs text-[var(--state-warning)]">elevated</span>}
+                </div>
+                <div>
+                  <label className={LABEL_COMPACT} htmlFor="acc_iop_os">IOP OS</label>
+                  <div className="relative"><input id="acc_iop_os" type="number" min={0} max={80} step={0.5} value={draft.iop_os ?? ""} onChange={(e) => handleChange("iop_os", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-10 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span></div>
+                  {osElevated && <span className="text-xs text-[var(--state-warning)]">elevated</span>}
+                </div>
+                <div>
+                  <label className={LABEL_COMPACT} htmlFor="acc_iop_method">Method</label>
+                  <select id="acc_iop_method" value={draft.iop_method ?? ""} onChange={(e) => handleChange("iop_method", e.target.value === "" ? null : (e.target.value as IopMethod))} onBlur={handleBlur} className={INPUT_COMPACT}><option value="">Select…</option><option value="goldmann">Goldmann</option><option value="icare">iCare</option><option value="air_puff">Air Puff</option></select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className={LABEL_COMPACT} htmlFor="autorefractor">Autorefractor</label><input id="autorefractor" type="text" value={draft.autorefractor ?? ""} onChange={(e) => handleChange("autorefractor", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="keratometer">Keratometer</label><input id="keratometer" type="text" value={draft.keratometer ?? ""} onChange={(e) => handleChange("keratometer", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="entrance_rx">Entrance Rx</label><input id="entrance_rx" type="text" value={draft.entrance_rx ?? ""} onChange={(e) => handleChange("entrance_rx", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="color_vision">Color Vision</label><input id="color_vision" type="text" value={draft.color_vision ?? ""} onChange={(e) => handleChange("color_vision", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_COMPACT} /></div>
+              </div>
             </div>
+
           </div>
 
-          {/* ── Pupil & Motility ──────────────────────── */}
-          <div id="section-pretest-pupils" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Pupils &amp; Motility</span>
-              <button type="button" onClick={handlePupilNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <button type="button" onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)} onBlur={handleBlur}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${draft.pupils_equal_round_reactive ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]" : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"}`}>
-                PERRL {draft.pupils_equal_round_reactive ? "\u2713" : "\u2717"}
-              </button>
-              <button type="button" onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)} onBlur={handleBlur}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${draft.relative_afferent_pupillary_defect ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]" : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"}`}>
-                RAPD {draft.relative_afferent_pupillary_defect ? "+" : "–"}
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div><label className={LABEL_COMPACT} htmlFor="confrontation">Confrontation</label><input id="confrontation" type="text" value={draft.confrontation ?? ""} onChange={(e) => handleChange("confrontation", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="motility">Motility</label><input id="motility" type="text" value={draft.motility ?? ""} onChange={(e) => handleChange("motility", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="npc">NPC</label><input id="npc" type="text" value={draft.npc ?? ""} onChange={(e) => handleChange("npc", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="acc_cover_test_notes">Cover Test</label><input id="acc_cover_test_notes" type="text" value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Ortho" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="pupils_od_mm">Pupil OD</label><input id="pupils_od_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_od_mm ?? ""} onChange={(e) => handleChange("pupils_od_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="pupils_os_mm">Pupil OS</label><input id="pupils_os_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_os_mm ?? ""} onChange={(e) => handleChange("pupils_os_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_COMPACT} /></div>
-            </div>
-          </div>
+          {/* ── Right Column: Pupils + Systemic ──────── */}
+          <div className="flex flex-col gap-3">
 
-          {/* ── Instrument Readings ───────────────────── */}
-          <div id="section-pretest-instruments" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Instruments</span>
-              <button type="button" onClick={handleInstrumentsNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              <div>
-                <label className={LABEL_COMPACT} htmlFor="acc_iop_od">IOP OD</label>
-                <div className="relative"><input id="acc_iop_od" type="number" min={0} max={80} step={0.5} value={draft.iop_od ?? ""} onChange={(e) => handleChange("iop_od", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-10 ${odElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span></div>
-                {odElevated && <span className="text-xs text-[var(--state-warning)]">elevated</span>}
+            {/* Pupils & Motility */}
+            <div id="section-pretest-pupils" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Pupils &amp; Motility</span>
+                <button type="button" onClick={handlePupilNormal} className="p-0.5 rounded text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors" title="Set normal values"><CheckCircle size={14} /></button>
               </div>
-              <div>
-                <label className={LABEL_COMPACT} htmlFor="acc_iop_os">IOP OS</label>
-                <div className="relative"><input id="acc_iop_os" type="number" min={0} max={80} step={0.5} value={draft.iop_os ?? ""} onChange={(e) => handleChange("iop_os", e.target.value === "" ? null : parseFloat(e.target.value))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-10 ${osElevated ? "border-[rgba(251,191,36,0.5)]" : ""}`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">mmHg</span></div>
-                {osElevated && <span className="text-xs text-[var(--state-warning)]">elevated</span>}
+              <div className="flex items-center gap-2 mb-2">
+                <button type="button" onClick={() => handleChange("pupils_equal_round_reactive", !draft.pupils_equal_round_reactive)} onBlur={handleBlur}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${draft.pupils_equal_round_reactive ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--mono-border)]" : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"}`}>
+                  PERRL {draft.pupils_equal_round_reactive ? "\u2713" : "\u2717"}
+                </button>
+                <button type="button" onClick={() => handleChange("relative_afferent_pupillary_defect", !draft.relative_afferent_pupillary_defect)} onBlur={handleBlur}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all border ${draft.relative_afferent_pupillary_defect ? "bg-[rgba(239,68,68,0.08)] text-[var(--state-critical)] border-[rgba(239,68,68,0.3)]" : "bg-[var(--bg-elevated)] text-[var(--text-muted)] border-[var(--border-default)]"}`}>
+                  RAPD {draft.relative_afferent_pupillary_defect ? "+" : "–"}
+                </button>
               </div>
-              <div>
-                <label className={LABEL_COMPACT} htmlFor="acc_iop_method">Method</label>
-                <select id="acc_iop_method" value={draft.iop_method ?? ""} onChange={(e) => handleChange("iop_method", e.target.value === "" ? null : (e.target.value as IopMethod))} onBlur={handleBlur} className={INPUT_COMPACT}><option value="">Select…</option><option value="goldmann">Goldmann</option><option value="icare">iCare</option><option value="air_puff">Air Puff</option></select>
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className={LABEL_COMPACT} htmlFor="confrontation">Confrontation</label><input id="confrontation" type="text" value={draft.confrontation ?? ""} onChange={(e) => handleChange("confrontation", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="motility">Motility</label><input id="motility" type="text" value={draft.motility ?? ""} onChange={(e) => handleChange("motility", e.target.value || null)} onBlur={handleBlur} placeholder="Full" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="npc">NPC</label><input id="npc" type="text" value={draft.npc ?? ""} onChange={(e) => handleChange("npc", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="acc_cover_test_notes">Cover Test</label><input id="acc_cover_test_notes" type="text" value={draft.cover_test_notes ?? ""} onChange={(e) => handleChange("cover_test_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Ortho" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="pupils_od_mm">Pupil OD</label><input id="pupils_od_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_od_mm ?? ""} onChange={(e) => handleChange("pupils_od_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_COMPACT} /></div>
+                <div><label className={LABEL_COMPACT} htmlFor="pupils_os_mm">Pupil OS</label><input id="pupils_os_mm" type="number" step={0.5} min={1} max={9} value={draft.pupils_os_mm ?? ""} onChange={(e) => handleChange("pupils_os_mm", e.target.value ? Number(e.target.value) : null)} onBlur={handleBlur} placeholder="mm" className={INPUT_COMPACT} /></div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><label className={LABEL_COMPACT} htmlFor="autorefractor">Autorefractor</label><input id="autorefractor" type="text" value={draft.autorefractor ?? ""} onChange={(e) => handleChange("autorefractor", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="keratometer">Keratometer</label><input id="keratometer" type="text" value={draft.keratometer ?? ""} onChange={(e) => handleChange("keratometer", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="entrance_rx">Entrance Rx</label><input id="entrance_rx" type="text" value={draft.entrance_rx ?? ""} onChange={(e) => handleChange("entrance_rx", e.target.value || null)} onBlur={handleBlur} placeholder="OD/OS" className={INPUT_COMPACT} /></div>
-              <div><label className={LABEL_COMPACT} htmlFor="color_vision">Color Vision</label><input id="color_vision" type="text" value={draft.color_vision ?? ""} onChange={(e) => handleChange("color_vision", e.target.value || null)} onBlur={handleBlur} placeholder="Normal" className={INPUT_COMPACT} /></div>
-            </div>
-          </div>
 
-          {/* ── Systemic ──────────────────────────────── */}
-          <div id="section-pretest-systemic" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
-            <div className="mb-2"><span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Systemic</span></div>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div>
-                <label className={LABEL_COMPACT} htmlFor="acc_blood_pressure">Blood Pressure</label>
-                <input id="acc_blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_COMPACT} />
-                {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-0.5">{getError("blood_pressure")}</p>}
+            {/* Systemic */}
+            <div id="section-pretest-systemic" className="rounded-xl p-3 bg-[var(--bg-glass)] border border-[var(--glass-border)]">
+              <div className="mb-1.5"><span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Systemic</span></div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className={LABEL_COMPACT} htmlFor="acc_blood_pressure">Blood Pressure</label>
+                  <input id="acc_blood_pressure" type="text" value={draft.blood_pressure ?? ""} onChange={(e) => handleChange("blood_pressure", e.target.value || null)} onBlur={handleBlur} placeholder="120/80" className={INPUT_COMPACT} />
+                  {getError("blood_pressure") && <p className="text-xs text-[var(--state-critical)] mt-0.5">{getError("blood_pressure")}</p>}
+                </div>
+                <div>
+                  <label className={LABEL_COMPACT} htmlFor="acc_pulse">Pulse</label>
+                  <div className="relative"><input id="acc_pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-8`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span></div>
+                  {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-0.5">{getError("pulse")}</p>}
+                </div>
               </div>
               <div>
-                <label className={LABEL_COMPACT} htmlFor="acc_pulse">Pulse</label>
-                <div className="relative"><input id="acc_pulse" type="number" min={30} max={250} value={draft.pulse ?? ""} onChange={(e) => handleChange("pulse", e.target.value === "" ? null : parseInt(e.target.value, 10))} onBlur={handleBlur} placeholder="—" className={`${INPUT_COMPACT} pr-8`} /><span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--text-muted)]">bpm</span></div>
-                {getError("pulse") && <p className="text-xs text-[var(--state-critical)] mt-0.5">{getError("pulse")}</p>}
+                <label className={LABEL_COMPACT} htmlFor="acc_technician_notes">Technician Notes</label>
+                <textarea id="acc_technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_COMPACT} resize-y`} />
               </div>
             </div>
-            <div>
-              <label className={LABEL_COMPACT} htmlFor="acc_technician_notes">Technician Notes</label>
-              <textarea id="acc_technician_notes" rows={2} value={draft.technician_notes ?? ""} onChange={(e) => handleChange("technician_notes", e.target.value || null)} onBlur={handleBlur} placeholder="Additional notes…" className={`${INPUT_COMPACT} resize-y`} />
-            </div>
+
           </div>
 
         </div>
       </div>
     );
-  }
-
-  // ── Flat mode (doctor mode — existing layout) ────────────────────────────
-
-  return (
-    <Card className="glass-card-accent">
-      <CardHeader className="flex flex-row items-center justify-between py-2 px-3">
-        <div>
-          <CardTitle>Vitals &amp; Pre-Test</CardTitle>
-          <CardDescription>Technician data entry</CardDescription>
-        </div>
-        <SaveStatusBadge status={saveStatus} />
-      </CardHeader>
-      <CardContent className="space-y-3 px-3 pb-3 pt-0">
-        {iopSection}
-        {vaSection}
-        {systemicSection}
-        {pupilsSection}
-      </CardContent>
-    </Card>
-  );
 }
 
 export default VitalsForm;

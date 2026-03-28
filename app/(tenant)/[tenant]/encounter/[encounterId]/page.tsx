@@ -350,6 +350,7 @@ export default function EncounterPage({
 
   const handleRevertToPretest = useCallback(async () => {
     setStatusError(null);
+    if (encounterState?.loadStatus !== "loaded") return;
     if (encounterState?.status !== "in_exam") return;
     if (!encounterState?.appointmentId) {
       setStatusError("Cannot revert: this encounter has no linked appointment.");
@@ -361,7 +362,7 @@ export default function EncounterPage({
     } catch (e) {
       setStatusError(e instanceof Error ? e.message : "Failed to revert to pre-test.");
     }
-  }, [encounterState?.status, encounterState?.appointmentId, loadEncounter, params.encounterId]);
+  }, [encounterState?.loadStatus, encounterState?.status, encounterState?.appointmentId, loadEncounter, params.encounterId]);
 
   // --- Staged Commit: commit handler ---
   const handleCommit = useCallback(async (
@@ -471,7 +472,7 @@ export default function EncounterPage({
   // Show full-page skeleton while encounter header is loading
   if (encounterLoadStatus === "loading" || encounterLoadStatus === "idle") {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
         <GlassCardSkeleton rows={2} />
         <GlassCardSkeleton rows={4} />
         <GlassCardSkeleton rows={6} />
@@ -564,7 +565,7 @@ export default function EncounterPage({
 
           {/* Finalized banner */}
           {isFinalized && (
-            <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[rgba(34,197,94,0.08)] border border-[rgba(34,197,94,0.20)] text-sm text-[var(--state-normal)]">
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[rgba(34,197,94,0.08)] border border-[rgba(34,197,94,0.20)] text-sm text-[var(--state-normal)]">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="flex-shrink-0">
                 <rect x="2.5" y="7" width="11" height="7.5" rx="2" stroke="currentColor" strokeWidth="1.3" />
                 <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
@@ -731,7 +732,7 @@ export default function EncounterPage({
                 />
               ) : encounterState?.aiSummaryText ? (
                 <Card>
-                  <CardContent className="p-6">
+                  <CardContent className="p-3">
                     <div className="section-title mb-2">AI Scribe Summary</div>
                     <p
                       className="text-sm leading-relaxed whitespace-pre-wrap"
@@ -748,7 +749,7 @@ export default function EncounterPage({
 
           {/* Bottom tab navigation — removed from DOM in pre-test mode */}
           <EncounterBottomTabs
-            status={encounterState?.status ?? "in_exam"}
+            status={encounterState?.status ?? "pre_test"}
             isFinalized={isFinalized}
             sidebarCollapsed={sidebarCollapsed}
             patientId={patientId ?? ""}

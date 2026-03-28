@@ -53,8 +53,8 @@ export function ExamFindingsCard({
     : SECTIONS;
 
   return (
-    <div className="space-y-3">
-      {!filterSection && <h2 className="section-title">Exam Findings</h2>}
+    <div className="space-y-2">
+      {!filterSection && <h2 className="text-xs font-semibold text-[var(--text-primary)]">Exam Findings</h2>}
       {sections.map((sec) => (
         <ReadOnlySection
           key={sec.key}
@@ -90,9 +90,9 @@ function ReadOnlySection({
   // If WNL, show compact summary
   if (draft.is_normal_wnl) {
     return (
-      <div className="rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)] px-5 py-3">
+      <div className="rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)] px-3 py-2">
         <div className="flex items-center gap-3">
-          <span className="text-overline text-[var(--text-primary)]">{label}</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)]">{label}</span>
           <Badge variant="success">WNL</Badge>
         </div>
         <p className="text-xs text-[var(--text-muted)] mt-1">
@@ -127,8 +127,8 @@ function ReadOnlySection({
   });
 
   return (
-    <div className="rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)] px-5 py-3">
-      <span className="text-overline text-[var(--text-primary)]">{label}</span>
+    <div className="rounded-xl bg-[var(--bg-glass)] border border-[var(--glass-border)] px-3 py-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)]">{label}</span>
 
       {/* Normal structures summary */}
       {normals.length > 0 && (

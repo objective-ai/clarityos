@@ -206,20 +206,20 @@ export function DiagnosisPicker({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               autoFocus
-              className="w-full px-4 py-2.5 rounded-xl text-xs glass-input"
+              className="w-full px-3 py-1.5 rounded-lg text-xs glass-input"
             />
           </div>
 
           <div className="max-h-64 overflow-y-auto">
             {filtered.length === 0 ? (
-              <div className="p-6 text-center text-caption text-[var(--text-muted)]">
+              <div className="p-3 text-center text-caption text-[var(--text-muted)]">
                 No codes match &quot;{search}&quot;
               </div>
             ) : (
               filtered.map((code, i) => (
                 <div
                   key={code.code}
-                  className={`flex items-center gap-3 px-4 py-3 hover-row ${
+                  className={`flex items-center gap-3 px-3 py-2 hover-row ${
                     i > 0 ? "border-t border-[var(--border-subtle)]" : ""
                   }`}
                 >

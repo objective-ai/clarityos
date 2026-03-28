@@ -76,10 +76,10 @@ export function ContinuitySidebar({
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-between w-full px-5 py-3 hover-row transition-colors"
+        className="flex items-center justify-between w-full px-3 py-2 hover-row transition-colors"
       >
-        <div className="flex items-center gap-2.5">
-          <span className="text-overline text-[var(--text-primary)]">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)]">
             Active Problems
           </span>
           <Badge variant="secondary">{problems.length}</Badge>
@@ -107,14 +107,14 @@ export function ContinuitySidebar({
       {!collapsed && (
         <div className="border-t border-[var(--border-subtle)]">
           {loadStatus === "loading" ? (
-            <div className="px-5 py-6 text-center text-caption text-[var(--text-muted)]">
+            <div className="px-3 py-3 text-center text-caption text-[var(--text-muted)]">
               Loading problems...
             </div>
           ) : (
             problems.map((problem, i) => (
               <div
                 key={problem.id}
-                className={`flex items-center gap-3 px-5 py-2.5 ${
+                className={`flex items-center gap-3 px-3 py-2 ${
                   i > 0 ? "border-t border-[var(--border-subtle)]" : ""
                 }`}
               >
