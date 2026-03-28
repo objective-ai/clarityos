@@ -216,6 +216,7 @@ export default function EncounterPage({
   const encounterLoadStatus = encounterState?.loadStatus ?? "idle";
   const encounterStatus = useEncounterStore((s) => s.encounters[params.encounterId]?.status);
   const isPreTest = encounterStatus === "pre_test";
+  const prevIsPreTest = useRef(isPreTest);
   const setAiStructuredData = useEncounterStore((s) => s.setAiStructuredData);
 
   // patientId flows from encounterStore (set by loadEncounter)
@@ -291,6 +292,16 @@ export default function EncounterPage({
     fetchProblems(patientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
+
+  // Scroll to Rx section when transitioning from pre-test to in-exam
+  useEffect(() => {
+    if (prevIsPreTest.current && !isPreTest) {
+      setTimeout(() => {
+        document.getElementById("section-rx")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300);
+    }
+    prevIsPreTest.current = isPreTest;
+  }, [isPreTest]);
 
   // --- Cross-store dirty guard: warn before closing with unsaved clinical data -
   const vitalsDirty = useVitalsStore(
