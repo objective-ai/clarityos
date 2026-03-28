@@ -60,7 +60,9 @@ test-login.mjs
 # screenshots / local test artifacts
 prod-*.png
 vercel-*.png
+supabase-logs.png
 .playwright-cli/
+.playwright/
 test-results/
 
 # claude code
