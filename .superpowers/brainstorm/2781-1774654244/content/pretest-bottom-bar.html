@@ -1,0 +1,74 @@
+<h2>Pre-Test Navigation & Progress</h2>
+<p class="subtitle">Should the pre-test view have a bottom bar with section navigation and completion checkmarks?</p>
+
+<div class="section">
+  <p>Currently, pre-test has <strong>no bottom bar</strong> — just 4 accordion sections stacked vertically with a "Ready for Doctor" button at the bottom. The doctor's exam view has the full <code>EncounterBottomTabs</code> with scroll-spy tabs and a status stepper.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Bottom Bar with Section Tabs + Checkmarks</h3>
+      <p>Mirror the doctor's EncounterBottomTabs pattern. Bottom bar shows 4 pre-test sections (VA, Pupil/Motility, Instruments, Systemic) as tabs with scroll-spy. Each section gets a checkmark when all required fields in that section are filled.</p>
+      <div style="margin: 1rem 0; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 12px; font-family: monospace; font-size: 0.85rem; line-height: 2;">
+        <div style="display:flex; gap:1.5rem; justify-content:center; align-items:center; flex-wrap: wrap;">
+          <span style="color:#2DD4BF;">✓ VA</span>
+          <span style="color:#2DD4BF;">✓ Pupils</span>
+          <span style="opacity:0.5;">○ Instruments</span>
+          <span style="opacity:0.5;">○ Systemic</span>
+          <span style="margin-left:auto; padding:0.4rem 1rem; background:#2DD4BF; color:#000; border-radius:8px; font-weight:bold;">Ready for Doctor</span>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Tech sees progress at a glance</li><li>Quick jump to any section</li><li>Consistent with doctor's exam view</li><li>"Ready for Doctor" only enables when all sections checked</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More complex — need to define "complete" per section</li><li>4 sections may feel cramped on mobile</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Inline Checkmarks Only (No Bottom Bar)</h3>
+      <p>Keep the accordion layout. Add a checkmark icon to each accordion header when that section is filled. No bottom bar — the page is short enough to scroll.</p>
+      <div style="margin: 1rem 0; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 12px; font-family: monospace; font-size: 0.85rem; line-height: 2;">
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <span>✓ <strong>Visual Acuity</strong> ▾</span>
+          <span>✓ <strong>Pupil &amp; Motility</strong> ▾</span>
+          <span>○ <strong>Instrument Readings</strong> ▸</span>
+          <span>○ <strong>Systemic</strong> ▸</span>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Simpler implementation</li><li>Progress visible in accordion headers</li><li>No bottom bar competing with "Ready for Doctor"</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>No quick-jump navigation</li><li>Accordion headers might be scrolled off screen</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Bottom Bar with Tabs + Checkmarks + "Ready for Doctor" Built In</h3>
+      <p>Same as A, but "Ready for Doctor" is part of the sticky bottom bar (right side), not a separate button at page bottom. The bar is always visible.</p>
+      <div style="margin: 1rem 0; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 12px; font-family: monospace; font-size: 0.85rem; line-height: 2;">
+        <div style="display:flex; gap:1rem; justify-content:center; align-items:center; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem;">
+          <span style="color:#2DD4BF; font-size:0.8rem;">✓ VA</span>
+          <span style="color:#2DD4BF; font-size:0.8rem;">✓ Pupils</span>
+          <span style="opacity:0.5; font-size:0.8rem;">○ Instruments</span>
+          <span style="opacity:0.5; font-size:0.8rem;">○ Systemic</span>
+          <span style="flex:1;"></span>
+          <span style="padding:0.4rem 1.2rem; background:rgba(45,212,191,0.3); color:#2DD4BF; border-radius:8px; font-weight:bold; font-size:0.8rem; opacity:0.5;">Ready for Doctor</span>
+        </div>
+        <div style="text-align:center; font-size:0.7rem; opacity:0.4; margin-top:0.5rem;">↑ Button enables when all sections complete</div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Everything in one sticky bar — always visible</li><li>"Ready for Doctor" is gated by completion</li><li>Tech never loses context on progress</li><li>Mirrors doctor bottom bar = consistent UX</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Most complex to build</li><li>Tight horizontal space on mobile</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 2rem; font-style: italic;">💡 Recommendation: <strong>Option C</strong> — sticky bottom bar with section tabs, checkmarks, and "Ready for Doctor" integrated. Keeps the tech informed and gives them quick navigation. Mirrors the doctor's exam view for UX consistency.</p>

@@ -1,0 +1,46 @@
+<h2>Pre-Test "Normal" Defaults — Per-Doctor or Universal?</h2>
+<p class="subtitle">When a tech clicks "All Normal", what values should populate?</p>
+
+<div class="section">
+  <p>Currently, "All Normal" sets hardcoded values like <code>PERRL: true</code>, <code>Confrontation: "Full"</code>, <code>Motility: "Full"</code>, etc. But different doctors may have different expectations for what "normal" means in their workflow.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Universal Defaults (Current)</h3>
+      <p>One set of "normal" values for the whole clinic. Simple. Works well for solo practice or clinics where all doctors agree on baseline normals.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero config needed</li><li>Already implemented</li><li>Consistent across techs</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Doctor can't customize their own normals</li><li>May not match every doctor's charting style</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Per-Doctor Normal Templates</h3>
+      <p>Each doctor defines their own "normal" template. When the tech starts a pre-test, the defaults come from the assigned doctor's preferences.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Each doctor gets exactly their charting style</li><li>Scales to multi-doctor clinics</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Needs a settings UI for doctors to configure</li><li>More complex — what if no doctor is assigned yet?</li><li>Overkill for solo practice pilot</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Universal Now, Per-Doctor Later</h3>
+      <p>Ship with universal defaults for the pilot. Design the data model so per-doctor templates can be added in a future phase without migration pain.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Ship fast for solo pilot</li><li>No wasted work — universal is the right v1</li><li>Easy upgrade path when multi-doctor needs arise</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Multi-doctor clinics won't have customization on day one</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 2rem; font-style: italic;">💡 Recommendation: <strong>Option C</strong> — universal defaults are the right call for a solo optometrist pilot. Per-doctor templates are a natural Phase 11+ feature when you onboard multi-doctor clinics.</p>

@@ -1,0 +1,127 @@
+<h2>Modal Layout: Full Chart</h2>
+<p class="subtitle">How should the chart modal be sized and structured?</p>
+
+<div class="cards">
+  <!-- Option A: Wide drawer -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 20px; background: #1a1a2e;">
+      <div style="display:flex; height: 280px; gap: 0;">
+        <!-- Main content area -->
+        <div style="flex:1; background: rgba(255,255,255,0.03); border-radius: 12px 0 0 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:11px; color:#888; margin-bottom:8px;">Encounter page (dimmed)</div>
+          <div style="background:rgba(255,255,255,0.02); height:40px; border-radius:6px; margin-bottom:8px;"></div>
+          <div style="background:rgba(255,255,255,0.02); height:40px; border-radius:6px; margin-bottom:8px;"></div>
+          <div style="background:rgba(255,255,255,0.02); height:40px; border-radius:6px;"></div>
+        </div>
+        <!-- Slide-over panel -->
+        <div style="width: 55%; background: rgba(45,212,191,0.04); border-left: 2px solid rgba(45,212,191,0.3); padding: 16px; border-radius: 0 12px 12px 0;">
+          <div style="font-size:13px; font-weight:600; color:#2DD4BF; margin-bottom:12px;">Patient Chart</div>
+          <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span style="font-size:10px; padding:4px 10px; background:rgba(45,212,191,0.15); color:#2DD4BF; border-radius:6px;">Summary</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Encounters</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Rx</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Flow</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Ins</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:12px; margin-bottom:10px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">Active Problems</div>
+            <div style="font-size:11px; color:#ccc;">Myopia, Dry Eye Syndrome</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:12px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">Last Visit</div>
+            <div style="font-size:11px; color:#ccc;">Mar 15 — Routine Eye Exam</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Side Panel (Slide-over)</h3>
+      <p>Slides in from the right, ~55% width. Encounter stays visible underneath. Doctor can glance back and forth.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Centered dialog -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 20px; background: #1a1a2e;">
+      <div style="position:relative; height: 280px;">
+        <!-- Dimmed background -->
+        <div style="position:absolute; inset:0; background:rgba(0,0,0,0.5); border-radius:12px;">
+          <div style="padding:16px;">
+            <div style="font-size:11px; color:#555;">Encounter (dimmed overlay)</div>
+          </div>
+        </div>
+        <!-- Centered modal -->
+        <div style="position:absolute; top:20px; left:10%; right:10%; bottom:20px; background:#1e1e2e; border-radius:12px; border:1px solid rgba(255,255,255,0.08); padding:20px; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div style="font-size:13px; font-weight:600; color:#2DD4BF;">Patient Chart — Johnson, M.</div>
+            <div style="font-size:10px; color:#666; cursor:pointer;">✕</div>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span style="font-size:10px; padding:4px 10px; background:rgba(45,212,191,0.15); color:#2DD4BF; border-radius:6px;">Summary</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Encounters</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Rx</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Flowsheets</span>
+            <span style="font-size:10px; padding:4px 10px; background:rgba(255,255,255,0.05); color:#888; border-radius:6px;">Insurance</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:12px;">
+              <div style="font-size:10px; color:#888; margin-bottom:4px;">Active Problems</div>
+              <div style="font-size:11px; color:#ccc;">Myopia, Dry Eye</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:12px;">
+              <div style="font-size:10px; color:#888; margin-bottom:4px;">Last Visit</div>
+              <div style="font-size:11px; color:#ccc;">Mar 15 — Routine</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Centered Modal (Large)</h3>
+      <p>Classic dialog overlay, ~80% width. Fully focused view. Blocks the encounter underneath.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Full-height right drawer -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 20px; background: #1a1a2e;">
+      <div style="display:flex; height: 280px; gap: 0;">
+        <!-- Main content area -->
+        <div style="flex:1; background: rgba(255,255,255,0.03); border-radius: 12px 0 0 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:11px; color:#888; margin-bottom:8px;">Encounter (compressed)</div>
+          <div style="background:rgba(255,255,255,0.02); height:30px; border-radius:6px; margin-bottom:6px;"></div>
+          <div style="background:rgba(255,255,255,0.02); height:30px; border-radius:6px; margin-bottom:6px;"></div>
+          <div style="background:rgba(255,255,255,0.02); height:30px; border-radius:6px;"></div>
+        </div>
+        <!-- Full-height drawer -->
+        <div style="width: 400px; background: #1e1e2e; border-left: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 0 12px 12px 0; display:flex; flex-direction:column;">
+          <div style="font-size:13px; font-weight:600; color:#2DD4BF; margin-bottom:12px;">Chart</div>
+          <!-- Vertical tabs -->
+          <div style="display:flex; flex:1; gap:10px;">
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span style="font-size:9px; padding:6px 8px; background:rgba(45,212,191,0.15); color:#2DD4BF; border-radius:4px; writing-mode:horizontal-tb;">Sum</span>
+              <span style="font-size:9px; padding:6px 8px; background:rgba(255,255,255,0.05); color:#888; border-radius:4px;">Enc</span>
+              <span style="font-size:9px; padding:6px 8px; background:rgba(255,255,255,0.05); color:#888; border-radius:4px;">Rx</span>
+              <span style="font-size:9px; padding:6px 8px; background:rgba(255,255,255,0.05); color:#888; border-radius:4px;">Flow</span>
+              <span style="font-size:9px; padding:6px 8px; background:rgba(255,255,255,0.05); color:#888; border-radius:4px;">Ins</span>
+            </div>
+            <div style="flex:1;">
+              <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:10px; margin-bottom:8px;">
+                <div style="font-size:10px; color:#888;">Problems</div>
+                <div style="font-size:11px; color:#ccc;">Myopia, Dry Eye</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.04); border-radius:8px; padding:10px;">
+                <div style="font-size:10px; color:#888;">Last Visit</div>
+                <div style="font-size:11px; color:#ccc;">Mar 15</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Persistent Side Drawer</h3>
+      <p>Fixed-width drawer pushes encounter content left. Stays open while doctor works. Vertical tabs to save space.</p>
+    </div>
+  </div>
+</div>
