@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 10.1-01-PLAN.md — insurance revamp data layer
-last_updated: "2026-04-03T22:40:09.540Z"
+stopped_at: Completed 10.1-02-PLAN.md — InsuranceTab redesign with grouped sections and extended form
+last_updated: "2026-04-03T22:43:28Z"
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 ---
@@ -52,7 +52,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 10.1 (insurance-revamp) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -159,6 +159,9 @@ Recent decisions affecting current work:
 - [Phase 09.1-01]: Middleware allowlist enumerates /api/public/ and /api/address/ as public; all other /api/* routes require auth (defense-in-depth)
 - [Phase 10.1]: Partial unique index (WHERE is_active = true) replaces hard UniqueConstraint on patient_insurance so inactive records are preserved historically
 - [Phase 10.1]: Auto-deactivate replaces 409 conflict check on insurance create — new active record silently deactivates same-priority predecessor
+- [Phase 10.1-02]: EligibilityBadge defined inline in InsuranceTab.tsx — keeps all insurance UI co-located, no new file
+- [Phase 10.1-02]: InsuranceRow replaced by InsuranceCell (stacked label/value) to support 2-column grid card layout
+- [Phase 10.1-02]: aria-label used on select/date inputs for accessibility (not htmlFor/id) — simpler given existing visual label siblings
 
 ### Pending Todos
 
@@ -170,8 +173,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-03T22:40:09.537Z
-Stopped at: Completed 10.1-01-PLAN.md — insurance revamp data layer
+Last session: 2026-04-03T22:43:28Z
+Stopped at: Completed 10.1-02-PLAN.md — InsuranceTab redesign with grouped sections and extended form
 Resume file: None
 
 **Phase 9 Overview:**
