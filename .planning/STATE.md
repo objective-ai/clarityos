@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 10.1-02-PLAN.md — InsuranceTab redesign with grouped sections and extended form
-last_updated: "2026-04-03T22:43:28Z"
+stopped_at: Completed 10.1-03-PLAN.md — insurance surface (TopNav chips, schedule badges, billing copay)
+last_updated: "2026-04-03T22:48:35Z"
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 ---
@@ -51,8 +51,8 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 10.1 (insurance-revamp) — EXECUTING
-Plan: 3 of 3
+Phase: 10.1 (insurance-revamp) — COMPLETE
+Plan: 3 of 3 (all complete)
 
 ## Performance Metrics
 
@@ -162,6 +162,9 @@ Recent decisions affecting current work:
 - [Phase 10.1-02]: EligibilityBadge defined inline in InsuranceTab.tsx — keeps all insurance UI co-located, no new file
 - [Phase 10.1-02]: InsuranceRow replaced by InsuranceCell (stacked label/value) to support 2-column grid card layout
 - [Phase 10.1-02]: aria-label used on select/date inputs for accessibility (not htmlFor/id) — simpler given existing visual label siblings
+- [Phase 10.1-03]: Eligibility badge added to AppointmentCard (not schedule/page.tsx) — card is the canonical row renderer covering all three view modes
+- [Phase 10.1-03]: BillingWorkflow copay derived from existing insurancePlans state matched by billedPayerId — no additional fetch needed
+- [Phase 10.1-03]: Batch insurance lookup uses patient_id.in_() single query on appointment list — avoids N+1
 
 ### Pending Todos
 
@@ -173,8 +176,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-03T22:43:28Z
-Stopped at: Completed 10.1-02-PLAN.md — InsuranceTab redesign with grouped sections and extended form
+Last session: 2026-04-03T22:48:35Z
+Stopped at: Completed 10.1-03-PLAN.md — insurance surface (TopNav chips, schedule badges, billing copay)
 Resume file: None
 
 **Phase 9 Overview:**
