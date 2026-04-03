@@ -357,12 +357,23 @@ export function BookAppointmentModal({
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           setPatientId(p.id);
-                          setSelectedPatientName(`${p.lastName}, ${p.firstName}`);
+                          setSelectedPatientName(
+                            p.preferredName
+                              ? `${p.lastName}, ${p.firstName} "${p.preferredName}"`
+                              : `${p.lastName}, ${p.firstName}`,
+                          );
                           setPatientSearch("");
                           setShowPatientDropdown(false);
                         }}
                       >
-                        <span className="font-medium">{p.lastName}, {p.firstName}</span>
+                        <span className="font-medium">
+                          {p.lastName}, {p.firstName}
+                          {p.preferredName && (
+                            <span className="font-normal text-[var(--text-secondary)]">
+                              {" "}&ldquo;{p.preferredName}&rdquo;
+                            </span>
+                          )}
+                        </span>
                         <span className="text-[var(--text-muted)] ml-2">
                           DOB {p.dob}
                         </span>
