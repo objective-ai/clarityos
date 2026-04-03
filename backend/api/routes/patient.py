@@ -539,7 +539,7 @@ async def get_rx_history(
 ):
     """Get finalized prescription history across encounters."""
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
-    await _get_patient_or_404(patient_id, ctx.tenant_id, db)
+    patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
     # Validate modality filter
     if modality and modality not in ("glasses", "contact_lens"):
@@ -613,7 +613,9 @@ async def prep_me(
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_PATIENT)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Generate a 2-sentence AI clinical summary from the last 3 finalized SOAP notes."""
+    """AI clinical summary from last 3 finalized SOAP notes, cached per day."""
+    from datetime import date as date_type, datetime, timezone
+
     patient_id = await resolve_patient_id(patient_id, ctx.tenant_id, db)
 
     if not settings.ANTHROPIC_API_KEY:
@@ -624,7 +626,54 @@ async def prep_me(
 
     patient = await _get_patient_or_404(patient_id, ctx.tenant_id, db)
 
-    # Fetch last 3 finalized encounters with SOAP notes
+    # --- Lightweight encounter metadata (needed for both cache hit & miss) ---
+    from sqlalchemy import func as sa_func
+
+    meta_stmt = (
+        select(
+            sa_func.count(Encounter.id),
+            sa_func.max(Encounter.encounter_date),
+        )
+        .where(
+            Encounter.patient_id == patient_id,
+            Encounter.tenant_id == ctx.tenant_id,
+            Encounter.is_deleted == False,  # noqa: E712
+            Encounter.is_finalized == True,  # noqa: E712
+            Encounter.assessment_and_plan.isnot(None),
+        )
+    )
+    meta_result = await db.execute(meta_stmt)
+    enc_count, last_enc_date = meta_result.one()
+
+    if enc_count == 0:
+        return PrepMeResponse(
+            summary="No finalized encounters found for this patient.",
+            encounter_count=0,
+        )
+
+    # --- Check DB cache: if generated today, return cached summary ---
+    if (
+        patient.prep_me_summary
+        and patient.prep_me_generated_at
+        and patient.prep_me_generated_at.date() == date_type.today()
+    ):
+        staff = await resolve_staff(ctx, db)
+        await log_action(
+            db, ctx, AuditAction.PHI_VIEWED, "patient", patient.id,
+            staff_id=staff.id if staff else None,
+            patient_id=patient.id,
+            detail="AI Prep Me summary viewed (cached)",
+            metadata={"cached": True, "encounter_count": enc_count},
+            ip_address=request.client.host if request.client else None,
+        )
+        return PrepMeResponse(
+            summary=patient.prep_me_summary,
+            encounter_count=enc_count,
+            last_encounter_date=last_enc_date,
+            cached=True,
+        )
+
+    # --- Cache miss: generate via LLM ---
     stmt = (
         select(Encounter)
         .where(
@@ -639,9 +688,6 @@ async def prep_me(
     )
     result = await db.execute(stmt)
     encounters = result.scalars().all()
-
-    if not encounters:
-        return PrepMeResponse(summary="No finalized encounters found for this patient.", encounter_count=0)
 
     # Build context from SOAP notes
     notes_context = []
@@ -689,6 +735,11 @@ async def prep_me(
             detail=f"AI service error: {e}",
         )
 
+    # Save to DB cache
+    patient.prep_me_summary = summary_text
+    patient.prep_me_generated_at = datetime.now(timezone.utc)
+    await db.commit()
+
     # Audit log
     staff = await resolve_staff(ctx, db)
     await log_action(
@@ -696,13 +747,12 @@ async def prep_me(
         staff_id=staff.id if staff else None,
         patient_id=patient.id,
         detail="AI Prep Me summary generated",
-        metadata={"ai_model": ai_model, "encounter_count": len(encounters)},
+        metadata={"ai_model": ai_model, "encounter_count": len(encounters), "cached": False},
         ip_address=request.client.host if request.client else None,
     )
 
-    last_date = encounters[0].encounter_date if encounters else None
     return PrepMeResponse(
         summary=summary_text,
-        encounter_count=len(encounters),
-        last_encounter_date=last_date,
+        encounter_count=enc_count,
+        last_encounter_date=last_enc_date,
     )

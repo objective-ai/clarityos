@@ -96,6 +96,7 @@ export function makePrepMeResponse(
       "Patient presents for annual comprehensive exam. Previous visit showed stable myopia with IOP within normal limits.",
     encounterCount: 3,
     lastEncounterDate: "2025-12-15",
+    cached: false,
     ...overrides,
   };
 }

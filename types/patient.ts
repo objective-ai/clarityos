@@ -150,6 +150,7 @@ export interface PrepMeResponse {
   summary: string;
   encounterCount: number;
   lastEncounterDate: string | null;
+  cached: boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -249,6 +249,12 @@ class Patient(TimestampMixin, SoftDeleteMixin, TenantBase):
         JSONB, nullable=False, default=dict, server_default="'{}'::jsonb"
     )
 
+    # AI Prep Me cache (generated once per day, avoids repeated LLM calls)
+    prep_me_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prep_me_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # --- Relationships ---
     appointments: Mapped[list["Appointment"]] = relationship(
         "Appointment", back_populates="patient", cascade="all, delete-orphan"
