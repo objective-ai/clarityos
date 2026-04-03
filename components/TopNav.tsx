@@ -13,6 +13,14 @@ import type { PatientHeaderData } from "@/types/session";
 import type { PatientInsurance } from "@/types/billing";
 import { formatClinicDate } from "@/lib/timezone";
 
+const ELIG_DOT: Record<string, string> = {
+  active: "bg-emerald-400",
+  inactive: "bg-red-400",
+  pending_verification: "bg-yellow-400",
+  expired: "bg-orange-400",
+  unknown: "bg-gray-400",
+};
+
 function calculateAge(dob: string): number {
   const birth = new Date(dob);
   const today = new Date();
@@ -58,8 +66,9 @@ export function TopNav({ patient }: TopNavProps) {
       .then(setInsurance)
       .catch(() => setInsurance([]));
   }, [patient?.id]);
-  const primaryIns = insurance.find((i) => i.priority === "primary");
-  const secondaryIns = insurance.find((i) => i.priority === "secondary");
+  const activeInsurance = insurance.filter((i: PatientInsurance) => i.is_active);
+  const primaryIns = activeInsurance.find((i: PatientInsurance) => i.priority === "primary");
+  const secondaryIns = activeInsurance.find((i: PatientInsurance) => i.priority === "secondary");
 
   // Extract encounterId from pathname for diagnosis tags + provider info
   const encounterId = pathname.includes("/encounter/")
@@ -118,27 +127,31 @@ export function TopNav({ patient }: TopNavProps) {
               </div>
             </div>
 
-            {/* Insurance summary */}
+            {/* Insurance summary chips */}
             {(primaryIns || secondaryIns) && (
               <>
                 <div className="w-px self-stretch bg-[var(--border-default)] flex-shrink-0" />
                 <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
                   <Shield size={12} className="text-[var(--text-muted)]" />
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    {primaryIns && (
+                  {primaryIns && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                      <span className={`w-1.5 h-1.5 rounded-full ${ELIG_DOT[primaryIns.eligibility_status] ?? "bg-gray-400"}`} />
                       <span className="text-[var(--text-secondary)]">
-                        <span className="text-[var(--text-muted)]">P:</span> {primaryIns.payer_name}
+                        {primaryIns.payer_name.length > 12 ? primaryIns.payer_name.split(" ")[0] : primaryIns.payer_name}
                       </span>
-                    )}
-                    {primaryIns && secondaryIns && (
-                      <span className="text-[var(--border-strong)]">&middot;</span>
-                    )}
-                    {secondaryIns && (
-                      <span className="text-[var(--text-secondary)]">
-                        <span className="text-[var(--text-muted)]">S:</span> {secondaryIns.payer_name}
+                      {primaryIns.copay_amount != null && (
+                        <span className="text-[var(--text-muted)]">${primaryIns.copay_amount}</span>
+                      )}
+                    </span>
+                  )}
+                  {secondaryIns && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-[var(--glass-bg)] border border-[var(--glass-border)]">
+                      <span className={`w-1.5 h-1.5 rounded-full ${ELIG_DOT[secondaryIns.eligibility_status] ?? "bg-gray-400"}`} />
+                      <span className="text-[var(--text-muted)]">
+                        {secondaryIns.payer_name.length > 12 ? secondaryIns.payer_name.split(" ")[0] : secondaryIns.payer_name}
                       </span>
-                    )}
-                  </div>
+                    </span>
+                  )}
                 </div>
               </>
             )}
