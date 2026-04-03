@@ -1,23 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Sun, Moon, Check } from "lucide-react";
+import { Sun, Moon, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useThemeStore, nextTheme } from "@/store/themeStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
-import { useEntitlements } from "@/hooks/useEntitlements";
-import { Entitlement } from "@/lib/entitlements";
-import { useSessionStore } from "@/store/sessionStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
 import type { PatientHeaderData } from "@/types/session";
+import type { PatientInsurance } from "@/types/billing";
 import { formatClinicDate } from "@/lib/timezone";
 
 function calculateAge(dob: string): number {
@@ -48,26 +41,25 @@ function getPageTitle(pathname: string): string {
   return "Dashboard";
 }
 
-type DevScenario = "premium_doctor" | "core_plan" | "technician" | "receptionist" | "owner";
-
-const SCENARIO_LABELS: [DevScenario, string][] = [
-  ["premium_doctor", "Doctor (Premium)"],
-  ["core_plan", "Doctor (Core Plan)"],
-  ["technician", "Technician"],
-  ["receptionist", "Receptionist"],
-  ["owner", "Owner"],
-];
 
 export function TopNav({ patient }: TopNavProps) {
   const pathname = usePathname();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const subtitle = usePageHeaderStore((s) => s.subtitle);
-  const { has, planName, role } = useEntitlements();
-  const isDev = process.env.NODE_ENV === "development";
-  const session = useSessionStore((s) => s.session);
-  const setSession = useSessionStore((s) => s.setSession);
   const pageTitle = getPageTitle(pathname);
+
+  // Fetch insurance for header display
+  const [insurance, setInsurance] = useState<PatientInsurance[]>([]);
+  useEffect(() => {
+    if (!patient?.id) { setInsurance([]); return; }
+    fetch(`/api/patients/${patient.id}/insurance`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setInsurance)
+      .catch(() => setInsurance([]));
+  }, [patient?.id]);
+  const primaryIns = insurance.find((i) => i.priority === "primary");
+  const secondaryIns = insurance.find((i) => i.priority === "secondary");
 
   // Extract encounterId from pathname for diagnosis tags + provider info
   const encounterId = pathname.includes("/encounter/")
@@ -76,26 +68,6 @@ export function TopNav({ patient }: TopNavProps) {
   const diagnoses = useDiagnosisStore(
     (s) => (encounterId ? s.encounters[encounterId]?.diagnoses : null) ?? []
   );
-  // Derive active scenario from actual session state so badge and checkmark stay in sync
-  const activeScenario: DevScenario = (() => {
-    if (role === "receptionist") return "receptionist";
-    if (role === "technician") return "technician";
-    if (role === "owner") return "owner";
-    if (planName === "Core") return "core_plan";
-    return "premium_doctor";
-  })();
-
-  const switchRole = async (scenario: DevScenario) => {
-    const { switchDevRole, getMockSession } = await import(
-      "@/lib/auth/mock-session"
-    );
-    if (session) {
-      setSession(switchDevRole(session, scenario));
-    } else {
-      setSession(getMockSession(scenario));
-    }
-  };
-
   return (
     <header
       className="sticky top-0 z-30 flex items-center justify-between px-6"
@@ -115,6 +87,11 @@ export function TopNav({ patient }: TopNavProps) {
               <div className="flex items-center gap-2">
                 <h1 className="text-[15px] font-semibold truncate text-[var(--text-primary)]">
                   {patient.lastName}, {patient.firstName}
+                  {patient.preferredName && (
+                    <span className="font-normal text-[var(--text-secondary)]">
+                      {" "}&ldquo;{patient.preferredName}&rdquo;
+                    </span>
+                  )}
                 </h1>
                 {patient.alerts.filter((a) => a.severity === "critical").map((a) => (
                   <Badge key={a.id} variant="destructive" className="gap-1 flex-shrink-0">
@@ -140,6 +117,31 @@ export function TopNav({ patient }: TopNavProps) {
                 <span className="font-mono text-[var(--text-muted)]">#{patient.chartNumber ?? patient.id.slice(0, 8)}</span>
               </div>
             </div>
+
+            {/* Insurance summary */}
+            {(primaryIns || secondaryIns) && (
+              <>
+                <div className="w-px self-stretch bg-[var(--border-default)] flex-shrink-0" />
+                <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+                  <Shield size={12} className="text-[var(--text-muted)]" />
+                  <div className="flex items-center gap-1.5 text-[11px]">
+                    {primaryIns && (
+                      <span className="text-[var(--text-secondary)]">
+                        <span className="text-[var(--text-muted)]">P:</span> {primaryIns.payer_name}
+                      </span>
+                    )}
+                    {primaryIns && secondaryIns && (
+                      <span className="text-[var(--border-strong)]">&middot;</span>
+                    )}
+                    {secondaryIns && (
+                      <span className="text-[var(--text-secondary)]">
+                        <span className="text-[var(--text-muted)]">S:</span> {secondaryIns.payer_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Diagnosis pills — vertically centered, spanning both rows */}
             {diagnoses.length > 0 && (
@@ -214,38 +216,6 @@ export function TopNav({ patient }: TopNavProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        {isDev && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs glass-card cursor-pointer border-none bg-transparent">
-                <span className="w-2 h-2 rounded-full flex-shrink-0 animate-glow bg-[var(--accent)]" />
-                <span className="text-[var(--text-muted)]">
-                  Dev mode &middot;{" "}
-                  <span className="text-[var(--accent)] font-mono">{planName}</span>
-                  {" "}&middot; role:{" "}
-                  <span className="text-[var(--accent)] font-mono">{role}</span>
-                  {" "}&middot;{" "}
-                  <span className="font-mono">ai_scribe: {String(has(Entitlement.AI_SCRIBE))}</span>
-                </span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {SCENARIO_LABELS.map(([scenario, label]) => (
-                <DropdownMenuItem
-                  key={scenario}
-                  onClick={() => switchRole(scenario)}
-                  className="flex items-center justify-between gap-3"
-                >
-                  <span>{label}</span>
-                  {activeScenario === scenario && (
-                    <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
         <Button
           variant="ghost"
           size="icon"

@@ -567,26 +567,12 @@ export default function EncounterPage({
             <PrepMeCard patientId={patientId} />
           )}
 
-          {/* Workflow header -- chief complaint + audit trail toggle */}
-          <div id="section-complaint" className="flex flex-col gap-2">
+          {/* Workflow header -- chief complaint */}
+          <div id="section-complaint">
             <EncounterWorkflowHeader
               encounterId={params.encounterId}
               isReadOnly={isFinalized}
             />
-            {canViewAudit && (
-              <button
-                type="button"
-                onClick={() => setAuditOpen(true)}
-                className="self-end flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg hover-btn"
-                style={{ color: "var(--text-secondary)", border: "1px solid var(--border-subtle)" }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                Audit Trail
-              </button>
-            )}
           </div>
 
           {/* Finalized banner */}
@@ -782,6 +768,7 @@ export default function EncounterPage({
             canFinalize={canFinalize}
             onAdvanceStatus={handleAdvanceStatus}
             onRevertToPretest={handleRevertToPretest}
+            onAuditTrailOpen={canViewAudit ? () => setAuditOpen(true) : undefined}
           />
 
           {/* Sticky mic FAB — only during in_exam for doctor/owner */}

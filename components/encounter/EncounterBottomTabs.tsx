@@ -93,6 +93,7 @@ interface EncounterBottomTabsProps {
   patientId: string;
   /** When false, Finalize button is visually subdued to indicate missing required fields */
   canFinalize?: boolean;
+  onAuditTrailOpen?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +108,7 @@ export function EncounterBottomTabs({
   sidebarCollapsed,
   patientId,
   canFinalize,
+  onAuditTrailOpen,
 }: EncounterBottomTabsProps) {
   const [activeTab, setActiveTab] = useState(TABS[0].id);
   const [chartOpen, setChartOpen] = useState(false);
@@ -193,6 +195,21 @@ export function EncounterBottomTabs({
         >
           Full Chart
         </button>
+
+        {/* Audit Trail button */}
+        {onAuditTrailOpen && (
+          <button
+            type="button"
+            onClick={onAuditTrailOpen}
+            className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium hover-btn bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center gap-1"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Audit Trail
+          </button>
+        )}
 
         {/* Stepper */}
         <div className="hidden sm:flex items-center gap-1">

@@ -32,6 +32,7 @@ import {
 } from "@/types/exam-findings";
 import { getFieldMeta } from "@/lib/exam-findings-fields";
 import { apiFetch } from "@/lib/api-client";
+import { snakifyKeys } from "@/lib/case-convert";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -132,11 +133,14 @@ async function saveFindingsToAPI(
       { method: "PUT", body: JSON.stringify(payload) },
     );
 
+    // Use the draft we sent — backend validated & saved it, but apiFetch's
+    // recursive camelizeKeys mangles the nested structure keys
+    // (lids_lashes → lidsLashes) which breaks component lookups.
     const saved: FindingsDraft = {
       is_normal_wnl: res.isNormalWnl,
-      findings_od: res.findingsOd ?? state.draft.findings_od,
-      findings_os: res.findingsOs ?? state.draft.findings_os,
-      provider_notes: res.providerNotes ?? "",
+      findings_od: state.draft.findings_od,
+      findings_os: state.draft.findings_os,
+      provider_notes: state.draft.provider_notes ?? "",
     };
 
     actions.commit(key, saved);
@@ -207,10 +211,16 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
             return;
           }
 
+          // apiFetch's recursive camelizeKeys mangles nested structure keys
+          // (lids_lashes → lidsLashes) — convert back to snake_case
           const draft: FindingsDraft = {
             is_normal_wnl: res.isNormalWnl,
-            findings_od: res.findingsOd ?? blankDraft(section).findings_od,
-            findings_os: res.findingsOs ?? blankDraft(section).findings_os,
+            findings_od: res.findingsOd
+              ? snakifyKeys(res.findingsOd) as Record<string, StructureFinding>
+              : blankDraft(section).findings_od,
+            findings_os: res.findingsOs
+              ? snakifyKeys(res.findingsOs) as Record<string, StructureFinding>
+              : blankDraft(section).findings_os,
             provider_notes: res.providerNotes ?? "",
           };
 
@@ -391,7 +401,7 @@ const examFindingsStoreImpl = subscribeWithSelector(devtools<ExamFindingsStore>(
           "setWNL",
         );
 
-        // Trigger save immediately — the "Normal" exam should persist
+        // Trigger save immediately
         get().scheduleSave(key);
       },
 

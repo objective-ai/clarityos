@@ -94,7 +94,6 @@ export function DiagnosisPicker({
         description: code.description,
         eyeAffected: eye,
       });
-      setShowPicker(false);
       setSearch("");
     },
     [encounterId, isReadOnly, store],

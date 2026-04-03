@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { Check, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
-import { useCurrentUser, useCurrentTenant } from "@/store/sessionStore";
+import { useCurrentUser, useCurrentTenant, useSessionStore } from "@/store/sessionStore";
 import { useTenantCustomizationStore } from "@/store/tenantCustomizationStore";
 import type { EntitlementKey, StaffRole } from "@/types/session";
 
@@ -115,9 +121,22 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+type DevScenario = "premium_doctor" | "core_plan" | "technician" | "receptionist" | "owner";
+
+const SCENARIO_LABELS: [DevScenario, string][] = [
+  ["premium_doctor", "Doctor (Premium)"],
+  ["core_plan", "Doctor (Core Plan)"],
+  ["technician", "Technician"],
+  ["receptionist", "Receptionist"],
+  ["owner", "Owner"],
+];
+
 export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { has, requireRole } = useEntitlements();
+  const { has, requireRole, planName, role } = useEntitlements();
+  const isDev = process.env.NODE_ENV === "development";
+  const session = useSessionStore((s) => s.session);
+  const setSession = useSessionStore((s) => s.setSession);
   const user = useCurrentUser();
   const tenant = useCurrentTenant();
   const logoUrl = useTenantCustomizationStore((s) => s.logoUrl);
@@ -136,6 +155,23 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
   const bottomItems: NavItem[] = [
     { label: "Admin", href: `${base}/admin`, icon: Icon.Settings, requiredRoles: ["admin", "owner"] },
   ];
+
+  const activeScenario: DevScenario = (() => {
+    if (role === "receptionist") return "receptionist";
+    if (role === "technician") return "technician";
+    if (role === "owner") return "owner";
+    if (planName === "Core") return "core_plan";
+    return "premium_doctor";
+  })();
+
+  const switchRole = async (scenario: DevScenario) => {
+    const { switchDevRole, getMockSession } = await import("@/lib/auth/mock-session");
+    if (session) {
+      setSession(switchDevRole(session, scenario));
+    } else {
+      setSession(getMockSession(scenario));
+    }
+  };
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
@@ -249,6 +285,48 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
       <div className="px-3">
         <div className="divider" />
       </div>
+
+      {/* Dev Mode Switcher */}
+      {isDev && (
+        <div className="px-3 pb-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full rounded-lg transition-colors hover:bg-[var(--bg-elevated)]"
+                style={{
+                  padding: isCollapsed ? "8px 0" : "8px 10px",
+                  justifyContent: isCollapsed ? "center" : undefined,
+                }}
+                title={isCollapsed ? `Dev: ${planName} · ${role}` : undefined}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0 animate-glow bg-[var(--accent)]" />
+                {!isCollapsed && (
+                  <span className="text-[10px] text-[var(--text-muted)] truncate">
+                    <span className="text-[var(--accent)] font-mono">{planName}</span>
+                    {" · "}
+                    <span className="text-[var(--accent)] font-mono">{role}</span>
+                  </span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="end">
+              {SCENARIO_LABELS.map(([scenario, label]) => (
+                <DropdownMenuItem
+                  key={scenario}
+                  onClick={() => switchRole(scenario)}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <span>{label}</span>
+                  {activeScenario === scenario && (
+                    <Check className="h-3.5 w-3.5 text-[var(--accent)]" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
 
       {/* Bottom Nav */}
       <nav className="px-3 pb-2 space-y-1">

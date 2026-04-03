@@ -121,16 +121,22 @@ async def upsert_exam_findings(
     existing.provider_notes = payload.provider_notes
 
     await db.flush()
+    row_id = existing.id
     await log_action(
-        db, ctx, AuditAction.UPDATE, "exam_findings", existing.id,
+        db, ctx, AuditAction.UPDATE, "exam_findings", row_id,
         staff_id=staff.id if staff else None,
         encounter_id=encounter_id,
         patient_id=enc.patient_id,
         detail=f"Upserted {exam_section} findings",
         ip_address=request.client.host if request.client else None,
     )
-    await db.refresh(existing)
-    return existing
+    # Re-fetch after flush (never db.refresh — MissingGreenlet)
+    saved = (
+        await db.execute(
+            select(ExamFindings).where(ExamFindings.id == row_id)
+        )
+    ).scalar_one()
+    return saved
 
 
 @router.get(

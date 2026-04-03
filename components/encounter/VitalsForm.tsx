@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { CheckCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCheck, CheckCircle } from "lucide-react";
 import { useVitalsStore, useVitalsState } from "@/store/vitalsStore";
 import { isIopElevated } from "@/types/vitals";
 import type { VitalsDraft, IopMethod } from "@/types/vitals";
@@ -124,6 +124,31 @@ export function VitalsForm({ encounterId, onNormalSection, allNormalTrigger }: V
     }
   }, [allNormalTrigger, handleVaNormal, handlePupilNormal, handleInstrumentsNormal, flushSave, encounterId]);
 
+  const [showAllNormalConfirm, setShowAllNormalConfirm] = useState(false);
+
+  const applyAllNormal = useCallback(() => {
+    handleVaNormal();
+    handlePupilNormal();
+    handleInstrumentsNormal();
+    flushSave(encounterId);
+    setShowAllNormalConfirm(false);
+  }, [handleVaNormal, handlePupilNormal, handleInstrumentsNormal, flushSave, encounterId]);
+
+  const handleAllNormalClick = useCallback(() => {
+    if (!draft) return;
+    // Check if any vitals fields already have data
+    const hasData = !!(
+      draft.ucva_od || draft.ucva_os || draft.bcva_od || draft.bcva_os ||
+      draft.color_vision ||
+      draft.confrontation || draft.motility || draft.npc || draft.cover_test_notes
+    );
+    if (hasData) {
+      setShowAllNormalConfirm(true);
+    } else {
+      applyAllNormal();
+    }
+  }, [draft, applyAllNormal]);
+
   if (!draft) return null;
 
   const odElevated = isIopElevated(draft.iop_od);
@@ -132,9 +157,23 @@ export function VitalsForm({ encounterId, onNormalSection, allNormalTrigger }: V
   return (
       <div className="flex flex-col gap-3">
         {/* Header row — title + All Normal + save status */}
-        <div className="flex items-center gap-3">
-          <h3 className="text-xs font-semibold text-[var(--text-primary)]">Pre-Test</h3>
-          <button type="button" onClick={() => { handleVaNormal(); handlePupilNormal(); handleInstrumentsNormal(); flushSave(encounterId); }} className={NORMAL_BTN_CLASS}>All Normal</button>
+        <div className="flex items-center gap-3 relative">
+          <h3 className="text-heading">Pre-Test</h3>
+          <button
+            type="button"
+            onClick={handleAllNormalClick}
+            className={NORMAL_BTN_CLASS}
+            title="Set all fields to normal values"
+          >
+            <CheckCheck size={14} />
+          </button>
+          {showAllNormalConfirm && (
+            <div className="absolute left-28 top-full mt-1 z-50 flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-default)] shadow-lg text-xs">
+              <span className="text-[var(--text-secondary)]">Override existing data?</span>
+              <button type="button" onClick={applyAllNormal} className="px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--text-inverse)] font-medium hover:brightness-110">Yes</button>
+              <button type="button" onClick={() => setShowAllNormalConfirm(false)} className="px-2 py-0.5 rounded bg-[var(--bg-glass)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:text-[var(--text-primary)]">No</button>
+            </div>
+          )}
           <div className="ml-auto"><SaveStatusBadge status={saveStatus} /></div>
         </div>
 
