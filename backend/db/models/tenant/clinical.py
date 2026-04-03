@@ -1229,7 +1229,12 @@ class PatientInsurance(TimestampMixin, TenantBase):
     __tablename__ = "patient_insurance"
     __table_args__ = (
         CheckConstraint("priority IN ('primary', 'secondary')", name="ck_insurance_priority"),
-        UniqueConstraint("patient_id", "priority", name="uq_patient_insurance_priority"),
+        CheckConstraint(
+            "eligibility_status IN ('active', 'inactive', 'pending_verification', 'expired', 'unknown')",
+            name="ck_insurance_eligibility_status",
+        ),
+        # Partial unique enforced via DB index (uq_patient_insurance_active_priority),
+        # not via ORM UniqueConstraint
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1257,6 +1262,15 @@ class PatientInsurance(TimestampMixin, TenantBase):
     relationship_to_subscriber: Mapped[str] = mapped_column(String(20), nullable=False, default="self")
     subscriber_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     subscriber_dob: Mapped[Date | None] = mapped_column(Date, nullable=True)  # type: ignore[assignment]
+
+    # --- Phase 10.1: Insurance Revamp ---
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    copay_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    eligibility_status: Mapped[str] = mapped_column(String(30), nullable=False, default="unknown")
+    eligibility_verified_date: Mapped[Date | None] = mapped_column(Date, nullable=True)  # type: ignore[assignment]
+    auth_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    auth_expiry: Mapped[Date | None] = mapped_column(Date, nullable=True)  # type: ignore[assignment]
+    auth_services: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # --- Relationships ---
     payer: Mapped["InsurancePayer"] = relationship("InsurancePayer", foreign_keys=[payer_id])
