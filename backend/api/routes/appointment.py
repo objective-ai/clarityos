@@ -40,6 +40,7 @@ from backend.db.models.tenant.clinical import (
     AppointmentStatus,
     AuditAction,
     Encounter,
+    PatientInsurance,
 )
 from backend.db.session import get_db
 from backend.schemas.appointment import (
@@ -63,6 +64,7 @@ def _build_appointment_response(
     appt: Appointment,
     patient_name: str | None = None,
     provider_name: str | None = None,
+    ins: PatientInsurance | None = None,
 ) -> AppointmentResponse:
     """Map an ORM Appointment (with eager-loaded relationships) to the schema."""
     if patient_name is None and appt.patient is not None:
@@ -92,6 +94,9 @@ def _build_appointment_response(
         encounter_short_id=appt.encounter.short_id if appt.encounter else None,
         intake_status=appt.intake_status,
         triage_flags_jsonb=appt.triage_flags_jsonb,
+        insurance_payer_name=ins.payer.name if ins and ins.payer else None,
+        insurance_copay=float(ins.copay_amount) if ins and ins.copay_amount else None,
+        insurance_eligibility=ins.eligibility_status if ins else None,
         created_at=appt.created_at,
         updated_at=appt.updated_at,
     )
@@ -233,7 +238,25 @@ async def list_appointments(
     result = await db.execute(stmt)
     appointments = result.scalars().all()
 
-    items = [_build_appointment_response(a) for a in appointments]
+    # Batch-fetch primary active insurance for all patients in result (avoids N+1)
+    patient_ids = list({a.patient_id for a in appointments})
+    if patient_ids:
+        ins_stmt = (
+            select(PatientInsurance)
+            .where(
+                PatientInsurance.patient_id.in_(patient_ids),
+                PatientInsurance.priority == "primary",
+                PatientInsurance.is_active == True,  # noqa: E712
+                PatientInsurance.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(PatientInsurance.payer))
+        )
+        ins_result = await db.execute(ins_stmt)
+        ins_by_patient = {ins.patient_id: ins for ins in ins_result.scalars().all()}
+    else:
+        ins_by_patient = {}
+
+    items = [_build_appointment_response(a, ins=ins_by_patient.get(a.patient_id)) for a in appointments]
     return AppointmentListResponse(
         items=items,
         total=len(items),

@@ -53,6 +53,10 @@ export interface Appointment {
     flags: string[];
     reasoning: string;
   } | null;
+  // Insurance summary (Phase 10.1)
+  insurancePayerName?: string | null;
+  insuranceCopay?: number | null;
+  insuranceEligibility?: string | null;
   createdAt: string;
   updatedAt: string;
 }

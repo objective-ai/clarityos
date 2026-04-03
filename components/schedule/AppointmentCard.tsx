@@ -13,6 +13,18 @@ import type { OverflowMenuItem } from "@/components/schedule/OverflowMenu";
 import { formatClinicTime } from "@/lib/timezone";
 
 // ---------------------------------------------------------------------------
+// Eligibility dot color map
+// ---------------------------------------------------------------------------
+
+const SCHED_ELIG_DOT: Record<string, string> = {
+  active: "bg-emerald-400",
+  inactive: "bg-red-400",
+  pending_verification: "bg-yellow-400",
+  expired: "bg-orange-400",
+  unknown: "bg-gray-400",
+};
+
+// ---------------------------------------------------------------------------
 // Status Badge (private to this file)
 // ---------------------------------------------------------------------------
 
@@ -164,9 +176,17 @@ export function AppointmentCard({
 
         {/* Patient info */}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
-            {appointment.patientName ?? "Unknown Patient"}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+              {appointment.patientName ?? "Unknown Patient"}
+            </p>
+            {appointment.insuranceEligibility && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-[var(--glass-bg)] border border-[var(--glass-border)] flex-shrink-0">
+                <span className={`w-1.5 h-1.5 rounded-full ${SCHED_ELIG_DOT[appointment.insuranceEligibility] ?? "bg-gray-400"}`} />
+                {appointment.insurancePayerName?.split(" ")[0] ?? "Ins"}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
             {APPOINTMENT_TYPE_LABELS[appointment.appointmentType]}
             {appointment.providerName && (

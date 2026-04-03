@@ -256,6 +256,11 @@ class AppointmentResponse(AppBaseModel):
     intake_status: str | None = None
     triage_flags_jsonb: dict | None = None
 
+    # Insurance summary (Phase 10.1)
+    insurance_payer_name: str | None = None
+    insurance_copay: float | None = None
+    insurance_eligibility: str | None = None  # "active" | "inactive" | ... | None if no insurance
+
     created_at: datetime
     updated_at: datetime
 
