@@ -188,6 +188,14 @@ export interface PatientInsurance {
   relationship_to_subscriber: "self" | "spouse" | "child" | "other";
   subscriber_name: string | null;
   subscriber_dob: string | null;
+  // --- Phase 10.1: Insurance Revamp ---
+  copay_amount: number | null;
+  eligibility_status: "active" | "inactive" | "pending_verification" | "expired" | "unknown";
+  eligibility_verified_date: string | null;
+  auth_number: string | null;
+  auth_expiry: string | null;
+  auth_services: string | null;
+  is_active: boolean;
 }
 
 // ---------------------------------------------------------------------------

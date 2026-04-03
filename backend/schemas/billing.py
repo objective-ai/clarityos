@@ -325,6 +325,14 @@ class PatientInsuranceCreate(AppBaseModel):
     relationship_to_subscriber: str = "self"
     subscriber_name: str | None = None
     subscriber_dob: str | None = None  # ISO date string
+    # --- Phase 10.1: Insurance Revamp ---
+    copay_amount: float | None = None
+    eligibility_status: str = "unknown"
+    eligibility_verified_date: str | None = None  # ISO date string
+    auth_number: str | None = None
+    auth_expiry: str | None = None  # ISO date string
+    auth_services: str | None = None
+    is_active: bool = True
 
     @field_validator("priority")
     @classmethod
@@ -340,6 +348,14 @@ class PatientInsuranceCreate(AppBaseModel):
             raise ValueError("plan_type must be 'medical', 'vision', or 'other'")
         return v
 
+    @field_validator("eligibility_status")
+    @classmethod
+    def validate_eligibility_status(cls, v: str) -> str:
+        valid = ("active", "inactive", "pending_verification", "expired", "unknown")
+        if v not in valid:
+            raise ValueError(f"eligibility_status must be one of {valid}")
+        return v
+
 
 class PatientInsuranceUpdate(AppBaseModel):
     payer_id: _uuid.UUID | None = None
@@ -351,6 +367,14 @@ class PatientInsuranceUpdate(AppBaseModel):
     relationship_to_subscriber: str | None = None
     subscriber_name: str | None = None
     subscriber_dob: str | None = None
+    # --- Phase 10.1: Insurance Revamp ---
+    copay_amount: float | None = None
+    eligibility_status: str | None = None
+    eligibility_verified_date: str | None = None
+    auth_number: str | None = None
+    auth_expiry: str | None = None
+    auth_services: str | None = None
+    is_active: bool | None = None
 
 
 class PatientInsuranceResponse(AppBaseModel):
@@ -366,6 +390,14 @@ class PatientInsuranceResponse(AppBaseModel):
     relationship_to_subscriber: str
     subscriber_name: str | None
     subscriber_dob: str | None
+    # --- Phase 10.1: Insurance Revamp ---
+    copay_amount: float | None = None
+    eligibility_status: str = "unknown"
+    eligibility_verified_date: str | None = None
+    auth_number: str | None = None
+    auth_expiry: str | None = None
+    auth_services: str | None = None
+    is_active: bool = True
 
 
 # ---------------------------------------------------------------------------

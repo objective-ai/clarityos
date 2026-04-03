@@ -7,7 +7,8 @@ Registered at /api/patients in main.py (alongside patient.router).
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date as _date
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -59,6 +60,13 @@ def _insurance_response(ins: PatientInsurance) -> PatientInsuranceResponse:
         relationship_to_subscriber=ins.relationship_to_subscriber,
         subscriber_name=ins.subscriber_name,
         subscriber_dob=str(ins.subscriber_dob) if ins.subscriber_dob else None,
+        copay_amount=float(ins.copay_amount) if ins.copay_amount is not None else None,
+        eligibility_status=ins.eligibility_status,
+        eligibility_verified_date=str(ins.eligibility_verified_date) if ins.eligibility_verified_date else None,
+        auth_number=ins.auth_number,
+        auth_expiry=str(ins.auth_expiry) if ins.auth_expiry else None,
+        auth_services=ins.auth_services,
+        is_active=ins.is_active,
     )
 
 
@@ -145,32 +153,51 @@ async def create_patient_insurance(
     if not payer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payer not found")
 
-    # Enforce uniqueness: patient + priority
-    existing = (
-        await db.execute(
-            select(PatientInsurance).where(
-                PatientInsurance.patient_id == patient_id,
-                PatientInsurance.priority == payload.priority,
-                PatientInsurance.tenant_id == ctx.tenant_id,
+    # Auto-deactivate existing active record with same priority (replaces 409 conflict)
+    if payload.is_active is not False:  # default True
+        existing_active = (
+            await db.execute(
+                select(PatientInsurance).where(
+                    PatientInsurance.patient_id == patient_id,
+                    PatientInsurance.priority == payload.priority,
+                    PatientInsurance.is_active == True,  # noqa: E712
+                    PatientInsurance.tenant_id == ctx.tenant_id,
+                )
             )
-        )
-    ).scalar_one_or_none()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Patient already has a {payload.priority} insurance on file. "
-            "Update or delete the existing one first.",
-        )
+        ).scalar_one_or_none()
+        if existing_active:
+            existing_active.is_active = False
 
     # Parse subscriber_dob if provided
     sub_dob = None
     if payload.subscriber_dob:
         try:
-            sub_dob = date.fromisoformat(payload.subscriber_dob)
+            sub_dob = _date.fromisoformat(payload.subscriber_dob)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="subscriber_dob must be ISO date format (YYYY-MM-DD)",
+            )
+
+    # Parse optional date fields
+    elig_verified = None
+    if payload.eligibility_verified_date:
+        try:
+            elig_verified = _date.fromisoformat(payload.eligibility_verified_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="eligibility_verified_date must be ISO date format (YYYY-MM-DD)",
+            )
+
+    auth_exp = None
+    if payload.auth_expiry:
+        try:
+            auth_exp = _date.fromisoformat(payload.auth_expiry)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="auth_expiry must be ISO date format (YYYY-MM-DD)",
             )
 
     ins = PatientInsurance(
@@ -185,6 +212,13 @@ async def create_patient_insurance(
         relationship_to_subscriber=payload.relationship_to_subscriber,
         subscriber_name=payload.subscriber_name,
         subscriber_dob=sub_dob,
+        copay_amount=Decimal(str(payload.copay_amount)) if payload.copay_amount is not None else None,
+        eligibility_status=payload.eligibility_status,
+        eligibility_verified_date=elig_verified,
+        auth_number=payload.auth_number,
+        auth_expiry=auth_exp,
+        auth_services=payload.auth_services,
+        is_active=payload.is_active if payload.is_active is not None else True,
     )
     db.add(ins)
     await db.flush()
@@ -252,12 +286,43 @@ async def update_patient_insurance(
     # Handle subscriber_dob conversion
     if "subscriber_dob" in updates and updates["subscriber_dob"] is not None:
         try:
-            updates["subscriber_dob"] = date.fromisoformat(updates["subscriber_dob"])
+            updates["subscriber_dob"] = _date.fromisoformat(updates["subscriber_dob"])
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="subscriber_dob must be ISO date format (YYYY-MM-DD)",
             )
+
+    # Handle new date field conversions
+    for date_field in ("eligibility_verified_date", "auth_expiry"):
+        if date_field in updates and updates[date_field] is not None:
+            try:
+                updates[date_field] = _date.fromisoformat(updates[date_field])
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"{date_field} must be ISO date format (YYYY-MM-DD)",
+                )
+
+    # Handle copay_amount Decimal conversion
+    if "copay_amount" in updates and updates["copay_amount"] is not None:
+        updates["copay_amount"] = Decimal(str(updates["copay_amount"]))
+
+    # Auto-deactivate existing active record if is_active being set to True
+    if updates.get("is_active") is True and not ins.is_active:
+        existing_active = (
+            await db.execute(
+                select(PatientInsurance).where(
+                    PatientInsurance.patient_id == ins.patient_id,
+                    PatientInsurance.priority == (updates.get("priority") or ins.priority),
+                    PatientInsurance.is_active == True,  # noqa: E712
+                    PatientInsurance.tenant_id == ctx.tenant_id,
+                    PatientInsurance.id != ins.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_active:
+            existing_active.is_active = False
 
     for field, new_val in updates.items():
         old_val = getattr(ins, field)
