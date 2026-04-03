@@ -35,7 +35,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.5 → 11 �
 | 9.1 | Security & Integration Hardening | 2/2 | Complete | 2026-03-26 |
 | 9.2 | Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
 | 10 | Encounter Workflow Redesign | 3/3 | Complete | 2026-03-27 |
-| 10.1 | Insurance Revamp | 0/? | Not started | — |
+| 10.1 | Insurance Revamp | 0/3 | Planned | — |
 | 10.2 | Revamp Schedule & Booking Page | 0/? | Not started | — |
 | 10.5 | Error Monitoring & System Status | 0/? | Not started | — |
 | 11 | Reporting & Exports | 0/? | Not started | — |
@@ -51,8 +51,13 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.5 → 11 �
 ### Phase 10.1: Insurance Revamp (INSERTED)
 **Goal:** Enrich patient insurance with missing fields (copay, auth code, eligibility status, position, active flag) to match production EHR standards. No document upload — that moves to Phase 14.1.
 **Depends on:** Phase 9 (insurance infrastructure), Phase 10
-**Requirements:** TBD
-**Plans:** None yet — run `/gsd:plan-phase 10.1` to break down
+**Requirements:** [INS-R01, INS-R02, INS-R03, INS-R04, INS-R05, INS-R06, INS-R07, INS-R08, INS-R09]
+**Plans:** 3 plans
+
+Plans:
+- [ ] 10.1-01-PLAN.md — Backend: migration + ORM + schemas + TS types (7 new columns, partial unique constraint)
+- [ ] 10.1-02-PLAN.md — Frontend: InsuranceTab card redesign + form modal extension + active/inactive separation
+- [ ] 10.1-03-PLAN.md — Surface integration: TopNav chips + schedule badges + billing copay
 
 ### Phase 10.2: Revamp Schedule & Booking Page (INSERTED)
 **Goal:** Modernize appointment scheduling UI, improve booking flow and calendar interactions
