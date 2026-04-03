@@ -464,6 +464,14 @@ export function BillingWorkflow({
   const isReadyToBill = superbill?.claimStatus === "ready_to_bill";
   const hasPayerSelection = selectedPayerId !== null || isSelfPayStep1;
 
+  // Derive copay from the currently billed payer's insurance record
+  const billedPlan = superbill?.isSelfPay
+    ? null
+    : insurancePlans.find(
+        (p) => p.payer_id === superbill?.billedPayerId && p.is_active,
+      );
+  const primaryCopay = billedPlan?.copay_amount ?? null;
+
   // ── Step 1: Choose Payer ───────────────────────────────────────────────
   if (step === "payer") {
     return (
@@ -687,6 +695,14 @@ export function BillingWorkflow({
             })}
             <option value="__self_pay__">Self-Pay</option>
           </select>
+          {primaryCopay != null && (
+            <div className="flex items-center gap-1.5 text-[12px] whitespace-nowrap flex-shrink-0">
+              <span style={{ color: "var(--text-muted)" }}>Copay:</span>
+              <span className="font-semibold" style={{ color: "var(--accent)" }}>
+                ${Number(primaryCopay).toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
