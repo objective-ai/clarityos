@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 10.1 context gathered
-last_updated: "2026-03-28T10:02:22.148Z"
+stopped_at: Completed 10.1-01-PLAN.md — insurance revamp data layer
+last_updated: "2026-04-03T22:40:09.540Z"
 progress:
   total_phases: 10
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
 ---
 
 ---
@@ -47,11 +47,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** Phase 10 — encounter-workflow-redesign
+**Current focus:** Phase 10.1 — insurance-revamp
 
 ## Current Position
 
-Phase: 10 (encounter-workflow-redesign) — EXECUTING
+Phase: 10.1 (insurance-revamp) — EXECUTING
 Plan: 2 of 3
 
 ## Performance Metrics
@@ -85,6 +85,7 @@ Plan: 2 of 3
 | Phase 09-claims-basics P06 | 4 | 2 tasks | 6 files |
 | Phase 09-claims-basics P07 | 20 | 1 tasks | 5 files |
 | Phase 09.1-security-integration-hardening P01 | 8 | 2 tasks | 2 files |
+| Phase 10.1 P01 | 15 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,8 @@ Recent decisions affecting current work:
 - [Phase 9.1-02]: Returns Map<string, number> for O(1) CPT lookups; empty map on error or self-pay; payer fee overlay uses ?? fallback to CPT_CATALOG defaultFee
 - [Phase 09.1-01]: Use getAuthHeaders() directly (not apiFetch) for insurance/PDF fetches — preserves snake_case keys and supports Blob responses
 - [Phase 09.1-01]: Middleware allowlist enumerates /api/public/ and /api/address/ as public; all other /api/* routes require auth (defense-in-depth)
+- [Phase 10.1]: Partial unique index (WHERE is_active = true) replaces hard UniqueConstraint on patient_insurance so inactive records are preserved historically
+- [Phase 10.1]: Auto-deactivate replaces 409 conflict check on insurance create — new active record silently deactivates same-priority predecessor
 
 ### Pending Todos
 
@@ -167,9 +170,9 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-03-28T10:02:22.144Z
-Stopped at: Phase 10.1 context gathered
-Resume file: .planning/phases/10.1-insurance-revamp/10.1-CONTEXT.md
+Last session: 2026-04-03T22:40:09.537Z
+Stopped at: Completed 10.1-01-PLAN.md — insurance revamp data layer
+Resume file: None
 
 **Phase 9 Overview:**
 
