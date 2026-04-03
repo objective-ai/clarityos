@@ -8,6 +8,7 @@ import {
   FileDown,
   Loader2,
   AlertTriangle,
+  Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useEntitlements } from "@/hooks/useEntitlements";
@@ -451,6 +452,14 @@ export default function BillingPage() {
                   {/* Icon buttons */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setWorkflowSb(sb)}
+                        className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-[var(--text-muted)] hover:text-[var(--accent)]"
+                        title="Edit Superbill"
+                      >
+                        <Pencil size={14} />
+                      </button>
                       <Link
                         href={`/${tenant}/encounter/${sb.encounterId}`}
                         className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -486,7 +495,7 @@ export default function BillingPage() {
       {workflowSb && (
         <BillingWorkflowDialog
           open={!!workflowSb}
-          onOpenChange={(v) => { if (!v) setWorkflowSb(null); }}
+          onOpenChange={(v) => { if (!v) { setWorkflowSb(null); fetchSuperbills(); } }}
           encounterId={workflowSb.encounterId}
           patientId={workflowSb.patientId}
           patientName={workflowSb.patientName}

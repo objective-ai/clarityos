@@ -1079,6 +1079,8 @@ export function BillingWorkflowDialog({
       <DialogContent
         className="max-w-[70vw] flex flex-col"
         style={{ maxHeight: "85vh" }}
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className="px-6 pt-6 pb-0 flex-shrink-0">
           <div className="flex items-center gap-2">

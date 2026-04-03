@@ -665,7 +665,6 @@ function PatientHeaderCard({
             )}
           </div>
 
-          {!editing && <PrepMeButton patientId={patientId} />}
         </div>
 
         {/* Alerts */}
@@ -687,6 +686,9 @@ function PatientHeaderCard({
             ))}
           </div>
         )}
+
+        {/* Prep Me — inline AI pre-visit summary */}
+        {!editing && <PrepMeButton patientId={patientId} />}
       </CardContent>
     </Card>
   );

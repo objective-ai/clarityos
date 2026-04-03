@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BillingWorkflowDialog } from "@/components/billing/BillingWorkflow";
+import { usePatientStore } from "@/store/patientStore";
 import type { PatientSuperbillSummary } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +55,11 @@ export function PatientBillingTab({ patientId }: { patientId: string }) {
   const [superbills, setSuperbills] = useState<PatientSuperbillSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingSb, setEditingSb] = useState<PatientSuperbillSummary | null>(null);
+  const patientName = usePatientStore((s) => {
+    const p = s.activePatient;
+    return p ? `${p.firstName} ${p.lastName}` : "Patient";
+  });
 
   const fetchSuperbills = async () => {
     setLoading(true);
@@ -108,16 +116,29 @@ export function PatientBillingTab({ patientId }: { patientId: string }) {
                 <th className="text-right text-caption text-[var(--text-muted)] px-4 py-3 font-medium">
                   Total
                 </th>
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody>
               {superbills.map((sb) => (
-                <SuperbillRow key={sb.id} superbill={sb} />
+                <SuperbillRow key={sb.id} superbill={sb} onEdit={() => setEditingSb(sb)} />
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {editingSb && (
+        <BillingWorkflowDialog
+          open
+          onOpenChange={(v) => { if (!v) { setEditingSb(null); fetchSuperbills(); } }}
+          encounterId={editingSb.encounter_id}
+          patientId={patientId}
+          patientName={patientName}
+          providerName=""
+          encounterDate={editingSb.encounter_date}
+        />
+      )}
     </div>
   );
 }
@@ -126,7 +147,7 @@ export function PatientBillingTab({ patientId }: { patientId: string }) {
 // Superbill Row
 // ---------------------------------------------------------------------------
 
-function SuperbillRow({ superbill }: { superbill: PatientSuperbillSummary }) {
+function SuperbillRow({ superbill, onEdit }: { superbill: PatientSuperbillSummary; onEdit: () => void }) {
   const style = STATUS_STYLES[superbill.claim_status] ?? STATUS_STYLES.draft;
 
   const formattedDate = (() => {
@@ -167,6 +188,16 @@ function SuperbillRow({ superbill }: { superbill: PatientSuperbillSummary }) {
       </td>
       <td className="px-4 py-3 text-body text-[var(--text-primary)] text-right">
         ${superbill.total_fee.toFixed(2)}
+      </td>
+      <td className="px-4 py-3 text-center">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-colors inline-flex"
+          title="Edit superbill"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
       </td>
     </tr>
   );

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { History } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { usePatientStore } from "@/store/patientStore";
+import { AuditTrailSidebar } from "@/components/encounter/AuditTrailSidebar";
 import type { PatientEncounterSummary } from "@/types/patient";
 import { formatClinicDate } from "@/lib/timezone";
 
@@ -15,6 +17,7 @@ import { formatClinicDate } from "@/lib/timezone";
 
 function TimelineItem({ encounter, tenant }: { encounter: PatientEncounterSummary; tenant: string }) {
   const dateStr = formatClinicDate(encounter.encounterDate);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   return (
     <div className="relative pl-8 pb-6 last:pb-0 group">
@@ -30,7 +33,7 @@ function TimelineItem({ encounter, tenant }: { encounter: PatientEncounterSummar
         }`}
       />
 
-      <Link href={`/${tenant}/encounter/${encounter.id}`} className="block cursor-pointer">
+      <Link href={`/${tenant}/encounter/${encounter.id}`} target="_blank" rel="noopener noreferrer" className="block cursor-pointer">
       <Card className="glass-card-hover transition-all duration-200">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3 mb-2">
@@ -47,6 +50,15 @@ function TimelineItem({ encounter, tenant }: { encounter: PatientEncounterSummar
                 </Badge>
               )}
             </div>
+            <button
+              type="button"
+              title="Audit trail"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAuditOpen(true); }}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <History size={14} />
+            </button>
           </div>
 
           {encounter.providerName && (
@@ -88,6 +100,13 @@ function TimelineItem({ encounter, tenant }: { encounter: PatientEncounterSummar
         </CardContent>
       </Card>
       </Link>
+
+      <AuditTrailSidebar
+        encounterId={encounter.id}
+        isOpen={auditOpen}
+        onClose={() => setAuditOpen(false)}
+        isReadOnly
+      />
     </div>
   );
 }

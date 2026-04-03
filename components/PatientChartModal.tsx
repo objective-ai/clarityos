@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -18,12 +19,13 @@ import { EncounterTimeline } from "@/components/patient/EncounterTimeline";
 import { RxHistoryTable } from "@/components/patient/RxHistoryTable";
 import { ClinicalFlowsheet } from "@/components/patient/ClinicalFlowsheet";
 import { InsuranceTab } from "@/components/patient/InsuranceTab";
+import { PatientBillingTab } from "@/components/patient/PatientBillingTab";
 
 // ---------------------------------------------------------------------------
 // Tab definitions
 // ---------------------------------------------------------------------------
 
-type ChartTab = "summary" | "encounters" | "rx-history" | "flowsheets" | "insurance";
+type ChartTab = "summary" | "encounters" | "rx-history" | "flowsheets" | "insurance" | "billing";
 
 const TABS: { key: ChartTab; label: string }[] = [
   { key: "summary", label: "Summary" },
@@ -31,6 +33,7 @@ const TABS: { key: ChartTab; label: string }[] = [
   { key: "rx-history", label: "Rx History" },
   { key: "flowsheets", label: "Flowsheets" },
   { key: "insurance", label: "Insurance" },
+  { key: "billing", label: "Billing" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -174,6 +177,8 @@ export function PatientChartModal({
         {/* No patient selected */}
         {!patientId ? (
           <div className="flex items-center justify-center py-16">
+            <DialogTitle className="sr-only">Patient Chart</DialogTitle>
+            <DialogDescription className="sr-only">No patient selected</DialogDescription>
             <p className="text-body text-[var(--text-muted)]">
               No patient selected
             </p>
@@ -181,6 +186,8 @@ export function PatientChartModal({
         ) : loading ? (
           /* Loading state */
           <div className="flex items-center justify-center py-16">
+            <DialogTitle className="sr-only">Patient Chart</DialogTitle>
+            <DialogDescription className="sr-only">Loading patient data</DialogDescription>
             <div className="w-8 h-8 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : patient ? (
@@ -195,7 +202,13 @@ export function PatientChartModal({
                 <div>
                   <DialogTitle className="text-lg">
                     {patient.lastName}, {patient.firstName}
+                    {patient.preferredName && (
+                      <span className="font-normal text-[var(--text-secondary)]">
+                        {" "}&ldquo;{patient.preferredName}&rdquo;
+                      </span>
+                    )}
                   </DialogTitle>
+                  <DialogDescription className="sr-only">Patient chart for {patient.firstName} {patient.lastName}</DialogDescription>
                   <div className="flex items-center gap-2 mt-0.5">
                     <Badge variant="outline">#{patient.chartNumber}</Badge>
                     <span className="text-caption text-[var(--text-secondary)]">
@@ -246,12 +259,17 @@ export function PatientChartModal({
               {activeTab === "insurance" && (
                 <InsuranceTab patientId={patientId} />
               )}
+              {activeTab === "billing" && (
+                <PatientBillingTab patientId={patientId} />
+              )}
             </div>
 
             {/* Footer */}
             <div className="px-6 py-3 border-t border-[var(--border-subtle)] flex justify-end">
               <Link
                 href={`/${tenant}/patients/${patientId}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={() => onOpenChange(false)}
                 className="text-sm text-[var(--accent)] hover:underline"
               >
