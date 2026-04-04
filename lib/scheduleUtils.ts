@@ -26,11 +26,11 @@ export function getWeekDays(dateStr: string): string[] {
 }
 
 /**
- * Returns elapsed minutes since startTime for active-wait statuses, null otherwise.
+ * Returns elapsed minutes since check-in (or startTime as fallback) for active-wait statuses.
  * Active statuses: arrived, in_pretest, in_exam.
  */
 export function getWaitMinutes(
-  appointment: Pick<Appointment, "status" | "startTime">,
+  appointment: Pick<Appointment, "status" | "startTime" | "checkedInAt">,
   now?: Date
 ): number | null {
   const activeStatuses: AppointmentStatus[] = [
@@ -40,7 +40,8 @@ export function getWaitMinutes(
   ];
   if (!activeStatuses.includes(appointment.status)) return null;
   const currentTime = (now ?? new Date()).getTime();
-  const start = new Date(appointment.startTime).getTime();
+  const anchor = appointment.checkedInAt ?? appointment.startTime;
+  const start = new Date(anchor).getTime();
   const mins = Math.floor((currentTime - start) / 60000);
   return mins < 0 ? 0 : mins;
 }

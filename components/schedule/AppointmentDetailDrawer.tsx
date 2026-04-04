@@ -124,7 +124,7 @@ export function AppointmentDetailDrawer({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          className="absolute top-4 right-4 z-10 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors"
           aria-label="Close drawer"
         >
           <X className="w-5 h-5" />
