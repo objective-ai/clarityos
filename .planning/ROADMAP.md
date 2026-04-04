@@ -36,7 +36,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.5 → 11 �
 | 9.2 | Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
 | 10 | Encounter Workflow Redesign | 3/3 | Complete | 2026-03-27 |
 | 10.1 | 3/3 | Complete   | 2026-04-03 | — |
-| 10.2 | Revamp Schedule & Booking Page | 0/? | Not started | — |
+| 10.2 | Revamp Schedule & Booking Page | 0/6 | In progress | — |
 | 10.5 | Error Monitoring & System Status | 0/? | Not started | — |
 | 11 | Reporting & Exports | 0/? | Not started | — |
 | 12 | AI Scribe Audio | 0/? | Not started | — |
@@ -60,10 +60,18 @@ Plans:
 - [ ] 10.1-03-PLAN.md — Surface integration: TopNav chips + schedule badges + billing copay
 
 ### Phase 10.2: Revamp Schedule & Booking Page (INSERTED)
-**Goal:** Modernize appointment scheduling UI, improve booking flow and calendar interactions
+**Goal:** Modernize schedule UI with week strip navigation, 5 view modes (List/Timeline/Clinic/Flow/Week), appointment detail drawer, booking drawer with slot picker, Flow board Kanban, Week view grid, and public patient booking wizard.
 **Depends on:** Phase 10
-**Requirements:** TBD
-**Plans:** None yet — run `/gsd:plan-phase 10.2` to break down
+**Requirements:** [SCH-01, SCH-02, SCH-03, SCH-04, SCH-05, SCH-06, SCH-07, SCH-08, SCH-09, SCH-10, SCH-11, SCH-12, SCH-13, SCH-14, SCH-15, SCH-16]
+**Plans:** 6 plans
+
+Plans:
+- [ ] 10.2-01-PLAN.md — Foundation: shared types, schedule utilities with tests, WeekStrip, page shell (5-mode toggle, role defaults, drawer state)
+- [ ] 10.2-02-PLAN.md — Backend: checked_in_at ORM/schema/auto-set + date range query + store fetchWeekAppointments
+- [ ] 10.2-03-PLAN.md — Appointment card redesign (wait time, intake icon, click handler) + AppointmentDetailDrawer
+- [ ] 10.2-04-PLAN.md — BookingDrawer with slot picker grid replacing BookAppointmentModal
+- [ ] 10.2-05-PLAN.md — FlowBoard (Kanban + 30s polling) + WeekView (7-day grid)
+- [ ] 10.2-06-PLAN.md — Public booking page polish: light theme, 5-step wizard
 
 ### Phase 10.5: Error Monitoring & System Status (INSERTED)
 **Goal:** Sentry integration (FastAPI + Next.js) + admin status page showing server health, recent errors, and uptime

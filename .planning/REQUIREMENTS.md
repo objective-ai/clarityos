@@ -45,7 +45,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **SCHED-01**: Appointment model and Alembic migration (patient_id, provider_id, datetime, duration, status, type, notes)
 - [ ] **SCHED-02**: Appointment CRUD API endpoints on FastAPI (create, read, update, cancel, list by date range)
 - [ ] **SCHED-03**: Schedule page wired to real appointment data instead of mock schedule
-- [ ] **SCHED-04**: Check-in workflow — appointment status transitions (scheduled → checked_in → in_exam → completed)
+- [ ] **SCHED-04**: Check-in workflow — appointment status transitions (scheduled -> checked_in -> in_exam -> completed)
 - [ ] **SCHED-05**: Encounter creation from appointment (link appointment to new encounter)
 
 ### HIPAA Compliance
@@ -83,7 +83,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **INTAKE-01**: Public intake route (/intake/[clinicId]/[appointmentToken]) — mobile-first, no auth required, secured by unique expiring token
 - [ ] **INTAKE-02**: Intake forms capture demographics, medical history, review of systems (ROS), and chief complaint using shadcn UI
 - [ ] **INTAKE-03**: Intake webhook/API receives submission, creates/updates Patient record, pre-seeds encounterStore for that day's appointment
-- [ ] **INTAKE-04**: AI Triage — async AI check on "Reason for Visit"; flags urgent conditions (e.g., flashing lights → "Possible RD") with red badge on Schedule View
+- [ ] **INTAKE-04**: AI Triage — async AI check on "Reason for Visit"; flags urgent conditions (e.g., flashing lights -> "Possible RD") with red badge on Schedule View
 
 ### Insurance & Claims
 
@@ -94,6 +94,25 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **INS-05**: Superbill auto-populates line item fees from patient's payer fee schedule via fee_service
 - [ ] **INS-06**: CMS-1500 PDF generation — posted superbills generate downloadable PDF forms via reportlab
 - [ ] **INS-07**: Patient Billing/Claims tab — list all superbills for patient with status, E&M code, CPT codes, and total
+
+### Schedule & Booking Revamp (Phase 10.2)
+
+- [ ] **SCH-01**: Horizontal Mon-Sun week strip with count badges replaces prev/next arrows at top of schedule page
+- [ ] **SCH-02**: 5 view mode tabs (List, Timeline, Clinic, Flow, Week) with active tab accent indicator
+- [ ] **SCH-03**: Role-based default view (receptionist/technician -> Flow, doctor -> Clinic, owner -> List)
+- [ ] **SCH-04**: View mode persists to localStorage, role default applies only on first visit
+- [ ] **SCH-05**: Appointment model has checked_in_at timestamp, auto-set when status transitions to arrived
+- [ ] **SCH-06**: Backend appointment list endpoint supports date_from/date_to range query (max 31 days)
+- [ ] **SCH-07**: Appointment cards show color-coded left border by status, wait time badge (amber >15min, red >30min), and intake status icon
+- [ ] **SCH-08**: Clicking an appointment card opens a right-side detail drawer with full info, patient summary, and all actions
+- [ ] **SCH-09**: Detail drawer closes via ESC, backdrop click, or Close button; 480px width with slide animation
+- [ ] **SCH-10**: Booking flow uses right-side drawer with visual 30-min slot picker grid instead of modal dialog
+- [ ] **SCH-11**: Slot picker shows available/occupied/selected states; overbooking shows warning but does not block staff
+- [ ] **SCH-12**: Flow board view with 4 Kanban columns (Waiting, Pre-Test, In Exam, Done) and upcoming appointments strip
+- [ ] **SCH-13**: Flow board auto-refreshes via 30-second polling; wait time displayed on each card
+- [ ] **SCH-14**: Week view shows 7-day time-aligned grid with appointment blocks positioned by time (Google Calendar style)
+- [ ] **SCH-15**: Public booking page at /book/[slug] uses light/white theme with 5-step wizard (Type, Provider, Date+Time, Info, Confirm)
+- [ ] **SCH-16**: Public booking wizard validates patient info, shows slot availability from backend, and displays success state on confirm
 
 ## v2 Requirements
 
@@ -117,7 +136,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 ### Deployment
 
 - **DEP-V2-01**: Deploy FastAPI to Render with HIPAA BAA
-- **DEP-V2-02**: CI/CD pipeline (GitHub Actions → Vercel + Render)
+- **DEP-V2-02**: CI/CD pipeline (GitHub Actions -> Vercel + Render)
 - **DEP-V2-03**: Supabase RLS policies as defense-in-depth
 
 ### Encounter Workflow Redesign
@@ -214,13 +233,29 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | EWR-05 | Phase 10 | Complete |
 | EWR-06 | Phase 10 | Complete |
 | EWR-07 | Phase 10 | Complete |
+| SCH-01 | Phase 10.2 | Pending |
+| SCH-02 | Phase 10.2 | Pending |
+| SCH-03 | Phase 10.2 | Pending |
+| SCH-04 | Phase 10.2 | Pending |
+| SCH-05 | Phase 10.2 | Pending |
+| SCH-06 | Phase 10.2 | Pending |
+| SCH-07 | Phase 10.2 | Pending |
+| SCH-08 | Phase 10.2 | Pending |
+| SCH-09 | Phase 10.2 | Pending |
+| SCH-10 | Phase 10.2 | Pending |
+| SCH-11 | Phase 10.2 | Pending |
+| SCH-12 | Phase 10.2 | Pending |
+| SCH-13 | Phase 10.2 | Pending |
+| SCH-14 | Phase 10.2 | Pending |
+| SCH-15 | Phase 10.2 | Pending |
+| SCH-16 | Phase 10.2 | Pending |
 
 **Coverage:**
-- Total requirements: 67
+- Total requirements: 83
 - Complete: 67
-- Pending: 0
+- Pending: 16
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-27 — Phase 10 encounter workflow redesign (7 EWR requirements added, all 67 satisfied)*
+*Last updated: 2026-04-03 — Phase 10.2 schedule & booking revamp (16 SCH requirements added)*
