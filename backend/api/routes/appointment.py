@@ -184,39 +184,71 @@ async def create_appointment(
 
 @router.get("/", response_model=AppointmentListResponse)
 async def list_appointments(
-    date: str,
+    date: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_SCHEDULE)),
     db: AsyncSession = Depends(get_db),
     provider_id: UUID | None = None,
 ):
     """
-    Return all appointments for a given calendar date.
+    Return appointments for a given calendar date or date range.
 
-    Query parameters:
-      - date (required): ISO date string, e.g. "2026-03-10"
+    Query parameters (mutually exclusive modes):
+      - date (single day): ISO date string, e.g. "2026-03-10"
+      - date_from + date_to (range): both required, max 31 days, e.g. "2026-04-06" to "2026-04-12"
       - provider_id (optional): filter to a single provider schedule
 
     Results are ordered by start_time ascending.
     """
-    try:
-        target_date = _date.fromisoformat(date)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid date format. Expected YYYY-MM-DD.",
-        )
-
     # Fetch tenant timezone for proper day boundary calculation
     tenant = (
         await db.execute(select(Tenant).where(Tenant.id == ctx.tenant_id))
     ).scalar_one_or_none()
     tz = ZoneInfo(tenant.timezone) if tenant and tenant.timezone else ZoneInfo("America/Los_Angeles")
 
-    # Calculate day boundaries in clinic-local time, then convert to UTC
-    local_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=tz)
-    local_end = local_start + timedelta(days=1)
-    day_start = local_start.astimezone(timezone.utc)
-    day_end = local_end.astimezone(timezone.utc) - timedelta(seconds=1)
+    if date_from is not None and date_to is not None:
+        # Range mode
+        try:
+            start_date = _date.fromisoformat(date_from)
+            end_date = _date.fromisoformat(date_to)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid date format. Expected YYYY-MM-DD.",
+            )
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="date_from must be <= date_to.",
+            )
+        if (end_date - start_date).days > 31:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Date range cannot exceed 31 days.",
+            )
+        local_start = datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0, tzinfo=tz)
+        local_end = datetime(end_date.year, end_date.month, end_date.day, 0, 0, 0, tzinfo=tz) + timedelta(days=1)
+        day_start = local_start.astimezone(timezone.utc)
+        day_end = (local_end - timedelta(seconds=1)).astimezone(timezone.utc)
+    elif date is not None:
+        # Single-day mode (backward compatible)
+        try:
+            target_date = _date.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid date format. Expected YYYY-MM-DD.",
+            )
+        local_start = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=tz)
+        local_end = local_start + timedelta(days=1)
+        day_start = local_start.astimezone(timezone.utc)
+        day_end = local_end.astimezone(timezone.utc) - timedelta(seconds=1)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Provide either 'date' or both 'date_from' and 'date_to'.",
+        )
 
     stmt = (
         select(Appointment)

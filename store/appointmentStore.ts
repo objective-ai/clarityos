@@ -31,9 +31,15 @@ interface AppointmentState {
   /** Error message */
   error: string | null;
 
+  /** Appointments for a full week (used by WeekView) */
+  weekAppointments: Appointment[];
+  /** Loading state for week fetch */
+  isLoadingWeek: boolean;
+
   // ---- Actions ----
   setSelectedDate: (date: string) => void;
   fetchAppointments: (date: string, providerId?: string) => Promise<void>;
+  fetchWeekAppointments: (startDate: string, endDate: string) => Promise<void>;
   createAppointment: (payload: AppointmentCreatePayload) => Promise<Appointment>;
   updateAppointment: (id: string, payload: AppointmentUpdatePayload) => Promise<Appointment>;
   cancelAppointment: (id: string, reason: string) => Promise<void>;
@@ -59,9 +65,23 @@ export const useAppointmentStore = create<AppointmentState>()(
       clinicTimezone: "America/Los_Angeles",
       loading: false,
       error: null,
+      weekAppointments: [],
+      isLoadingWeek: false,
 
       setSelectedDate: (date) => {
         set({ selectedDate: date });
+      },
+
+      fetchWeekAppointments: async (startDate, endDate) => {
+        set({ isLoadingWeek: true });
+        try {
+          const data = await apiFetch<AppointmentListResponse>(
+            `/api/appointments?date_from=${startDate}&date_to=${endDate}`
+          );
+          set({ weekAppointments: data.items, isLoadingWeek: false });
+        } catch (err) {
+          set({ isLoadingWeek: false });
+        }
       },
 
       fetchAppointments: async (date, providerId) => {
