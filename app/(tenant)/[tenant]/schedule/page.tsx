@@ -17,6 +17,7 @@ import type { ViewMode, DrawerState } from "@/types/schedule";
 import { VALID_VIEW_MODES, VIEW_MODE_LABELS } from "@/types/schedule";
 
 import { AppointmentCard } from "@/components/schedule/AppointmentCard";
+import { AppointmentDetailDrawer } from "@/components/schedule/AppointmentDetailDrawer";
 import { WeekStrip } from "@/components/schedule/WeekStrip";
 import { BookingDrawer } from "@/components/schedule/BookingDrawer";
 import { CancelModal, RescheduleModal } from "@/components/schedule/ScheduleModals";
@@ -381,10 +382,25 @@ function SchedulePageInner() {
               onViewEncounter={(encId) => router.push(`/${tenant}/encounter/${encId}`)}
               onSendIntake={handleSendIntake}
               onMarkNoShow={handleMarkNoShow}
+              onCardClick={(a) => setDrawer({ mode: "detail", appointment: a })}
             />
           ))}
         </div>
       )}
+
+      {/* Appointment detail drawer */}
+      <AppointmentDetailDrawer
+        appointment={drawer.mode === "detail" ? drawer.appointment : null}
+        open={drawer.mode === "detail"}
+        onClose={() => setDrawer({ mode: "closed" })}
+        onCheckIn={handleCheckIn}
+        onStartExam={handleStartExam}
+        onCancel={(id) => { setCancelTarget(id); setDrawer({ mode: "closed" }); }}
+        onReschedule={(a) => { setRescheduleTarget(a); setDrawer({ mode: "closed" }); }}
+        onIntake={handleSendIntake}
+        tenant={tenant}
+        timezone={clinicTimezone}
+      />
 
       {/* Booking drawer */}
       <BookingDrawer
