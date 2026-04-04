@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { OverflowMenu } from "@/components/schedule/OverflowMenu";
 import type { OverflowMenuItem } from "@/components/schedule/OverflowMenu";
 import { formatClinicTime } from "@/lib/timezone";
+import { getWaitMinutes, getWaitColor } from "@/lib/scheduleUtils";
+import { Send, SendHorizonal, CheckCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Eligibility dot color map
@@ -49,6 +51,50 @@ function StatusBadge({ status }: { status: AppointmentStatus }) {
 }
 
 // ---------------------------------------------------------------------------
+// Wait Time Badge (private to this file)
+// ---------------------------------------------------------------------------
+
+function WaitBadge({ waitMinutes, color }: { waitMinutes: number; color: "amber" | "red" }) {
+  const styles =
+    color === "red"
+      ? "bg-[#F87171]/15 text-[#F87171]"
+      : "bg-[#FBBF24]/15 text-[#FBBF24]";
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold transition-colors duration-300 ${styles}`}
+    >
+      {waitMinutes} min
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Intake Status Icon (private to this file)
+// ---------------------------------------------------------------------------
+
+function IntakeIcon({ status }: { status: "pending" | "submitted" | null }) {
+  if (status === "submitted") {
+    return (
+      <span title="Intake submitted" className="shrink-0 inline-flex">
+        <CheckCircle className="w-4 h-4 text-[var(--state-normal,#22c55e)]" />
+      </span>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <span title="Intake sent" className="shrink-0 inline-flex">
+        <SendHorizonal className="w-4 h-4 text-[var(--state-info,#3b82f6)]" />
+      </span>
+    );
+  }
+  return (
+    <span title="Intake not sent" className="shrink-0 inline-flex">
+      <Send className="w-4 h-4 text-[var(--text-secondary)]" />
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Appointment Card
 // ---------------------------------------------------------------------------
 
@@ -64,6 +110,7 @@ export function AppointmentCard({
   onViewEncounter,
   onSendIntake,
   onMarkNoShow,
+  onCardClick,
 }: {
   appointment: Appointment;
   tz: string;
@@ -76,6 +123,7 @@ export function AppointmentCard({
   onViewEncounter: (encounterId: string) => void;
   onSendIntake: (appt: Appointment) => void;
   onMarkNoShow: (id: string) => void;
+  onCardClick?: (appointment: Appointment) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -87,6 +135,10 @@ export function AppointmentCard({
   const canViewEncounter =
     appointment.status === "completed" || appointment.status === "finalized";
   const hasEncounter = !!appointment.encounterId;
+
+  // Wait time
+  const waitMinutes = getWaitMinutes(appointment);
+  const waitColor = getWaitColor(waitMinutes);
 
   // Build overflow menu items based on status
   const overflowItems: OverflowMenuItem[] = [];
@@ -154,16 +206,14 @@ export function AppointmentCard({
 
   return (
     <div
-      className="glass-card glass-card-hover p-4 transition-all"
-      style={menuOpen ? { position: "relative", zIndex: 50 } : undefined}
+      className="glass-card glass-card-hover border-l-4 p-4 transition-all cursor-pointer"
+      style={{
+        borderLeftColor: STATUS_COLORS[appointment.status],
+        ...(menuOpen ? { position: "relative", zIndex: 50 } : {}),
+      }}
+      onClick={() => onCardClick?.(appointment)}
     >
       <div className="flex items-center gap-4">
-        {/* Color bar */}
-        <div
-          className="w-1 self-stretch rounded-full shrink-0"
-          style={{ backgroundColor: STATUS_COLORS[appointment.status] }}
-        />
-
         {/* Time */}
         <div className="shrink-0 w-[4.5rem] text-center">
           <p className="text-sm font-semibold text-[var(--text-primary)]">
@@ -200,23 +250,16 @@ export function AppointmentCard({
           )}
         </div>
 
-        {/* Intake · Status badges */}
+        {/* Intake icon · Wait badge · Status badges */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {appointment.intakeStatus === "submitted" && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              Intake
-            </span>
+          {/* Intake status icon */}
+          <IntakeIcon status={appointment.intakeStatus} />
+
+          {/* Wait time badge */}
+          {waitColor !== null && waitMinutes !== null && (
+            <WaitBadge waitMinutes={waitMinutes} color={waitColor} />
           )}
-          {appointment.intakeStatus === "pending" && (
-            <button
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onSendIntake(appointment); }}
-            >
-              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-              Intake Form
-            </button>
-          )}
+
           {appointment.triageFlags?.urgency === "urgent" && (
             <span
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-500/15 text-red-400 border border-red-500/25 animate-pulse"
@@ -237,7 +280,10 @@ export function AppointmentCard({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center gap-2 shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
           {canCheckIn && (
             <Button size="sm" onClick={() => onCheckIn(appointment.id)}>
               Check In
