@@ -36,7 +36,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.5 → 11 �
 | 9.2 | Requirements & Traceability Repair | 1/1 | Complete | 2026-03-27 |
 | 10 | Encounter Workflow Redesign | 3/3 | Complete | 2026-03-27 |
 | 10.1 | 3/3 | Complete   | 2026-04-03 | — |
-| 10.2 | 1/6 | In Progress|  | — |
+| 10.2 | 2/6 | In Progress|  | — |
 | 10.5 | Error Monitoring & System Status | 0/? | Not started | — |
 | 11 | Reporting & Exports | 0/? | Not started | — |
 | 12 | AI Scribe Audio | 0/? | Not started | — |
@@ -63,7 +63,7 @@ Plans:
 **Goal:** Modernize schedule UI with week strip navigation, 5 view modes (List/Timeline/Clinic/Flow/Week), appointment detail drawer, booking drawer with slot picker, Flow board Kanban, Week view grid, and public patient booking wizard.
 **Depends on:** Phase 10
 **Requirements:** [SCH-01, SCH-02, SCH-03, SCH-04, SCH-05, SCH-06, SCH-07, SCH-08, SCH-09, SCH-10, SCH-11, SCH-12, SCH-13, SCH-14, SCH-15, SCH-16]
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 - [ ] 10.2-01-PLAN.md — Foundation: shared types, schedule utilities with tests, WeekStrip, page shell (5-mode toggle, role defaults, drawer state)

@@ -3,42 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 10.2 UI-SPEC approved
-last_updated: "2026-04-04T02:19:22.118Z"
+stopped_at: Completed 10.2-06-PLAN.md — public booking page with 5-step wizard
+last_updated: "2026-04-03T00:00:00.000Z"
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 9
-  completed_plans: 3
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: in_progress
-stopped_at: Completed 10-03-PLAN.md — encounter mode split and StickyMicButton FAB
-last_updated: "2026-03-27T21:49:17.472Z"
-progress:
-  total_phases: 19
-  completed_phases: 7
-  total_plans: 24
-  completed_plans: 29
----
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: in_progress
-stopped_at: Phase 9.2 complete — all 60 requirements marked Complete
-last_updated: "2026-03-27T09:24:51.157Z"
-progress:
-  total_phases: 18
-  completed_phases: 6
-  total_plans: 21
-  completed_plans: 26
-  percent: 100
+  completed_plans: 6
 
 # Project State
 
@@ -52,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 10.2 (revamp-schedule-booking-page) — EXECUTING
-Plan: 1 of 6
+Plan: 6 of 6 (COMPLETE)
 
 ## Performance Metrics
 
@@ -165,6 +136,9 @@ Recent decisions affecting current work:
 - [Phase 10.1-03]: Eligibility badge added to AppointmentCard (not schedule/page.tsx) — card is the canonical row renderer covering all three view modes
 - [Phase 10.1-03]: BillingWorkflow copay derived from existing insurancePlans state matched by billedPayerId — no additional fetch needed
 - [Phase 10.1-03]: Batch insurance lookup uses patient_id.in_() single query on appointment list — avoids N+1
+- [Phase 10.2-06]: Public booking page uses explicit Tailwind classes (bg-gray-50, text-gray-900) not CSS variables — prevents dark glassmorphism leakage
+- [Phase 10.2-06]: data-theme="public-booking" attribute + globals.css override block as defense-in-depth for public pages
+- [Phase 10.2-06]: 7-day availability strip replaces full date picker — better mobile UX for patient-facing booking
 
 ### Pending Todos
 
@@ -176,9 +150,9 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-04T00:08:29.067Z
-Stopped at: Phase 10.2 UI-SPEC approved
-Resume file: .planning/phases/10.2-revamp-schedule-booking-page/10.2-UI-SPEC.md
+Last session: 2026-04-03T00:00:00.000Z
+Stopped at: Completed 10.2-06-PLAN.md — public booking page with 5-step wizard
+Resume file: .planning/phases/10.2-revamp-schedule-booking-page/10.2-06-SUMMARY.md
 
 **Phase 9 Overview:**
 

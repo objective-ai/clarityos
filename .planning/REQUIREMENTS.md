@@ -111,8 +111,8 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **SCH-12**: Flow board view with 4 Kanban columns (Waiting, Pre-Test, In Exam, Done) and upcoming appointments strip
 - [ ] **SCH-13**: Flow board auto-refreshes via 30-second polling; wait time displayed on each card
 - [ ] **SCH-14**: Week view shows 7-day time-aligned grid with appointment blocks positioned by time (Google Calendar style)
-- [ ] **SCH-15**: Public booking page at /book/[slug] uses light/white theme with 5-step wizard (Type, Provider, Date+Time, Info, Confirm)
-- [ ] **SCH-16**: Public booking wizard validates patient info, shows slot availability from backend, and displays success state on confirm
+- [x] **SCH-15**: Public booking page at /book/[slug] uses light/white theme with 5-step wizard (Type, Provider, Date+Time, Info, Confirm)
+- [x] **SCH-16**: Public booking wizard validates patient info, shows slot availability from backend, and displays success state on confirm
 
 ## v2 Requirements
 
@@ -247,8 +247,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SCH-12 | Phase 10.2 | Pending |
 | SCH-13 | Phase 10.2 | Pending |
 | SCH-14 | Phase 10.2 | Pending |
-| SCH-15 | Phase 10.2 | Pending |
-| SCH-16 | Phase 10.2 | Pending |
+| SCH-15 | Phase 10.2 | Complete |
+| SCH-16 | Phase 10.2 | Complete |
 
 **Coverage:**
 - Total requirements: 83
