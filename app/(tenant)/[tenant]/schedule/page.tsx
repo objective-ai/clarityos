@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
@@ -12,8 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api-client";
 import { clinicToday, formatDateLong, shiftDate } from "@/lib/timezone";
+import { getRoleDefaultView } from "@/lib/scheduleUtils";
+import type { ViewMode, DrawerState } from "@/types/schedule";
+import { VALID_VIEW_MODES, VIEW_MODE_LABELS } from "@/types/schedule";
 
 import { AppointmentCard } from "@/components/schedule/AppointmentCard";
+import { WeekStrip } from "@/components/schedule/WeekStrip";
 import { BookAppointmentModal } from "@/components/schedule/BookAppointmentModal";
 import { CancelModal, RescheduleModal } from "@/components/schedule/ScheduleModals";
 
@@ -82,18 +86,23 @@ function SchedulePageInner() {
     handleBook,
   } = useScheduleActions(tenant);
 
-  // View mode: list | timeline | clinic
-  type ViewMode = "list" | "timeline" | "clinic";
+  const { role } = useEntitlements();
+
+  // View mode: list | timeline | clinic | flow | week
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("schedule_view") as ViewMode) || "list";
+      const stored = localStorage.getItem("schedule_view") as ViewMode;
+      if (stored && VALID_VIEW_MODES.includes(stored)) return stored;
     }
-    return "list";
+    return getRoleDefaultView(role ?? "");
   });
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode);
     localStorage.setItem("schedule_view", mode);
   };
+
+  // Drawer state machine: closed | detail | booking
+  const [drawer, setDrawer] = useState<DrawerState>({ mode: "closed" });
 
   // Provider filter
   const [selectedProviderId, setSelectedProviderId] = useState("");
@@ -113,17 +122,22 @@ function SchedulePageInner() {
     fetchAppointments(selectedDate, selectedProviderId || undefined);
   }, [selectedProviderId, selectedDate, fetchAppointments]);
 
-  // Modal state
-  const [bookingOpen, setBookingOpen] = useState(false);
-  const [bookingDefaults, setBookingDefaults] = useState<{
-    patientId?: string;
-    providerId?: string;
-    appointmentType?: AppointmentType;
-    patientName?: string;
-    providerName?: string;
-  } | undefined>(undefined);
+  // Booking state derived from drawer
+  const bookingOpen = drawer.mode === "booking";
+  const bookingDefaults = drawer.mode === "booking" ? drawer.defaults : undefined;
+  const openBooking = (defaults?: { patientId?: string; providerId?: string; appointmentType?: AppointmentType; patientName?: string; providerName?: string }) => {
+    setDrawer({ mode: "booking", defaults });
+  };
+  const closeDrawer = () => setDrawer({ mode: "closed" });
+
+  // Cancel / reschedule modals
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+
+  // Counts by date for WeekStrip
+  const countsByDate = useMemo(() => {
+    return { [selectedDate]: appointments.length };
+  }, [selectedDate, appointments.length]);
 
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
 
@@ -133,13 +147,12 @@ function SchedulePageInner() {
       const pid = searchParams.get("patientId");
       const provId = searchParams.get("providerId");
       if (pid && provId) {
-        setBookingDefaults({
+        openBooking({
           patientId: pid,
           providerId: provId,
           patientName: searchParams.get("patientName") || undefined,
           providerName: searchParams.get("providerName") || undefined,
         });
-        setBookingOpen(true);
         router.replace(`/${tenant}/schedule`, { scroll: false });
       }
     }
@@ -153,11 +166,10 @@ function SchedulePageInner() {
     return () => setSubtitle(null);
   }, [selectedDate, clinicTimezone, setSubtitle]);
 
-  // Follow-up handler — opens booking modal with defaults
+  // Follow-up handler — opens booking drawer with defaults
   const onFollowUp = (appt: Appointment) => {
     const defaults = handleFollowUp(appt);
-    setBookingDefaults(defaults);
-    setBookingOpen(true);
+    openBooking(defaults);
   };
 
   // Entitlement gate
@@ -191,6 +203,15 @@ function SchedulePageInner() {
 
   return (
     <div className="flex flex-col gap-6 stagger">
+      {/* Week strip navigation */}
+      <WeekStrip
+        selectedDate={selectedDate}
+        countsByDate={countsByDate}
+        onSelectDay={setSelectedDate}
+        onShiftWeek={(dir) => setSelectedDate(shiftDate(selectedDate, dir * 7))}
+        clinicTimezone={clinicTimezone}
+      />
+
       {/* Toolbar: summary left, controls right */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Left — summary counters */}
@@ -214,7 +235,7 @@ function SchedulePageInner() {
           ) : null}
         </div>
 
-        {/* Right — provider filter, view toggle, date nav, book */}
+        {/* Right — provider filter, view toggle, book */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Provider filter */}
           <select
@@ -232,48 +253,28 @@ function SchedulePageInner() {
               ))}
           </select>
 
-          {/* View toggle */}
+          {/* View toggle — 5 modes */}
           <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden">
-            {(["list", "timeline", "clinic"] as const).map((mode) => (
+            {VALID_VIEW_MODES.map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleViewChange(mode)}
-                className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                className={`px-2.5 py-1 text-[11px] font-medium transition-colors duration-200 ${
                   viewMode === mode
                     ? "bg-[var(--accent)] text-[var(--text-inverse)]"
                     : "text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
                 }`}
               >
-                {mode === "list" ? "List" : mode === "timeline" ? "Timeline" : "Clinic"}
+                {VIEW_MODE_LABELS[mode]}
               </button>
             ))}
           </div>
 
           <div className="w-px h-5 bg-[var(--border-subtle)]" />
 
-          {/* Date nav */}
-          <Button variant="ghost" size="icon" onClick={() => setSelectedDate(shiftDate(selectedDate, -1))} title="Previous day">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M8.5 3L4.5 7l4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedDate(clinicToday(clinicTimezone))}>
-            Today
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => setSelectedDate(shiftDate(selectedDate, 1))} title="Next day">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M5.5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Button>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="glass-input px-3 py-1.5 rounded-lg text-sm"
-          />
           <Button
             size="sm"
-            onClick={() => { setBookingDefaults(undefined); setBookingOpen(true); }}
+            onClick={() => openBooking()}
           >
             + Book
           </Button>
@@ -322,7 +323,7 @@ function SchedulePageInner() {
               No appointments scheduled for this day.
             </p>
           </div>
-          <Button variant="outline" onClick={() => { setBookingDefaults(undefined); setBookingOpen(true); }}>
+          <Button variant="outline" onClick={() => openBooking()}>
             Book an appointment
           </Button>
         </div>
@@ -340,7 +341,7 @@ function SchedulePageInner() {
           onFollowUp={onFollowUp}
           onSendIntake={handleSendIntake}
           onMarkNoShow={handleMarkNoShow}
-          onSlotClick={() => { setBookingDefaults(undefined); setBookingOpen(true); }}
+          onSlotClick={() => openBooking()}
         />
       ) : viewMode === "clinic" ? (
         <ClinicView
@@ -358,10 +359,17 @@ function SchedulePageInner() {
           onSendIntake={handleSendIntake}
           onMarkNoShow={handleMarkNoShow}
           onSlotClick={(_time, providerId) => {
-            setBookingDefaults(providerId ? { providerId } : undefined);
-            setBookingOpen(true);
+            openBooking(providerId ? { providerId } : undefined);
           }}
         />
+      ) : viewMode === "flow" ? (
+        <div className="glass-card flex items-center justify-center py-20 text-[var(--text-muted)]">
+          Flow Board — coming in Plan 05
+        </div>
+      ) : viewMode === "week" ? (
+        <div className="glass-card flex items-center justify-center py-20 text-[var(--text-muted)]">
+          Week View — coming in Plan 05
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
           {appointments.map((appt) => (
@@ -386,7 +394,7 @@ function SchedulePageInner() {
       {/* Modals */}
       <BookAppointmentModal
         open={bookingOpen}
-        onClose={() => { setBookingOpen(false); setBookingDefaults(undefined); }}
+        onClose={closeDrawer}
         onSubmit={handleBook}
         defaults={bookingDefaults}
       />
