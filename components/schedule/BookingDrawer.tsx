@@ -376,6 +376,7 @@ export function BookingDrawer({
               <input
                 type="date"
                 value={date}
+                min={clinicToday(tz)}
                 onChange={(e) => {
                   setDate(e.target.value);
                   setSelectedSlot(null);

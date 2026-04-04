@@ -133,13 +133,11 @@ function SchedulePageInner() {
     fetchAppointments(selectedDate, selectedProviderId || undefined);
   }, [selectedProviderId, selectedDate, fetchAppointments]);
 
-  // Fetch week appointments when week view is active
+  // Fetch week appointments for WeekStrip counts (all view modes)
   useEffect(() => {
-    if (viewMode === "week") {
-      const days = getWeekDays(selectedDate);
-      fetchWeekAppointments(days[0], days[6]);
-    }
-  }, [viewMode, selectedDate, fetchWeekAppointments]);
+    const days = getWeekDays(selectedDate);
+    fetchWeekAppointments(days[0], days[6]);
+  }, [selectedDate, fetchWeekAppointments]);
 
   // Booking state helpers
   const openBooking = (defaults?: { patientId?: string; providerId?: string; appointmentType?: AppointmentType; patientName?: string; providerName?: string }) => {
@@ -152,12 +150,14 @@ function SchedulePageInner() {
   // Counts by date for WeekStrip — includes week data when loaded
   const countsByDate = useMemo(() => {
     const counts: Record<string, number> = {};
-    counts[selectedDate] = appointments.length;
     if (weekAppointments.length > 0) {
       for (const appt of weekAppointments) {
         const d = appt.startTime.slice(0, 10);
         counts[d] = (counts[d] || 0) + 1;
       }
+    } else {
+      // Fallback: only know selected date's count
+      counts[selectedDate] = appointments.length;
     }
     return counts;
   }, [appointments, weekAppointments, selectedDate]);
@@ -277,15 +277,15 @@ function SchedulePageInner() {
           </select>
 
           {/* View toggle — 5 modes */}
-          <div className="flex rounded-lg border border-white/20 overflow-hidden">
+          <div className="flex rounded-lg border border-[var(--border-default)] overflow-hidden">
             {VALID_VIEW_MODES.map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleViewChange(mode)}
                 className={`px-2.5 py-1 text-[11px] font-medium transition-colors duration-200 ${
                   viewMode === mode
-                    ? "bg-[var(--accent)] text-[var(--text-inverse)]"
-                    : "text-white/60 hover:text-white/80 hover:bg-white/5"
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
                 }`}
               >
                 {VIEW_MODE_LABELS[mode]}
