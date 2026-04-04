@@ -103,9 +103,9 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **SCH-04**: View mode persists to localStorage, role default applies only on first visit
 - [x] **SCH-05**: Appointment model has checked_in_at timestamp, auto-set when status transitions to arrived
 - [x] **SCH-06**: Backend appointment list endpoint supports date_from/date_to range query (max 31 days)
-- [ ] **SCH-07**: Appointment cards show color-coded left border by status, wait time badge (amber >15min, red >30min), and intake status icon
-- [ ] **SCH-08**: Clicking an appointment card opens a right-side detail drawer with full info, patient summary, and all actions
-- [ ] **SCH-09**: Detail drawer closes via ESC, backdrop click, or Close button; 480px width with slide animation
+- [x] **SCH-07**: Appointment cards show color-coded left border by status, wait time badge (amber >15min, red >30min), and intake status icon
+- [x] **SCH-08**: Clicking an appointment card opens a right-side detail drawer with full info, patient summary, and all actions
+- [x] **SCH-09**: Detail drawer closes via ESC, backdrop click, or Close button; 480px width with slide animation
 - [x] **SCH-10**: Booking flow uses right-side drawer with visual 30-min slot picker grid instead of modal dialog
 - [x] **SCH-11**: Slot picker shows available/occupied/selected states; overbooking shows warning but does not block staff
 - [ ] **SCH-12**: Flow board view with 4 Kanban columns (Waiting, Pre-Test, In Exam, Done) and upcoming appointments strip
@@ -239,9 +239,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SCH-04 | Phase 10.2 | Pending |
 | SCH-05 | Phase 10.2 | Complete |
 | SCH-06 | Phase 10.2 | Complete |
-| SCH-07 | Phase 10.2 | Pending |
-| SCH-08 | Phase 10.2 | Pending |
-| SCH-09 | Phase 10.2 | Pending |
+| SCH-07 | Phase 10.2 | Complete |
+| SCH-08 | Phase 10.2 | Complete |
+| SCH-09 | Phase 10.2 | Complete |
 | SCH-10 | Phase 10.2 | Complete |
 | SCH-11 | Phase 10.2 | Complete |
 | SCH-12 | Phase 10.2 | Pending |
