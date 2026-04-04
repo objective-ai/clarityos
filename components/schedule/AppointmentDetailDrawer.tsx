@@ -97,6 +97,9 @@ export function AppointmentDetailDrawer({
       ? "Resend Intake"
       : "Send Intake";
 
+  // Bug A: prevent drawer from rendering at all when nothing is selected
+  if (!open && !appt) return null;
+
   return (
     <>
       {/* Backdrop */}
@@ -111,12 +114,22 @@ export function AppointmentDetailDrawer({
       {/* Drawer panel */}
       <div
         className={`fixed right-0 top-0 bottom-0 z-50 w-[480px] max-md:w-full bg-[var(--bg-surface)] border-l border-[var(--border-default)] shadow-2xl flex flex-col transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          open ? "translate-x-0" : "translate-x-full"
+          open ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         role="dialog"
         aria-modal="true"
         aria-label={appt ? `Appointment details for ${appt.patientName ?? "patient"}` : "Appointment details"}
       >
+        {/* Bug B: always-visible close button, outside appt ternary */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Close drawer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {appt ? (
           <>
             {/* Header */}
@@ -129,13 +142,6 @@ export function AppointmentDetailDrawer({
                   {APPOINTMENT_TYPE_LABELS[appt.appointmentType]}
                 </p>
               </div>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors shrink-0"
-                aria-label="Close drawer"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
 
             {/* Scrollable content */}
