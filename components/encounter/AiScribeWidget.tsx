@@ -248,12 +248,16 @@ function ManualApView({
   onSave,
   onShowUpsell,
   saved,
+  hideUpsell,
+  onBack,
 }: {
   value: string;
   onChange: (text: string) => void;
   onSave: () => void;
   onShowUpsell: () => void;
   saved: boolean;
+  hideUpsell?: boolean;
+  onBack?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -274,23 +278,34 @@ function ManualApView({
           {saved ? "Saved ✓" : "Save"}
         </button>
         <span className="text-xs text-[var(--text-muted)]">Saved on finalize</span>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="ml-auto text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors underline underline-offset-2"
+          >
+            ← Use AI Scribe instead
+          </button>
+        )}
       </div>
-      <div
-        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer hover:border-[var(--accent)] transition-colors"
-        style={{ background: "var(--accent-dim)", borderColor: "var(--mono-border)" }}
-        onClick={onShowUpsell}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && onShowUpsell()}
-      >
-        <svg width="14" height="14" viewBox="0 0 18 18" fill="none" className="flex-shrink-0">
-          <path d="M9 2L10.8 6.5H15.5L11.8 9.2L13.5 14L9 11L4.5 14L6.2 9.2L2.5 6.5H7.2L9 2Z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round" />
-        </svg>
-        <span className="text-xs text-[var(--text-secondary)]">
-          <span className="font-semibold text-[var(--accent)]">AI Scribe</span> can auto-fill this from a transcript — saves 12–15 min per encounter
-        </span>
-        <span className="ml-auto text-[10px] font-semibold text-[var(--accent)] whitespace-nowrap">Upgrade →</span>
-      </div>
+      {!hideUpsell && (
+        <div
+          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer hover:border-[var(--accent)] transition-colors"
+          style={{ background: "var(--accent-dim)", borderColor: "var(--mono-border)" }}
+          onClick={onShowUpsell}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && onShowUpsell()}
+        >
+          <svg width="14" height="14" viewBox="0 0 18 18" fill="none" className="flex-shrink-0">
+            <path d="M9 2L10.8 6.5H15.5L11.8 9.2L13.5 14L9 11L4.5 14L6.2 9.2L2.5 6.5H7.2L9 2Z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round" />
+          </svg>
+          <span className="text-xs text-[var(--text-secondary)]">
+            <span className="font-semibold text-[var(--accent)]">AI Scribe</span> can auto-fill this from a transcript — saves 12–15 min per encounter
+          </span>
+          <span className="ml-auto text-[10px] font-semibold text-[var(--accent)] whitespace-nowrap">Upgrade →</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -303,6 +318,7 @@ function DraftView({
   error,
   isGenerating,
   onMicClick,
+  onWriteManually,
 }: {
   transcript: string;
   onTranscriptChange: (text: string) => void;
@@ -311,6 +327,7 @@ function DraftView({
   error: string | null;
   isGenerating: boolean;
   onMicClick: () => void;
+  onWriteManually?: () => void;
 }) {
   // Local state for instant typing feedback; 1.5s debounce to persist to store
   const [localText, setLocalText] = useState(transcript);
@@ -394,6 +411,15 @@ function DraftView({
         >
           {hasAiScribe ? "Generate Note" : "Upgrade to Unlock"}
         </button>
+        {onWriteManually && (
+          <button
+            type="button"
+            onClick={onWriteManually}
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors underline underline-offset-2"
+          >
+            Write A&P manually
+          </button>
+        )}
       </div>
     </div>
   );
@@ -548,6 +574,7 @@ export function AiScribeWidget({
   const [editDraft, setEditDraft] = useState("");
   const [manualApDraft, setManualApDraft] = useState("");
   const [manualApSaved, setManualApSaved] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   // Store selectors
   const transcript = useEncounterStore((s) => s.encounters[encounterId]?.aiScribeTranscript ?? "");
@@ -652,6 +679,7 @@ export function AiScribeWidget({
     setAiStructuredData(encounterId, null);
     setAssessmentAndPlan(encounterId, "");
     setAiScribeStatus(encounterId, "draft");
+    setManualMode(false);
   }, [reset, encounterId, setAiSummary, setAiStructuredData, setAssessmentAndPlan, setAiScribeStatus]);
 
   // Count ALL AI suggestions (not just exam) by running buildConflicts against store snapshots.
@@ -706,7 +734,7 @@ export function AiScribeWidget({
 
   // --- Render ---
   const renderView = () => {
-    // Core plan users get a manual A&P editor instead of the AI Scribe draft view
+    // Non-premium users always get the manual A&P editor
     if (!hasAiScribe && status === "draft") {
       return (
         <ManualApView
@@ -715,6 +743,21 @@ export function AiScribeWidget({
           onSave={handleManualApSave}
           onShowUpsell={() => setShowUpsell(true)}
           saved={manualApSaved}
+        />
+      );
+    }
+
+    // Premium users who chose to write manually
+    if (hasAiScribe && manualMode && status === "draft") {
+      return (
+        <ManualApView
+          value={manualApDraft}
+          onChange={(text) => { setManualApDraft(text); setManualApSaved(false); }}
+          onSave={handleManualApSave}
+          onShowUpsell={() => {}}
+          saved={manualApSaved}
+          hideUpsell
+          onBack={() => setManualMode(false)}
         />
       );
     }
@@ -730,6 +773,7 @@ export function AiScribeWidget({
             error={error}
             isGenerating={isStreaming}
             onMicClick={() => setShowDictationModal(true)}
+            onWriteManually={() => setManualMode(true)}
           />
         );
 
