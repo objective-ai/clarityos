@@ -97,8 +97,8 @@ Requirements for the full MVP. Each maps to roadmap phases.
 
 ### Schedule & Booking Revamp (Phase 10.2)
 
-- [ ] **SCH-01**: Horizontal Mon-Sun week strip with count badges replaces prev/next arrows at top of schedule page
-- [ ] **SCH-02**: 5 view mode tabs (List, Timeline, Clinic, Flow, Week) with active tab accent indicator
+- [x] **SCH-01**: Horizontal Mon-Sun week strip with count badges replaces prev/next arrows at top of schedule page
+- [x] **SCH-02**: 5 view mode tabs (List, Timeline, Clinic, Flow, Week) with active tab accent indicator
 - [x] **SCH-03**: Role-based default view (receptionist/technician -> Flow, doctor -> Clinic, owner -> List)
 - [x] **SCH-04**: View mode persists to localStorage, role default applies only on first visit
 - [x] **SCH-05**: Appointment model has checked_in_at timestamp, auto-set when status transitions to arrived
@@ -108,9 +108,9 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **SCH-09**: Detail drawer closes via ESC, backdrop click, or Close button; 480px width with slide animation
 - [x] **SCH-10**: Booking flow uses right-side drawer with visual 30-min slot picker grid instead of modal dialog
 - [x] **SCH-11**: Slot picker shows available/occupied/selected states; overbooking shows warning but does not block staff
-- [ ] **SCH-12**: Flow board view with 4 Kanban columns (Waiting, Pre-Test, In Exam, Done) and upcoming appointments strip
-- [ ] **SCH-13**: Flow board auto-refreshes via 30-second polling; wait time displayed on each card
-- [ ] **SCH-14**: Week view shows 7-day time-aligned grid with appointment blocks positioned by time (Google Calendar style)
+- [x] **SCH-12**: Flow board view with 4 Kanban columns (Waiting, Pre-Test, In Exam, Done) and upcoming appointments strip
+- [x] **SCH-13**: Flow board auto-refreshes via 30-second polling; wait time displayed on each card
+- [x] **SCH-14**: Week view shows 7-day time-aligned grid with appointment blocks positioned by time (Google Calendar style)
 - [x] **SCH-15**: Public booking page at /book/[slug] uses light/white theme with 5-step wizard (Type, Provider, Date+Time, Info, Confirm)
 - [x] **SCH-16**: Public booking wizard validates patient info, shows slot availability from backend, and displays success state on confirm
 
@@ -233,8 +233,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | EWR-05 | Phase 10 | Complete |
 | EWR-06 | Phase 10 | Complete |
 | EWR-07 | Phase 10 | Complete |
-| SCH-01 | Phase 10.2 | Pending |
-| SCH-02 | Phase 10.2 | Pending |
+| SCH-01 | Phase 10.2 | Complete |
+| SCH-02 | Phase 10.2 | Complete |
 | SCH-03 | Phase 10.2 | Complete |
 | SCH-04 | Phase 10.2 | Complete |
 | SCH-05 | Phase 10.2 | Complete |
@@ -244,9 +244,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SCH-09 | Phase 10.2 | Complete |
 | SCH-10 | Phase 10.2 | Complete |
 | SCH-11 | Phase 10.2 | Complete |
-| SCH-12 | Phase 10.2 | Pending |
-| SCH-13 | Phase 10.2 | Pending |
-| SCH-14 | Phase 10.2 | Pending |
+| SCH-12 | Phase 10.2 | Complete |
+| SCH-13 | Phase 10.2 | Complete |
+| SCH-14 | Phase 10.2 | Complete |
 | SCH-15 | Phase 10.2 | Complete |
 | SCH-16 | Phase 10.2 | Complete |
 
