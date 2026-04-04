@@ -488,3 +488,18 @@ input[id^="rx-cell-"]:disabled {
   opacity: 0.45;
   cursor: default;
 }
+
+/* =========================================================================
+   Public booking page — light theme safety net
+   Explicit Tailwind classes are used in the component, but these CSS variable
+   overrides act as a fallback so any accidental var() references resolve correctly.
+   ========================================================================= */
+[data-theme="public-booking"] {
+  --bg-base:      #F8F9FC;
+  --bg-surface:   #FFFFFF;
+  --bg-elevated:  #FFFFFF;
+  --text-primary:   #0F1729;
+  --text-secondary: #5E6880;
+  --border-subtle:  #E2E8F0;
+  --glass-bg: rgba(255, 255, 255, 0.95);
+}

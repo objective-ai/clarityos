@@ -4,8 +4,8 @@
  * app/book/[slug]/page.tsx
  *
  * Public self-serve booking page — no auth required.
- * 3-step wizard: Select Type + Provider → Pick Date + Time → Patient Info + Confirm
- * → Confirmation screen with intake form link.
+ * 5-step wizard: Visit Type → Provider → Date & Time → Your Info → Confirm
+ * Light/white theme using explicit Tailwind classes (bypasses CSS variables).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -22,12 +22,15 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STEPS = ["Appointment", "Date & Time", "Your Info", "Confirmed"] as const;
+const STEPS = ["Visit Type", "Provider", "Date & Time", "Your Info", "Confirm"] as const;
 
 const TYPE_ICONS: Record<string, string> = {
-  comprehensive_exam: "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z",
-  contact_lens_exam: "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z",
-  pediatric_exam: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
+  comprehensive_exam:
+    "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z",
+  contact_lens_exam:
+    "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z",
+  pediatric_exam:
+    "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
 };
 
 const SEX_OPTIONS = [
@@ -38,72 +41,96 @@ const SEX_OPTIONS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Shell — page wrapper
+// Step indicator
+// ---------------------------------------------------------------------------
+
+function StepIndicator({ current }: { current: number }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-8">
+      {STEPS.map((label, i) => (
+        <div
+          key={label}
+          title={label}
+          className={`h-2 flex-1 rounded-full transition-all duration-300 ${
+            i < current
+              ? "bg-[var(--accent)]"
+              : i === current
+              ? "bg-[var(--accent)]/50 ring-2 ring-[var(--accent)] ring-offset-1"
+              : "bg-gray-200"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shell — page wrapper (light theme)
 // ---------------------------------------------------------------------------
 
 function Shell({
   children,
   clinicName,
-  step,
+  currentStep,
+  showSteps = true,
 }: {
   children: React.ReactNode;
   clinicName?: string;
-  step?: number;
+  currentStep?: number;
+  showSteps?: boolean;
 }) {
   return (
-    <div className="min-h-screen bg-[var(--bg-base)]">
-      {/* Ambient gradient */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[var(--accent)] opacity-[0.03] blur-[120px] rounded-full" />
-      </div>
-
-      <div className="relative z-10 max-w-lg mx-auto px-4 py-8 sm:py-12">
+    <div
+      className="min-h-screen bg-gray-50"
+      data-theme="public-booking"
+    >
+      <div className="max-w-lg mx-auto px-4 mt-12 mb-12 sm:px-6">
         {/* Header */}
         <div className="text-center mb-6">
           <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 flex items-center justify-center">
-            <svg className="w-5 h-5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <svg
+              className="w-5 h-5 text-[var(--accent)]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
             </svg>
           </div>
           {clinicName && (
-            <h1 className="text-lg font-semibold text-[var(--text-primary)]">{clinicName}</h1>
+            <h1 className="text-lg font-semibold text-gray-900">{clinicName}</h1>
           )}
-          <p className="text-sm text-[var(--text-secondary)]">Book an Appointment</p>
+          <p className="text-sm text-gray-500">Book an Appointment</p>
         </div>
 
-        {/* Step indicator */}
-        {step !== undefined && step < STEPS.length - 1 && (
-          <div className="flex items-center justify-center gap-2 mb-6">
-            {STEPS.slice(0, -1).map((label, i) => (
-              <div key={label} className="flex items-center gap-2">
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold transition-colors ${
-                    i <= step
-                      ? "bg-[var(--accent)] text-white"
-                      : "bg-[var(--bg-elevated)] text-[var(--text-muted)]"
-                  }`}
-                >
-                  {i + 1}
-                </div>
-                {i < STEPS.length - 2 && (
-                  <div className={`w-8 h-px ${i < step ? "bg-[var(--accent)]" : "bg-[var(--border-subtle)]"}`} />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Content card */}
-        <div className="rounded-xl border border-white/8 bg-[var(--bg-surface)] p-6 shadow-lg">
+        {/* Wizard card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
+          {showSteps && currentStep !== undefined && currentStep < STEPS.length && (
+            <StepIndicator current={currentStep} />
+          )}
           {children}
         </div>
 
-        <p className="text-center text-xs text-[var(--text-muted)] mt-6">
+        <p className="text-center text-xs text-gray-400 mt-6">
           Your information is encrypted and protected under HIPAA.
         </p>
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Shared field components
+// ---------------------------------------------------------------------------
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-xs text-red-400 mt-0.5">{message}</p>;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,22 +140,25 @@ function Shell({
 export default function PublicBookingPage() {
   const { slug } = useParams<{ slug: string }>();
 
-  // State
+  // Clinic data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clinicInfo, setClinicInfo] = useState<BookingClinicInfo | null>(null);
 
-  // Step 1
+  // Step 1 — Visit Type
   const [selectedType, setSelectedType] = useState<BookableType | null>(null);
+
+  // Step 2 — Provider
   const [selectedProvider, setSelectedProvider] = useState<BookingProvider | null>(null);
 
-  // Step 2
+  // Step 3 — Date & Time
   const [selectedDate, setSelectedDate] = useState("");
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [slotError, setSlotError] = useState<string | null>(null);
 
-  // Step 3
+  // Step 4 — Patient Info
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dob, setDob] = useState("");
@@ -136,14 +166,18 @@ export default function PublicBookingPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  // Step 4
+  // Step 5 — Confirm / Submit
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [slotTaken, setSlotTaken] = useState(false);
+
+  // Success state
   const [confirmation, setConfirmation] = useState<PublicBookingResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Wizard step
+  // Wizard step (0-indexed, matching STEPS array)
   const [step, setStep] = useState(0);
 
   // ---------------------------------------------------------------------------
@@ -170,20 +204,23 @@ export default function PublicBookingPage() {
   }, [slug]);
 
   // ---------------------------------------------------------------------------
-  // Fetch availability when date/provider/type change
+  // Fetch availability when date/provider/type change (Step 3)
   // ---------------------------------------------------------------------------
 
   const fetchAvailability = useCallback(async () => {
     if (!slug || !selectedDate || !selectedProvider || !selectedType) return;
     setLoadingSlots(true);
     setSelectedSlot(null);
+    setSlotError(null);
     try {
       const qs = new URLSearchParams({
         date: selectedDate,
         provider_id: selectedProvider.id,
         appointment_type: selectedType.value,
       });
-      const res = await fetch(`/api/public/booking/${slug}/availability?${qs}`);
+      const res = await fetch(
+        `/api/public/booking/${slug}/availability?${qs}`
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.detail ?? "Failed to load availability");
@@ -192,15 +229,19 @@ export default function PublicBookingPage() {
       setAvailability(data);
     } catch (err) {
       setAvailability(null);
-      setError(err instanceof Error ? err.message : "Failed to load availability");
+      setSlotError(
+        err instanceof Error ? err.message : "Failed to load availability"
+      );
     } finally {
       setLoadingSlots(false);
     }
   }, [slug, selectedDate, selectedProvider, selectedType]);
 
   useEffect(() => {
-    fetchAvailability();
-  }, [fetchAvailability]);
+    if (step === 2) {
+      fetchAvailability();
+    }
+  }, [fetchAvailability, step]);
 
   // ---------------------------------------------------------------------------
   // Date constraints
@@ -234,34 +275,41 @@ export default function PublicBookingPage() {
   }, [availability]);
 
   // ---------------------------------------------------------------------------
-  // Submit booking
+  // Patient info validation
   // ---------------------------------------------------------------------------
 
-  // Validation
   const validationErrors = useMemo(() => {
     const errs: Record<string, string> = {};
     if (!firstName.trim()) errs.firstName = "Required";
     if (!lastName.trim()) errs.lastName = "Required";
-    if (!dob) errs.dob = "Required";
-    if (!sex) errs.sex = "Required";
+    if (!phone.trim()) errs.phone = "Required";
+    if (phone.trim() && !/^[\d\s()+-]{7,20}$/.test(phone.trim()))
+      errs.phone = "Invalid phone number";
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
       errs.email = "Invalid email";
-    if (phone.trim() && !/^[\d\s()+-]{7,20}$/.test(phone.trim()))
-      errs.phone = "Invalid phone";
     return errs;
-  }, [firstName, lastName, dob, sex, email, phone]);
+  }, [firstName, lastName, phone, email]);
 
   const markTouched = useCallback((field: string) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Submit booking (Step 5)
+  // ---------------------------------------------------------------------------
+
   const handleSubmit = async () => {
     if (!slug || !selectedType || !selectedProvider || !selectedSlot) return;
-    // Mark all required fields as touched to show errors
-    setTouched({ firstName: true, lastName: true, dob: true, sex: true, email: true, phone: true });
+    setTouched({
+      firstName: true,
+      lastName: true,
+      phone: true,
+      email: true,
+    });
     if (Object.keys(validationErrors).length > 0) return;
     setSubmitting(true);
-    setError(null);
+    setSubmitError(null);
+    setSlotTaken(false);
 
     try {
       const res = await fetch(`/api/public/booking/${slug}/book`, {
@@ -270,8 +318,8 @@ export default function PublicBookingPage() {
         body: JSON.stringify({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          dob,
-          sex,
+          dob: dob || undefined,
+          sex: sex || undefined,
           phone: phone.trim() || null,
           email: email.trim() || null,
           provider_id: selectedProvider.id,
@@ -282,12 +330,27 @@ export default function PublicBookingPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.detail ?? "Booking failed. Please try again.");
+        // Detect slot-taken scenario (409 Conflict from backend)
+        if (res.status === 409) {
+          setSlotTaken(true);
+          setSubmitError(
+            "This slot is no longer available. Please choose a different time."
+          );
+        } else {
+          throw new Error(
+            data?.detail ??
+              "Something went wrong. The appointment was not saved — please try again."
+          );
+        }
+        return;
       }
       setConfirmation(data);
-      setStep(3);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Booking failed");
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. The appointment was not saved — please try again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -306,6 +369,18 @@ export default function PublicBookingPage() {
     return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
   }
 
+  function formatDateDisplay(dateStr: string): string {
+    if (!dateStr) return "";
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
   function copyIntakeUrl() {
     if (confirmation?.intake_url) {
       navigator.clipboard.writeText(confirmation.intake_url);
@@ -315,12 +390,12 @@ export default function PublicBookingPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Loading / error states
+  // Loading state
   // ---------------------------------------------------------------------------
 
   if (loading) {
     return (
-      <Shell>
+      <Shell showSteps={false}>
         <div className="flex items-center justify-center py-16">
           <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
         </div>
@@ -328,12 +403,26 @@ export default function PublicBookingPage() {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Error state (clinic not found)
+  // ---------------------------------------------------------------------------
+
   if (error && !clinicInfo) {
     return (
-      <Shell>
+      <Shell showSteps={false}>
         <div className="text-center py-12">
-          <svg className="w-10 h-10 mx-auto mb-3 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <svg
+            className="w-10 h-10 mx-auto mb-3 text-red-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
           </svg>
           <p className="text-sm text-red-400">{error}</p>
         </div>
@@ -342,40 +431,71 @@ export default function PublicBookingPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 4: Confirmation
+  // Success state
   // ---------------------------------------------------------------------------
 
-  if (step === 3 && confirmation) {
+  if (confirmation) {
     return (
-      <Shell clinicName={clinicInfo?.clinic_name} step={3}>
-        <div className="text-center">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      <Shell clinicName={clinicInfo?.clinic_name} showSteps={false}>
+        <div className="text-center py-4">
+          {/* Green checkmark */}
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-green-50 border border-green-100 flex items-center justify-center">
+            <svg
+              className="w-8 h-8 text-green-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
           </div>
 
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">Appointment Booked!</h2>
-          <p className="text-sm text-[var(--text-secondary)] mb-6">{confirmation.message}</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            You&apos;re booked!
+          </h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Your appointment is confirmed. You&apos;ll receive a reminder closer to
+            your visit.
+          </p>
 
-          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 text-left space-y-2 mb-6">
+          {/* Appointment summary */}
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-left space-y-3 mb-6">
+            {clinicInfo?.clinic_name && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Clinic</span>
+                <span className="text-gray-900 font-medium">
+                  {clinicInfo.clinic_name}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
-              <span className="text-[var(--text-muted)]">Date & Time</span>
-              <span className="text-[var(--text-primary)] font-medium">{confirmation.appointment_date}</span>
+              <span className="text-gray-500">Date & Time</span>
+              <span className="text-gray-900 font-medium">
+                {confirmation.appointment_date}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[var(--text-muted)]">Provider</span>
-              <span className="text-[var(--text-primary)] font-medium">{confirmation.provider_name}</span>
+              <span className="text-gray-500">Provider</span>
+              <span className="text-gray-900 font-medium">
+                {confirmation.provider_name}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[var(--text-muted)]">Type</span>
-              <span className="text-[var(--text-primary)] font-medium">{confirmation.appointment_type_label}</span>
+              <span className="text-gray-500">Type</span>
+              <span className="text-gray-900 font-medium">
+                {confirmation.appointment_type_label}
+              </span>
             </div>
           </div>
 
           {confirmation.intake_url && (
             <div className="space-y-3">
-              <p className="text-sm text-[var(--text-secondary)]">
+              <p className="text-sm text-gray-500">
                 Please complete your intake form before your visit:
               </p>
               <a
@@ -386,7 +506,7 @@ export default function PublicBookingPage() {
               </a>
               <button
                 onClick={copyIntakeUrl}
-                className="block w-full py-2 rounded-lg border border-[var(--border-default)] text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
+                className="block w-full py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 {copied ? "Copied!" : "Copy Intake Link"}
               </button>
@@ -398,20 +518,20 @@ export default function PublicBookingPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 1: Select Type + Provider
+  // Step 1: Select Visit Type
   // ---------------------------------------------------------------------------
 
   if (step === 0) {
-    const canProceed = selectedType && selectedProvider;
-
     return (
-      <Shell clinicName={clinicInfo?.clinic_name} step={0}>
+      <Shell clinicName={clinicInfo?.clinic_name} currentStep={0}>
         <div className="space-y-5">
-          {/* Appointment Type */}
           <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              What type of appointment?
-            </label>
+            <h2 className="text-base font-semibold text-gray-900 mb-1">
+              What type of visit?
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Select the type of appointment you&apos;d like to book.
+            </p>
             <div className="grid gap-2">
               {clinicInfo?.bookable_types.map((type) => (
                 <button
@@ -420,66 +540,55 @@ export default function PublicBookingPage() {
                   className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
                     selectedType?.value === type.value
                       ? "border-[var(--accent)] bg-[var(--accent)]/5"
-                      : "border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)]"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    selectedType?.value === type.value
-                      ? "bg-[var(--accent)]/10"
-                      : "bg-[var(--bg-elevated)]"
-                  }`}>
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                      selectedType?.value === type.value
+                        ? "bg-[var(--accent)]/10"
+                        : "bg-gray-100"
+                    }`}
+                  >
                     <svg
-                      className={`w-4.5 h-4.5 ${selectedType?.value === type.value ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
+                      className={`w-4 h-4 ${
+                        selectedType?.value === type.value
+                          ? "text-[var(--accent)]"
+                          : "text-gray-400"
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d={TYPE_ICONS[type.value] ?? TYPE_ICONS.comprehensive_exam} />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d={
+                          TYPE_ICONS[type.value] ?? TYPE_ICONS.comprehensive_exam
+                        }
+                      />
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{type.label}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{type.duration_minutes} minutes</p>
-                  </div>
-                  {selectedType?.value === type.value && (
-                    <svg className="w-5 h-5 text-[var(--accent)] shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Provider */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              Choose a provider
-            </label>
-            <div className="grid gap-2">
-              {clinicInfo?.providers.map((prov) => (
-                <button
-                  key={prov.id}
-                  onClick={() => setSelectedProvider(prov)}
-                  className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
-                    selectedProvider?.id === prov.id
-                      ? "border-[var(--accent)] bg-[var(--accent)]/5"
-                      : "border-[var(--border-default)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-elevated)]"
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${
-                    selectedProvider?.id === prov.id
-                      ? "bg-[var(--accent)]/10 text-[var(--accent)]"
-                      : "bg-[var(--bg-elevated)] text-[var(--text-muted)]"
-                  }`}>
-                    {prov.first_name[0]}{prov.last_name[0]}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      Dr. {prov.first_name} {prov.last_name}
+                    <p className="text-sm font-medium text-gray-900">
+                      {type.label}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {type.duration_minutes} minutes
                     </p>
                   </div>
-                  {selectedProvider?.id === prov.id && (
-                    <svg className="w-5 h-5 text-[var(--accent)] shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  {selectedType?.value === type.value && (
+                    <svg
+                      className="w-5 h-5 text-[var(--accent)] shrink-0"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   )}
                 </button>
@@ -488,11 +597,11 @@ export default function PublicBookingPage() {
           </div>
 
           <button
-            disabled={!canProceed}
+            disabled={!selectedType}
             onClick={() => setStep(1)}
             className="w-full py-2.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
           >
-            Continue
+            Next
           </button>
         </div>
       </Shell>
@@ -500,63 +609,160 @@ export default function PublicBookingPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 2: Pick Date + Time
+  // Step 2: Pick Provider
   // ---------------------------------------------------------------------------
 
   if (step === 1) {
     return (
-      <Shell clinicName={clinicInfo?.clinic_name} step={1}>
+      <Shell clinicName={clinicInfo?.clinic_name} currentStep={1}>
         <div className="space-y-5">
-          {/* Summary */}
-          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] bg-[var(--bg-elevated)] rounded-lg px-3 py-2">
-            <span className="font-medium text-[var(--text-primary)]">{selectedType?.label}</span>
-            <span>with</span>
-            <span className="font-medium text-[var(--text-primary)]">Dr. {selectedProvider?.last_name}</span>
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1">
+              Choose a provider
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Select who you&apos;d like to see for your{" "}
+              <span className="font-medium text-gray-700">
+                {selectedType?.label}
+              </span>
+              .
+            </p>
+            <div className="grid gap-2">
+              {clinicInfo?.providers.map((prov) => (
+                <button
+                  key={prov.id}
+                  onClick={() => setSelectedProvider(prov)}
+                  className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                    selectedProvider?.id === prov.id
+                      ? "border-[var(--accent)] bg-[var(--accent)]/5"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${
+                      selectedProvider?.id === prov.id
+                        ? "bg-[var(--accent)]/10 text-[var(--accent)]"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {prov.first_name[0]}
+                    {prov.last_name[0]}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">
+                      Dr. {prov.first_name} {prov.last_name}
+                    </p>
+                  </div>
+                  {selectedProvider?.id === prov.id && (
+                    <svg
+                      className="w-5 h-5 text-[var(--accent)] shrink-0"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep(0)}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors py-2.5 px-4"
+            >
+              Back
+            </button>
+            <button
+              disabled={!selectedProvider}
+              onClick={() => setStep(2)}
+              className="flex-1 py-2.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Step 3: Date & Time slot
+  // ---------------------------------------------------------------------------
+
+  if (step === 2) {
+    return (
+      <Shell clinicName={clinicInfo?.clinic_name} currentStep={2}>
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1">
+              Choose a date & time
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {selectedType?.label} with Dr. {selectedProvider?.last_name}
+            </p>
           </div>
 
           {/* Date picker */}
           <div>
-            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Select a date</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Select a date
+            </label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => {
                 setSelectedDate(e.target.value);
                 setSelectedSlot(null);
+                setSlotError(null);
               }}
               min={today}
               max={maxDate}
-              className="w-full px-3 py-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+              aria-label="Select appointment date"
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors"
             />
           </div>
 
           {/* Time slots */}
           {selectedDate && (
             <div>
-              <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">Available times</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Available times
+              </label>
 
               {loadingSlots ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="w-5 h-5 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
                 </div>
+              ) : slotError ? (
+                <p className="text-sm text-red-400 py-4 text-center">
+                  {slotError}
+                </p>
               ) : !availability?.slots.length ? (
-                <p className="text-sm text-[var(--text-muted)] py-4 text-center">
-                  No available times on this date. Please try another day.
+                <p className="text-sm text-gray-400 py-4 text-center">
+                  This provider has no availability on the selected date.
                 </p>
               ) : (
                 <div className="space-y-4">
                   {groupedSlots.morning.length > 0 && (
                     <div>
-                      <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider">Morning</p>
-                      <div className="grid grid-cols-3 gap-2">
+                      <p className="text-xs text-gray-400 mb-2 uppercase tracking-wider font-medium">
+                        Morning
+                      </p>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {groupedSlots.morning.map((slot) => (
                           <button
                             key={slot}
                             onClick={() => setSelectedSlot(slot)}
-                            className={`py-2 px-1 rounded-lg text-sm font-medium text-center transition-all ${
+                            className={`py-2 px-1 rounded-md text-sm font-medium text-center transition-all ${
                               selectedSlot === slot
-                                ? "bg-[var(--accent)] text-white"
-                                : "border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
+                                ? "bg-[var(--accent)]/15 border border-[var(--accent)] text-[var(--accent)]"
+                                : "bg-gray-50 hover:bg-[var(--accent)]/10 border border-gray-200 text-gray-700 hover:border-[var(--accent)]/40"
                             }`}
                           >
                             {formatSlotTime(slot)}
@@ -567,16 +773,18 @@ export default function PublicBookingPage() {
                   )}
                   {groupedSlots.afternoon.length > 0 && (
                     <div>
-                      <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider">Afternoon</p>
-                      <div className="grid grid-cols-3 gap-2">
+                      <p className="text-xs text-gray-400 mb-2 uppercase tracking-wider font-medium">
+                        Afternoon
+                      </p>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {groupedSlots.afternoon.map((slot) => (
                           <button
                             key={slot}
                             onClick={() => setSelectedSlot(slot)}
-                            className={`py-2 px-1 rounded-lg text-sm font-medium text-center transition-all ${
+                            className={`py-2 px-1 rounded-md text-sm font-medium text-center transition-all ${
                               selectedSlot === slot
-                                ? "bg-[var(--accent)] text-white"
-                                : "border border-[var(--border-default)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
+                                ? "bg-[var(--accent)]/15 border border-[var(--accent)] text-[var(--accent)]"
+                                : "bg-gray-50 hover:bg-[var(--accent)]/10 border border-gray-200 text-gray-700 hover:border-[var(--accent)]/40"
                             }`}
                           >
                             {formatSlotTime(slot)}
@@ -593,17 +801,17 @@ export default function PublicBookingPage() {
           {/* Navigation */}
           <div className="flex gap-3">
             <button
-              onClick={() => setStep(0)}
-              className="flex-1 py-2.5 rounded-lg border border-[var(--border-default)] text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
+              onClick={() => setStep(1)}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors py-2.5 px-4"
             >
               Back
             </button>
             <button
               disabled={!selectedSlot}
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="flex-1 py-2.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
             >
-              Continue
+              Next
             </button>
           </div>
         </div>
@@ -612,146 +820,277 @@ export default function PublicBookingPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Step 3: Patient Info + Confirm
+  // Step 4: Patient Info
   // ---------------------------------------------------------------------------
 
-  if (step === 2) {
-    const canSubmit = Object.keys(validationErrors).length === 0 && !submitting;
+  if (step === 3) {
+    const hasErrors = Object.keys(validationErrors).length > 0;
 
     return (
-      <Shell clinicName={clinicInfo?.clinic_name} step={2}>
+      <Shell clinicName={clinicInfo?.clinic_name} currentStep={3}>
         <div className="space-y-5">
-          {/* Appointment summary */}
-          <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-3 space-y-1.5">
-            <div className="flex justify-between text-xs">
-              <span className="text-[var(--text-muted)]">Type</span>
-              <span className="text-[var(--text-primary)] font-medium">{selectedType?.label}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[var(--text-muted)]">Provider</span>
-              <span className="text-[var(--text-primary)] font-medium">Dr. {selectedProvider?.first_name} {selectedProvider?.last_name}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[var(--text-muted)]">Date & Time</span>
-              <span className="text-[var(--text-primary)] font-medium">
-                {selectedDate} at {selectedSlot ? formatSlotTime(selectedSlot) : ""}
-              </span>
-            </div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1">
+              Your information
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              We&apos;ll use this to create your appointment record.
+            </p>
           </div>
 
-          {/* Patient info form */}
           <div className="space-y-3">
+            {/* First + Last Name */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">First Name *</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  First Name <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   onBlur={() => markTouched("firstName")}
-                  className={`w-full px-3 py-2 rounded-lg border bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] ${touched.firstName && validationErrors.firstName ? "border-red-400" : "border-[var(--border-default)]"}`}
                   placeholder="First name"
+                  className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
+                    touched.firstName && validationErrors.firstName
+                      ? "border-red-400 focus:border-red-400"
+                      : "border-gray-200 focus:border-[var(--accent)]"
+                  }`}
                 />
-                {touched.firstName && validationErrors.firstName && <p className="text-xs text-red-400 mt-0.5">{validationErrors.firstName}</p>}
+                {touched.firstName && (
+                  <FieldError message={validationErrors.firstName} />
+                )}
               </div>
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Last Name *</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Last Name <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   onBlur={() => markTouched("lastName")}
-                  className={`w-full px-3 py-2 rounded-lg border bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] ${touched.lastName && validationErrors.lastName ? "border-red-400" : "border-[var(--border-default)]"}`}
                   placeholder="Last name"
+                  className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
+                    touched.lastName && validationErrors.lastName
+                      ? "border-red-400 focus:border-red-400"
+                      : "border-gray-200 focus:border-[var(--accent)]"
+                  }`}
                 />
-                {touched.lastName && validationErrors.lastName && <p className="text-xs text-red-400 mt-0.5">{validationErrors.lastName}</p>}
+                {touched.lastName && (
+                  <FieldError message={validationErrors.lastName} />
+                )}
               </div>
             </div>
 
+            {/* Phone + Email */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Date of Birth *</label>
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  onBlur={() => markTouched("dob")}
-                  max={today}
-                  className={`w-full px-3 py-2 rounded-lg border bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] ${touched.dob && validationErrors.dob ? "border-red-400" : "border-[var(--border-default)]"}`}
-                />
-                {touched.dob && validationErrors.dob && <p className="text-xs text-red-400 mt-0.5">{validationErrors.dob}</p>}
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Sex *</label>
-                <select
-                  value={sex}
-                  onChange={(e) => setSex(e.target.value)}
-                  onBlur={() => markTouched("sex")}
-                  className={`w-full px-3 py-2 rounded-lg border bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] ${touched.sex && validationErrors.sex ? "border-red-400" : "border-[var(--border-default)]"}`}
-                >
-                  <option value="">Select...</option>
-                  {SEX_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                {touched.sex && validationErrors.sex && <p className="text-xs text-red-400 mt-0.5">{validationErrors.sex}</p>}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Phone</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Phone <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   onBlur={() => markTouched("phone")}
-                  className={`w-full px-3 py-2 rounded-lg border bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] ${touched.phone && validationErrors.phone ? "border-red-400" : "border-[var(--border-default)]"}`}
                   placeholder="(555) 555-5555"
+                  className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
+                    touched.phone && validationErrors.phone
+                      ? "border-red-400 focus:border-red-400"
+                      : "border-gray-200 focus:border-[var(--accent)]"
+                  }`}
                 />
-                {touched.phone && validationErrors.phone && <p className="text-xs text-red-400 mt-0.5">{validationErrors.phone}</p>}
+                {touched.phone && (
+                  <FieldError message={validationErrors.phone} />
+                )}
               </div>
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Email</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Email
+                </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onBlur={() => markTouched("email")}
-                  className={`w-full px-3 py-2 rounded-lg border bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] ${touched.email && validationErrors.email ? "border-red-400" : "border-[var(--border-default)]"}`}
                   placeholder="email@example.com"
+                  className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
+                    touched.email && validationErrors.email
+                      ? "border-red-400 focus:border-red-400"
+                      : "border-gray-200 focus:border-[var(--accent)]"
+                  }`}
                 />
-                {touched.email && validationErrors.email && <p className="text-xs text-red-400 mt-0.5">{validationErrors.email}</p>}
+                {touched.email && (
+                  <FieldError message={validationErrors.email} />
+                )}
               </div>
             </div>
 
+            {/* Date of Birth + Sex */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Date of Birth
+                </label>
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  max={today}
+                  aria-label="Date of birth"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Sex
+                </label>
+                <select
+                  value={sex}
+                  onChange={(e) => setSex(e.target.value)}
+                  aria-label="Sex"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors"
+                >
+                  <option value="">Select...</option>
+                  {SEX_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Reason for Visit */}
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Reason for Visit</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Reason for Visit
+              </label>
               <textarea
                 value={chiefComplaint}
                 onChange={(e) => setChiefComplaint(e.target.value)}
                 rows={2}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] resize-none"
                 placeholder="Briefly describe why you're coming in..."
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors resize-none"
               />
             </div>
           </div>
 
-          {/* Error */}
-          {error && (
-            <p className="text-sm text-red-400 text-center">{error}</p>
+          {/* Navigation */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStep(2)}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors py-2.5 px-4"
+            >
+              Back
+            </button>
+            <button
+              disabled={hasErrors && Object.values(touched).some(Boolean)}
+              onClick={() => {
+                // Mark all required fields touched to trigger validation display
+                setTouched({ firstName: true, lastName: true, phone: true, email: true });
+                if (!hasErrors) setStep(4);
+              }}
+              className="flex-1 py-2.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Step 5: Confirm booking
+  // ---------------------------------------------------------------------------
+
+  if (step === 4) {
+    return (
+      <Shell clinicName={clinicInfo?.clinic_name} currentStep={4}>
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 mb-1">
+              Confirm your booking
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Review your appointment details before confirming.
+            </p>
+          </div>
+
+          {/* Summary card */}
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Visit Type</span>
+              <span className="text-gray-900 font-medium">
+                {selectedType?.label}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Provider</span>
+              <span className="text-gray-900 font-medium">
+                Dr. {selectedProvider?.first_name} {selectedProvider?.last_name}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Date</span>
+              <span className="text-gray-900 font-medium">
+                {formatDateDisplay(selectedDate)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Time</span>
+              <span className="text-gray-900 font-medium">
+                {selectedSlot ? formatSlotTime(selectedSlot) : ""}
+              </span>
+            </div>
+            <div className="border-t border-gray-200 pt-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Patient</span>
+                <span className="text-gray-900 font-medium">
+                  {firstName} {lastName}
+                </span>
+              </div>
+              {phone && (
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-gray-500">Phone</span>
+                  <span className="text-gray-900 font-medium">{phone}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Error state */}
+          {submitError && (
+            <div className="rounded-lg border border-red-100 bg-red-50 p-3">
+              <p className="text-sm text-red-600">{submitError}</p>
+              {slotTaken && (
+                <button
+                  onClick={() => {
+                    setStep(2);
+                    setSubmitError(null);
+                    setSlotTaken(false);
+                    setSelectedSlot(null);
+                  }}
+                  className="mt-2 text-sm text-red-600 underline hover:text-red-700"
+                >
+                  Go back to choose a different time
+                </button>
+              )}
+            </div>
           )}
 
           {/* Navigation */}
           <div className="flex gap-3">
             <button
-              onClick={() => { setStep(1); setError(null); }}
-              className="flex-1 py-2.5 rounded-lg border border-[var(--border-default)] text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
+              onClick={() => { setStep(3); setSubmitError(null); }}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors py-2.5 px-4"
             >
               Back
             </button>
             <button
-              disabled={!canSubmit}
+              disabled={submitting}
               onClick={handleSubmit}
               className="flex-1 py-2.5 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
             >
@@ -761,7 +1100,7 @@ export default function PublicBookingPage() {
                   Booking...
                 </span>
               ) : (
-                "Book Appointment"
+                "Confirm Booking"
               )}
             </button>
           </div>
