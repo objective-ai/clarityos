@@ -8,7 +8,7 @@
  * Light/white theme using explicit Tailwind classes (bypasses CSS variables).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import type {
   BookingClinicInfo,
@@ -134,6 +134,146 @@ function FieldError({ message }: { message?: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Booking Week Strip — 7-day availability calendar (light theme)
+// ---------------------------------------------------------------------------
+
+const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function getConsecutiveDays(startDate: string, count: number): string[] {
+  const result: string[] = [];
+  const d = new Date(startDate + "T12:00:00");
+  for (let i = 0; i < count; i++) {
+    const dd = new Date(d);
+    dd.setDate(d.getDate() + i);
+    result.push(
+      `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`
+    );
+  }
+  return result;
+}
+
+function BookingWeekStrip({
+  selectedDate,
+  onSelectDay,
+  weekStart,
+  onShiftWeek,
+  slotCounts,
+  loadingDays,
+  todayStr,
+}: {
+  selectedDate: string;
+  onSelectDay: (date: string) => void;
+  weekStart: string;
+  onShiftWeek: (direction: -1 | 1) => void;
+  /** date → number of available slots. undefined = not fetched. 0 = no availability. */
+  slotCounts: Record<string, number>;
+  loadingDays: boolean;
+  todayStr: string;
+}) {
+  const days = useMemo(() => getConsecutiveDays(weekStart, 7), [weekStart]);
+  const isPastWeek = weekStart <= todayStr;
+
+  return (
+    <div className="space-y-2">
+      {/* Week navigation header */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => onShiftWeek(-1)}
+          disabled={isPastWeek}
+          className={`p-1 rounded-md transition-colors ${
+            isPastWeek
+              ? "text-gray-300 cursor-not-allowed"
+              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+          }`}
+          aria-label="Previous week"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <span className="text-xs font-medium text-gray-500">
+          {(() => {
+            const first = new Date(days[0] + "T12:00:00");
+            const last = new Date(days[6] + "T12:00:00");
+            if (first.getMonth() === last.getMonth()) {
+              return `${MONTH_NAMES_SHORT[first.getMonth()]} ${first.getDate()}–${last.getDate()}`;
+            }
+            return `${MONTH_NAMES_SHORT[first.getMonth()]} ${first.getDate()} – ${MONTH_NAMES_SHORT[last.getMonth()]} ${last.getDate()}`;
+          })()}
+        </span>
+        <button
+          onClick={() => onShiftWeek(1)}
+          className="p-1 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          aria-label="Next week"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((dateStr) => {
+          const d = new Date(dateStr + "T12:00:00");
+          const dayName = DAY_NAMES_SHORT[d.getDay()];
+          const dayNum = d.getDate();
+          const isSelected = dateStr === selectedDate;
+          const isToday = dateStr === todayStr;
+          const count = slotCounts[dateStr];
+          const hasSlots = count !== undefined && count > 0;
+          const noSlots = count !== undefined && count === 0;
+          const isPast = dateStr < todayStr;
+          const disabled = isPast || noSlots;
+
+          return (
+            <button
+              key={dateStr}
+              onClick={() => !disabled && onSelectDay(dateStr)}
+              disabled={disabled}
+              className={`
+                flex flex-col items-center py-2 rounded-lg transition-all duration-150
+                ${disabled
+                  ? "opacity-40 cursor-not-allowed"
+                  : isSelected
+                  ? "bg-[var(--accent)]/10 border border-[var(--accent)]/40 ring-1 ring-[var(--accent)]/20"
+                  : "border border-gray-100 hover:border-gray-300 hover:bg-gray-50"
+                }
+              `}
+            >
+              <span className={`text-[10px] font-medium ${
+                isSelected ? "text-[var(--accent)]" : isToday ? "text-[var(--accent)]" : "text-gray-400"
+              }`}>
+                {isToday ? "Today" : dayName}
+              </span>
+              <span className={`text-sm font-semibold mt-0.5 ${
+                isSelected ? "text-[var(--accent)]" : disabled ? "text-gray-300" : "text-gray-800"
+              }`}>
+                {dayNum}
+              </span>
+              {loadingDays ? (
+                <span className="w-3 h-3 mt-0.5 border border-gray-300 border-t-transparent rounded-full animate-spin" />
+              ) : count !== undefined ? (
+                <span className={`text-[9px] font-medium mt-0.5 ${
+                  hasSlots
+                    ? isSelected ? "text-[var(--accent)]" : "text-green-600"
+                    : "text-gray-300"
+                }`}>
+                  {hasSlots ? `${count}` : "—"}
+                </span>
+              ) : (
+                <span className="text-[9px] text-gray-300 mt-0.5">·</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page Component
 // ---------------------------------------------------------------------------
 
@@ -157,6 +297,11 @@ export default function PublicBookingPage() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [slotError, setSlotError] = useState<string | null>(null);
+  // Week strip state
+  const [weekStart, setWeekStart] = useState("");
+  const [weekSlotCounts, setWeekSlotCounts] = useState<Record<string, number>>({});
+  const [loadingWeek, setLoadingWeek] = useState(false);
+  const weekFetchRef = useRef(0);
 
   // Step 4 — Patient Info
   const [firstName, setFirstName] = useState("");
@@ -238,10 +383,10 @@ export default function PublicBookingPage() {
   }, [slug, selectedDate, selectedProvider, selectedType]);
 
   useEffect(() => {
-    if (step === 2) {
+    if (step === 2 && selectedDate) {
       fetchAvailability();
     }
-  }, [fetchAvailability, step]);
+  }, [fetchAvailability, step, selectedDate]);
 
   // ---------------------------------------------------------------------------
   // Date constraints
@@ -252,11 +397,63 @@ export default function PublicBookingPage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
-  const maxDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 90);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
+  // Initialize weekStart to today when entering step 3
+  useEffect(() => {
+    if (step === 2 && !weekStart) {
+      setWeekStart(today);
+    }
+  }, [step, weekStart, today]);
+
+  // Fetch slot counts for all 7 days in the current week
+  const fetchWeekAvailability = useCallback(async (startDate: string) => {
+    if (!slug || !selectedProvider || !selectedType) return;
+    const days = getConsecutiveDays(startDate, 7);
+    const fetchId = ++weekFetchRef.current;
+    setLoadingWeek(true);
+
+    try {
+      const results = await Promise.all(
+        days.map(async (date) => {
+          if (date < today) return { date, count: 0 };
+          try {
+            const qs = new URLSearchParams({
+              date,
+              provider_id: selectedProvider.id,
+              appointment_type: selectedType.value,
+            });
+            const res = await fetch(`/api/public/booking/${slug}/availability?${qs}`);
+            if (!res.ok) return { date, count: 0 };
+            const data: AvailabilityResponse = await res.json();
+            return { date, count: data.slots?.length ?? 0 };
+          } catch {
+            return { date, count: 0 };
+          }
+        })
+      );
+
+      // Only update if this is still the latest fetch
+      if (fetchId !== weekFetchRef.current) return;
+
+      const counts: Record<string, number> = {};
+      for (const r of results) counts[r.date] = r.count;
+      setWeekSlotCounts((prev) => ({ ...prev, ...counts }));
+
+      // Auto-select first available day if no date selected yet
+      if (!selectedDate) {
+        const firstAvailable = results.find((r) => r.count > 0);
+        if (firstAvailable) setSelectedDate(firstAvailable.date);
+      }
+    } finally {
+      if (fetchId === weekFetchRef.current) setLoadingWeek(false);
+    }
+  }, [slug, selectedProvider, selectedType, today, selectedDate]);
+
+  // Fetch week availability when weekStart changes or entering step 3
+  useEffect(() => {
+    if (step === 2 && weekStart) {
+      fetchWeekAvailability(weekStart);
+    }
+  }, [step, weekStart, fetchWeekAvailability]);
 
   // ---------------------------------------------------------------------------
   // Group slots by morning/afternoon
@@ -708,25 +905,29 @@ export default function PublicBookingPage() {
             </p>
           </div>
 
-          {/* Date picker */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Select a date
-            </label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                setSelectedDate(e.target.value);
-                setSelectedSlot(null);
-                setSlotError(null);
-              }}
-              min={today}
-              max={maxDate}
-              aria-label="Select appointment date"
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors"
-            />
-          </div>
+          {/* Week strip date picker */}
+          <BookingWeekStrip
+            selectedDate={selectedDate}
+            onSelectDay={(date) => {
+              setSelectedDate(date);
+              setSelectedSlot(null);
+              setSlotError(null);
+            }}
+            weekStart={weekStart || today}
+            onShiftWeek={(dir) => {
+              const days = getConsecutiveDays(weekStart || today, 7);
+              const base = dir === 1 ? days[6] : days[0];
+              const d = new Date(base + "T12:00:00");
+              d.setDate(d.getDate() + dir);
+              const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              // Don't go before today
+              if (next < today) return;
+              setWeekStart(next);
+            }}
+            slotCounts={weekSlotCounts}
+            loadingDays={loadingWeek}
+            todayStr={today}
+          />
 
           {/* Time slots */}
           {selectedDate && (
