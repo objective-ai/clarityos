@@ -99,8 +99,8 @@ Requirements for the full MVP. Each maps to roadmap phases.
 
 - [ ] **SCH-01**: Horizontal Mon-Sun week strip with count badges replaces prev/next arrows at top of schedule page
 - [ ] **SCH-02**: 5 view mode tabs (List, Timeline, Clinic, Flow, Week) with active tab accent indicator
-- [ ] **SCH-03**: Role-based default view (receptionist/technician -> Flow, doctor -> Clinic, owner -> List)
-- [ ] **SCH-04**: View mode persists to localStorage, role default applies only on first visit
+- [x] **SCH-03**: Role-based default view (receptionist/technician -> Flow, doctor -> Clinic, owner -> List)
+- [x] **SCH-04**: View mode persists to localStorage, role default applies only on first visit
 - [x] **SCH-05**: Appointment model has checked_in_at timestamp, auto-set when status transitions to arrived
 - [x] **SCH-06**: Backend appointment list endpoint supports date_from/date_to range query (max 31 days)
 - [x] **SCH-07**: Appointment cards show color-coded left border by status, wait time badge (amber >15min, red >30min), and intake status icon
@@ -235,8 +235,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | EWR-07 | Phase 10 | Complete |
 | SCH-01 | Phase 10.2 | Pending |
 | SCH-02 | Phase 10.2 | Pending |
-| SCH-03 | Phase 10.2 | Pending |
-| SCH-04 | Phase 10.2 | Pending |
+| SCH-03 | Phase 10.2 | Complete |
+| SCH-04 | Phase 10.2 | Complete |
 | SCH-05 | Phase 10.2 | Complete |
 | SCH-06 | Phase 10.2 | Complete |
 | SCH-07 | Phase 10.2 | Complete |
