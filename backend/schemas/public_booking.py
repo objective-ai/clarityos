@@ -9,8 +9,6 @@ Endpoints:
   POST /api/public/booking/{slug}/book/           — create patient + appointment
 """
 
-from __future__ import annotations
-
 import uuid
 from datetime import date, datetime
 
@@ -75,9 +73,9 @@ class PublicBookingRequest(AppBaseModel):
     # Patient info (minimal — full details collected via intake form)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    dob: date | None = None
-    sex: str | None = Field(
-        default=None,
+    dob: date
+    sex: str = Field(
+        ...,
         description="Patient sex: male, female, other, or prefer_not_to_say.",
     )
     phone: str | None = Field(default=None, max_length=20)

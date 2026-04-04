@@ -200,6 +200,8 @@ ADDON_ID = uuid.UUID("00000000-0007-0007-0007-000000000001")
 
 # Use today's actual date so schedule appointments always land on the current day
 TODAY = datetime.date.today()
+YESTERDAY = TODAY - datetime.timedelta(days=1)
+TOMORROW = TODAY + datetime.timedelta(days=1)
 
 # Clinic timezone — seed times are specified in local clinic time and converted to UTC
 from zoneinfo import ZoneInfo
@@ -663,73 +665,82 @@ def _seed_appointments(session: Session) -> None:
     step("Seeding 13 Appointments")
 
     appts = [
-        # Past/completed — linked to encounters
-        dict(id=APPT_IDS[0], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
-             booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
-             status=AppointmentStatus.COMPLETED, start_time=_dt(datetime.date(2026, 2, 20), 9),
-             end_time=_dt(datetime.date(2026, 2, 20), 9, 45), duration_minutes=45,
-             chief_complaint="Annual comprehensive exam — diabetic patient",
-             intake_status="submitted"),
-        dict(id=APPT_IDS[1], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[1], provider_id=STAFF_SARAH_ID,
-             booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
-             status=AppointmentStatus.COMPLETED, start_time=_dt(datetime.date(2026, 2, 21), 10),
-             end_time=_dt(datetime.date(2026, 2, 21), 10, 30), duration_minutes=30,
-             chief_complaint="Difficulty reading at near, dry eye worsening",
-             intake_status="submitted"),
+        # Historical — linked to Thornton encounter series
         dict(id=APPT_IDS[2], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[2], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
              status=AppointmentStatus.COMPLETED, start_time=_dt(datetime.date(2026, 1, 14), 9),
              end_time=_dt(datetime.date(2026, 1, 14), 9, 30), duration_minutes=30,
              chief_complaint="12-month glaucoma follow-up",
-             intake_status="submitted"),
+             intake_status="submitted",
+             checked_in_at=_dt(datetime.date(2026, 1, 14), 8, 50)),
 
-        # Today (2026-03-07)
+        # Yesterday — completed visits
+        dict(id=APPT_IDS[0], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
+             booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
+             status=AppointmentStatus.COMPLETED, start_time=_dt(YESTERDAY, 9),
+             end_time=_dt(YESTERDAY, 9, 45), duration_minutes=45,
+             chief_complaint="Annual comprehensive exam — diabetic patient",
+             intake_status="submitted",
+             checked_in_at=_dt(YESTERDAY, 8, 48)),
+        dict(id=APPT_IDS[1], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[1], provider_id=STAFF_SARAH_ID,
+             booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
+             status=AppointmentStatus.COMPLETED, start_time=_dt(YESTERDAY, 10, 30),
+             end_time=_dt(YESTERDAY, 11), duration_minutes=30,
+             chief_complaint="Difficulty reading at near, dry eye worsening",
+             intake_status="submitted",
+             checked_in_at=_dt(YESTERDAY, 10, 15)),
+
+        # Today — active clinic day (~1 hr spacing)
         dict(id=APPT_IDS[3], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[3], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
-             status=AppointmentStatus.ARRIVED, start_time=_dt(TODAY, 8, 30),
-             end_time=_dt(TODAY, 9, 15), duration_minutes=45,
+             status=AppointmentStatus.ARRIVED, start_time=_dt(TODAY, 9),
+             end_time=_dt(TODAY, 9, 45), duration_minutes=45,
              chief_complaint="First comprehensive eye exam",
-             intake_status="submitted"),
+             intake_status="submitted",
+             checked_in_at=_dt(TODAY, 8, 48)),
         dict(id=APPT_IDS[4], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[4], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
-             status=AppointmentStatus.IN_EXAM, start_time=_dt(TODAY, 9),
-             end_time=_dt(TODAY, 9, 45), duration_minutes=45,
+             status=AppointmentStatus.IN_EXAM, start_time=_dt(TODAY, 10),
+             end_time=_dt(TODAY, 10, 45), duration_minutes=45,
              chief_complaint="Post-LASIK annual, presbyopia worsening",
-             intake_status="submitted"),
+             intake_status="submitted",
+             checked_in_at=_dt(TODAY, 9, 46)),
         dict(id=APPT_IDS[5], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[7], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.COMPREHENSIVE_EXAM,
-             status=AppointmentStatus.CONFIRMED, start_time=_dt(TODAY, 9, 30),
-             end_time=_dt(TODAY, 10, 15), duration_minutes=45,
+             status=AppointmentStatus.CONFIRMED, start_time=_dt(TODAY, 11),
+             end_time=_dt(TODAY, 11, 45), duration_minutes=45,
              chief_complaint="Cataract monitoring, AMD follow-up",
              intake_status="submitted"),
         dict(id=APPT_IDS[6], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[8], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
-             status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 10),
-             end_time=_dt(TODAY, 10, 30), duration_minutes=30,
+             status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 13),
+             end_time=_dt(TODAY, 13, 30), duration_minutes=30,
              chief_complaint="Diabetic retinopathy monitoring — annual dilated exam",
              intake_status="pending"),
+
+        # Tomorrow — upcoming schedule (~1 hr spacing)
         dict(id=APPT_IDS[7], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[5], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
-             status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 10, 30),
-             end_time=_dt(TODAY, 11), duration_minutes=30,
+             status=AppointmentStatus.CONFIRMED, start_time=_dt(TOMORROW, 9),
+             end_time=_dt(TOMORROW, 9, 30), duration_minutes=30,
              chief_complaint="Contact lens refit — progressive astigmatism",
              intake_status="submitted"),
         dict(id=APPT_IDS[8], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[1], provider_id=STAFF_DUY_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.CONTACT_LENS_EXAM,
-             status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 11),
-             end_time=_dt(TODAY, 11, 30), duration_minutes=30,
+             status=AppointmentStatus.CONFIRMED, start_time=_dt(TOMORROW, 10),
+             end_time=_dt(TOMORROW, 10, 30), duration_minutes=30,
              chief_complaint="Contact lens dryness and discomfort — possible fit issue",
              intake_status="pending"),
         dict(id=APPT_IDS[9], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[9], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.PEDIATRIC_EXAM,
-             status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 13),
-             end_time=_dt(TODAY, 13, 45), duration_minutes=45,
+             status=AppointmentStatus.SCHEDULED, start_time=_dt(TOMORROW, 11),
+             end_time=_dt(TOMORROW, 11, 45), duration_minutes=45,
              chief_complaint="Progressive myopia management — 11yo",
              intake_status="submitted"),
         dict(id=APPT_IDS[10], tenant_id=TENANT_ID, patient_id=PATIENT_IDS[0], provider_id=STAFF_SARAH_ID,
              booked_by_id=STAFF_EMILY_ID, appointment_type=AppointmentType.FOLLOW_UP,
-             status=AppointmentStatus.SCHEDULED, start_time=_dt(TODAY, 14),
-             end_time=_dt(TODAY, 14, 20), duration_minutes=20,
+             status=AppointmentStatus.SCHEDULED, start_time=_dt(TOMORROW, 13),
+             end_time=_dt(TOMORROW, 13, 20), duration_minutes=20,
              chief_complaint="Glasses adjustment, vision check",
              intake_status="pending"),
 
@@ -1395,7 +1406,7 @@ def _seed_enc_donovan_today(session: Session) -> None:
 # ── Patient Insurance ────────────────────────────────────────────────────
 
 def _seed_patient_insurance(session: Session) -> None:
-    step("Seeding Patient Insurance")
+    step("Seeding 14 Patient Insurance records (10 primary + 4 secondary)")
 
     from sqlalchemy import select as _select
     existing = session.execute(
@@ -1410,52 +1421,106 @@ def _seed_patient_insurance(session: Session) -> None:
         dict(patient_id=PATIENT_IDS[0], payer_id=PAYER_MEDICARE_ID,
              priority="primary", plan_type="medical",
              subscriber_id="1EG4-TE5-MK72", plan_name="Medicare Part B",
-             relationship_to_subscriber="self"),
+             relationship_to_subscriber="self",
+             copay_amount=Decimal("0.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 28)),
         # Vasquez (52, CL wearer) — VSP Vision primary
         dict(patient_id=PATIENT_IDS[1], payer_id=PAYER_VSP_ID,
              priority="primary", plan_type="vision",
              subscriber_id="VSP-8821047", group_number="GRP-4401",
-             plan_name="VSP Signature Plan", relationship_to_subscriber="self"),
+             plan_name="VSP Signature Plan", relationship_to_subscriber="self",
+             copay_amount=Decimal("15.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 25)),
         # Thornton (58, glaucoma suspect) — Aetna primary
         dict(patient_id=PATIENT_IDS[2], payer_id=PAYER_AETNA_ID,
              priority="primary", plan_type="medical",
              subscriber_id="W123456789", group_number="AET-8801",
-             plan_name="Aetna Choice POS II", relationship_to_subscriber="self"),
+             plan_name="Aetna Choice POS II", relationship_to_subscriber="self",
+             copay_amount=Decimal("40.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 30),
+             auth_number="AUTH-AET-2026-04471", auth_expiry=datetime.date(2026, 9, 30),
+             auth_services="OCT imaging, Visual field testing"),
         # Patel (28) — United Healthcare primary
         dict(patient_id=PATIENT_IDS[3], payer_id=PAYER_UHC_ID,
              priority="primary", plan_type="medical",
              subscriber_id="UHC-44918273", group_number="UHC-2200",
-             plan_name="UHC Choice Plus", relationship_to_subscriber="self"),
+             plan_name="UHC Choice Plus", relationship_to_subscriber="self",
+             copay_amount=Decimal("35.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 4, 1)),
         # Donovan (55, post-LASIK) — EyeMed primary
         dict(patient_id=PATIENT_IDS[4], payer_id=PAYER_EYEMED_ID,
              priority="primary", plan_type="vision",
              subscriber_id="EYEM-6612009", group_number="EYM-5501",
-             plan_name="EyeMed Access Plan", relationship_to_subscriber="self"),
+             plan_name="EyeMed Access Plan", relationship_to_subscriber="self",
+             copay_amount=Decimal("10.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 20)),
         # Santos (45) — Anthem Blue Cross primary
         dict(patient_id=PATIENT_IDS[5], payer_id=PAYER_ANTHEM_ID,
              priority="primary", plan_type="medical",
              subscriber_id="ANT-77301928", group_number="ANT-3301",
-             plan_name="Anthem PPO 2000", relationship_to_subscriber="self"),
+             plan_name="Anthem PPO 2000", relationship_to_subscriber="self",
+             copay_amount=Decimal("50.00"), eligibility_status="pending_verification"),
         # Kim (32, digital eye strain) — Blue Shield primary
         dict(patient_id=PATIENT_IDS[6], payer_id=PAYER_BLUESHIELD_ID,
              priority="primary", plan_type="medical",
              subscriber_id="BSC-10293847", group_number="BSC-7701",
-             plan_name="Blue Shield PPO", relationship_to_subscriber="self"),
+             plan_name="Blue Shield PPO", relationship_to_subscriber="self",
+             copay_amount=Decimal("30.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 31)),
         # Thompson (72, cataracts) — Medicare primary
         dict(patient_id=PATIENT_IDS[7], payer_id=PAYER_MEDICARE_ID,
              priority="primary", plan_type="medical",
              subscriber_id="2KL9-TE4-NP81", plan_name="Medicare Part B",
-             relationship_to_subscriber="self"),
+             relationship_to_subscriber="self",
+             copay_amount=Decimal("0.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 15),
+             auth_number="AUTH-MCR-2026-08192", auth_expiry=datetime.date(2026, 12, 31),
+             auth_services="OCT imaging"),
         # Chen (44) — Humana primary
         dict(patient_id=PATIENT_IDS[8], payer_id=PAYER_HUMANA_ID,
              priority="primary", plan_type="medical",
              subscriber_id="HUM-55019283", group_number="HUM-9901",
-             plan_name="Humana Gold Plus HMO", relationship_to_subscriber="self"),
+             plan_name="Humana Gold Plus HMO", relationship_to_subscriber="self",
+             copay_amount=Decimal("25.00"), eligibility_status="expired",
+             eligibility_verified_date=datetime.date(2025, 12, 10),
+             auth_number="AUTH-HUM-2025-55019", auth_expiry=datetime.date(2026, 3, 31),
+             auth_services="Visual field testing, OCT imaging"),
         # Rodriguez (31) — Medi-Cal primary
         dict(patient_id=PATIENT_IDS[9], payer_id=PAYER_MEDICAID_ID,
              priority="primary", plan_type="medical",
              subscriber_id="MC-88271039", plan_name="Medi-Cal Managed Care",
-             relationship_to_subscriber="self"),
+             relationship_to_subscriber="self",
+             copay_amount=Decimal("0.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 4, 1)),
+
+        # ── Secondary Insurance ──────────────────────────────────────
+        # Hargrove (Medicare primary) → VSP Vision secondary
+        dict(patient_id=PATIENT_IDS[0], payer_id=PAYER_VSP_ID,
+             priority="secondary", plan_type="vision",
+             subscriber_id="VSP-1001-HRG", group_number="GRP-4401",
+             plan_name="VSP Signature Plan", relationship_to_subscriber="self",
+             copay_amount=Decimal("15.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 28)),
+        # Vasquez (VSP primary) → Aetna medical secondary
+        dict(patient_id=PATIENT_IDS[1], payer_id=PAYER_AETNA_ID,
+             priority="secondary", plan_type="medical",
+             subscriber_id="W998877665", group_number="AET-8801",
+             plan_name="Aetna Choice POS II", relationship_to_subscriber="spouse",
+             copay_amount=Decimal("40.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 25)),
+        # Thompson (Medicare primary) → EyeMed Vision secondary
+        dict(patient_id=PATIENT_IDS[7], payer_id=PAYER_EYEMED_ID,
+             priority="secondary", plan_type="vision",
+             subscriber_id="EYEM-9908001", group_number="EYM-5501",
+             plan_name="EyeMed Access Plan", relationship_to_subscriber="self",
+             copay_amount=Decimal("10.00"), eligibility_status="active",
+             eligibility_verified_date=datetime.date(2026, 3, 15)),
+        # Santos (Anthem primary) → VSP Vision secondary
+        dict(patient_id=PATIENT_IDS[5], payer_id=PAYER_VSP_ID,
+             priority="secondary", plan_type="vision",
+             subscriber_id="VSP-6634-SNT", group_number="GRP-4401",
+             plan_name="VSP Signature Plan", relationship_to_subscriber="self",
+             copay_amount=Decimal("15.00"), eligibility_status="pending_verification"),
     ]
 
     for r in records:
@@ -1670,10 +1735,28 @@ def _seed_insurance_payers(session: Session) -> None:
         {"id": PAYER_UHC_ID,        "name": "United Healthcare",         "payer_id": "UHC"},
         {"id": PAYER_HUMANA_ID,     "name": "Humana",                    "payer_id": "HUMANA"},
     ]
+    created = 0
     for p_data in CA_PAYERS:
+        if session.get(InsurancePayer, p_data["id"]):
+            continue
         session.add(InsurancePayer(tenant_id=TENANT_ID, **p_data))
+        created += 1
     session.flush()
-    ok(f"Created {len(CA_PAYERS)} insurance payers")
+    if created:
+        ok(f"Created {created} insurance payers")
+    else:
+        warn("Insurance payers already exist — skipping")
+
+    from sqlalchemy import select as _select
+    existing_fees = session.execute(
+        _select(FeeScheduleItem).where(
+            FeeScheduleItem.tenant_id == TENANT_ID,
+            FeeScheduleItem.payer_id.is_(None),
+        )
+    ).first()
+    if existing_fees:
+        warn("Base fee catalog already exists — skipping")
+        return
 
     CPT_CATALOG_SEED = [
         # E/M codes — New Patient
@@ -1790,11 +1873,12 @@ def main() -> None:
   TENANT schema ({TENANT_SCHEMA})
   ├── Staff             : 4  (Dr. Duy Tran, Dr. Sarah Lin, Marcus Webb, Emily Nguyen)
   ├── Patients          : 10 (diverse demographics)
-  ├── Appointments      : 13 (3 past + 8 today + 2 next week)
+  ├── Appointments      : 13 (1 past + 2 yesterday + 4 today + 4 tomorrow + 2 next week)
   ├── Encounters        : 8  (5 finalized + 2 in-progress + 1 glaucoma series)
   ├── Superbills        : 3  (with CPT line items)
   ├── IntakeTokens      : 2  (pending)
   ├── InsurancePayers   : 10 (CA payers — VSP, EyeMed, Medicare, etc.)
+  ├── PatientInsurance  : 14 (10 primary + 4 secondary)
   └── FeeScheduleItems  : 11 (base CPT fee catalog)
 
   Login: duytran@yahoo.com / 123456 (via Supabase Auth)
