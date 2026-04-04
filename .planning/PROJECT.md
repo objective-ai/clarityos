@@ -32,6 +32,8 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 - ✓ Billing workflow with superbill, E/M crosswalk, and payer fee schedules — Phase 9
 - ✓ Auth hardening (api-client auth gaps, middleware defense-in-depth) — Phase 9.1
 - ✓ Payer fee schedule wiring into billing workflow — Phase 9.1
+- ✓ Schedule page revamp (5 view modes, FlowBoard, WeekView, detail drawer) — Phase 10.2
+- ✓ Public booking wizard polish (5-step flow, error handling) — Phase 10.2
 
 ### Active
 
@@ -50,7 +52,7 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 ## Context
 
 ### Current State
-Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Approaching pilot launch with solo optometrist target.
+Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Phase 10.2 revamped schedule page (5 view modes, FlowBoard Kanban, WeekView, detail drawer, glassmorphism tabs) and polished public booking wizard (5-step flow, proper error handling). Approaching pilot launch with solo optometrist target.
 
 ### Technical Debt (from codebase audit)
 - **5 critical security issues**: dev auth bypass, hardcoded SECRET_KEY, no Next.js route middleware, unconditional mock session, hardcoded Supabase ref in config
@@ -88,4 +90,4 @@ California solo and small-group optometry practices (1-4 providers). The product
 | Move Python backend out of `app/` directory | Resolves Next.js App Router namespace conflict | — Pending |
 
 ---
-*Last updated: 2026-03-26 after Phase 9.1 completion*
+*Last updated: 2026-04-03 after Phase 10.2 completion*
