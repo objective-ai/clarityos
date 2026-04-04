@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import dynamic from "next/dynamic";
 import { apiFetch } from "@/lib/api-client";
 import { clinicToday, formatDateLong, shiftDate } from "@/lib/timezone";
-import { getRoleDefaultView } from "@/lib/scheduleUtils";
+import { getRoleDefaultView, getWeekDays } from "@/lib/scheduleUtils";
 import type { ViewMode, DrawerState } from "@/types/schedule";
 import { VALID_VIEW_MODES, VIEW_MODE_LABELS } from "@/types/schedule";
 
@@ -32,6 +32,14 @@ const TimelineView = dynamic(
 );
 const ClinicView = dynamic(
   () => import("@/components/schedule/ClinicView"),
+  { loading: () => <div className="animate-pulse h-64 bg-white/5 rounded-xl" />, ssr: false }
+);
+const FlowBoard = dynamic(
+  () => import("@/components/schedule/FlowBoard").then((m) => ({ default: m.FlowBoard })),
+  { loading: () => <div className="animate-pulse h-64 bg-white/5 rounded-xl" />, ssr: false }
+);
+const WeekView = dynamic(
+  () => import("@/components/schedule/WeekView").then((m) => ({ default: m.WeekView })),
   { loading: () => <div className="animate-pulse h-64 bg-white/5 rounded-xl" />, ssr: false }
 );
 
@@ -69,6 +77,9 @@ function SchedulePageInner() {
     error,
     setSelectedDate,
     fetchAppointments,
+    weekAppointments,
+    isLoadingWeek,
+    fetchWeekAppointments,
   } = useAppointmentStore();
 
   const {
@@ -122,6 +133,14 @@ function SchedulePageInner() {
     fetchAppointments(selectedDate, selectedProviderId || undefined);
   }, [selectedProviderId, selectedDate, fetchAppointments]);
 
+  // Fetch week appointments when week view is active
+  useEffect(() => {
+    if (viewMode === "week") {
+      const days = getWeekDays(selectedDate);
+      fetchWeekAppointments(days[0], days[6]);
+    }
+  }, [viewMode, selectedDate, fetchWeekAppointments]);
+
   // Booking state helpers
   const openBooking = (defaults?: { patientId?: string; providerId?: string; appointmentType?: AppointmentType; patientName?: string; providerName?: string }) => {
     setDrawer({ mode: "booking", defaults });
@@ -130,10 +149,18 @@ function SchedulePageInner() {
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
 
-  // Counts by date for WeekStrip
+  // Counts by date for WeekStrip — includes week data when loaded
   const countsByDate = useMemo(() => {
-    return { [selectedDate]: appointments.length };
-  }, [selectedDate, appointments.length]);
+    const counts: Record<string, number> = {};
+    counts[selectedDate] = appointments.length;
+    if (weekAppointments.length > 0) {
+      for (const appt of weekAppointments) {
+        const d = appt.startTime.slice(0, 10);
+        counts[d] = (counts[d] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [appointments, weekAppointments, selectedDate]);
 
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
 
@@ -359,13 +386,27 @@ function SchedulePageInner() {
           }}
         />
       ) : viewMode === "flow" ? (
-        <div className="glass-card flex items-center justify-center py-20 text-[var(--text-muted)]">
-          Flow Board — coming in Plan 05
-        </div>
+        <FlowBoard
+          appointments={appointments}
+          selectedDate={selectedDate}
+          selectedProviderId={selectedProviderId}
+          onCardClick={(appt) => setDrawer({ mode: "detail", appointment: appt })}
+          onCheckIn={handleCheckIn}
+          onStartExam={handleStartExam}
+          tenant={tenant}
+          timezone={clinicTimezone}
+        />
       ) : viewMode === "week" ? (
-        <div className="glass-card flex items-center justify-center py-20 text-[var(--text-muted)]">
-          Week View — coming in Plan 05
-        </div>
+        <WeekView
+          selectedDate={selectedDate}
+          weekAppointments={weekAppointments}
+          isLoading={isLoadingWeek}
+          onCardClick={(appt) => setDrawer({ mode: "detail", appointment: appt })}
+          onCheckIn={handleCheckIn}
+          onStartExam={handleStartExam}
+          tenant={tenant}
+          timezone={clinicTimezone}
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {appointments.map((appt) => (
