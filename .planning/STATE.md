@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 10.2-02-PLAN.md — checked_in_at migration + date range query
-last_updated: "2026-04-04T03:08:17.448Z"
+stopped_at: Completed 10.2-04-PLAN.md — BookingDrawer with slot picker
+last_updated: "2026-04-04T03:13:58.303Z"
 progress:
   total_phases: 10
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 ---
@@ -72,6 +72,7 @@ Plan: 6 of 6 (COMPLETE)
 | Phase 09.1-security-integration-hardening P01 | 8 | 2 tasks | 2 files |
 | Phase 10.1 P01 | 15 | 2 tasks | 5 files |
 | Phase 10.2 P02 | 20 | 2 tasks | 6 files |
+| Phase 10.2 P04 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,8 @@ Recent decisions affecting current work:
 - [Phase 10.2-06]: 7-day availability strip replaces full date picker — better mobile UX for patient-facing booking
 - [Phase 10.2]: ADD COLUMN IF NOT EXISTS used in migration 0013 for idempotency (checked_in_at already in dev DB)
 - [Phase 10.2]: BFF GET already forwards query params — no BFF changes needed for date_from/date_to
+- [Phase 10.2]: BookingDrawer calls createAppointment directly from store — no onSubmit prop needed
+- [Phase 10.2]: staffList mapped at call site to { id, full_name } — keeps BookingDrawer API clean
 
 ### Pending Todos
 
@@ -167,8 +170,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-04T03:08:17.445Z
-Stopped at: Completed 10.2-02-PLAN.md — checked_in_at migration + date range query
+Last session: 2026-04-04T03:13:58.300Z
+Stopped at: Completed 10.2-04-PLAN.md — BookingDrawer with slot picker
 Resume file: None
 
 **Phase 9 Overview:**
