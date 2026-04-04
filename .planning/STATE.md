@@ -3,27 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Completed 10.2-03-PLAN.md
-last_updated: "2026-04-04T03:15:24.058Z"
+stopped_at: Completed 10.2-08-PLAN.md
+last_updated: "2026-04-04T04:28:50.884Z"
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 9
-  completed_plans: 8
+  total_plans: 11
+  completed_plans: 10
 ---
-
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: in_progress
-stopped_at: Completed 10.2-06-PLAN.md — public booking page with 5-step wizard
-last_updated: "2026-04-03T00:00:00.000Z"
-progress:
-  total_phases: 10
-  completed_phases: 1
-  total_plans: 9
-  completed_plans: 6
 
 # Project State
 
@@ -37,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 10.2 (revamp-schedule-booking-page) — EXECUTING
-Plan: 6 of 6 (COMPLETE)
+Plan: 8 of 8 (complete)
 
 ## Performance Metrics
 
@@ -74,6 +61,7 @@ Plan: 6 of 6 (COMPLETE)
 | Phase 10.2 P02 | 20 | 2 tasks | 6 files |
 | Phase 10.2 P04 | 4 | 2 tasks | 2 files |
 | Phase 10.2 P03 | 25 | 2 tasks | 2 files |
+| Phase 10.2 P08 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -159,8 +147,12 @@ Recent decisions affecting current work:
 - [Phase 10.2]: ADD COLUMN IF NOT EXISTS used in migration 0013 for idempotency (checked_in_at already in dev DB)
 - [Phase 10.2]: BFF GET already forwards query params — no BFF changes needed for date_from/date_to
 - [Phase 10.2]: BookingDrawer calls createAppointment directly from store — no onSubmit prop needed
+- [Phase 10.2-07]: Explicit Tailwind opacity classes (text-white/60) used over CSS variables for tab text — CSS variables have insufficient contrast on glassmorphism
+- [Phase 10.2-07]: Early return null when !open && !appointment prevents SSR hydration flash in AppointmentDetailDrawer — more reliable than CSS-only translate
+- [Phase 10.2-07]: Always-visible X button placed outside appt ternary in AppointmentDetailDrawer so it renders even in empty/loading state
 - [Phase 10.2]: staffList mapped at call site to { id, full_name } — keeps BookingDrawer API clean
 - [Phase 10.2-03]: Drawer already existed as skeleton — enhanced wiring rather than rewriting; TimelineView/ClinicView onCardClick passthrough deferred
+- [Phase 10.2]: dob/sex made optional in PublicBookingRequest; frontend sends null not undefined; FastAPI 422 array detail unwrapped to readable sentences
 
 ### Pending Todos
 
@@ -172,8 +164,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-04T03:15:24.054Z
-Stopped at: Completed 10.2-03-PLAN.md
+Last session: 2026-04-04T04:28:50.881Z
+Stopped at: Completed 10.2-08-PLAN.md
 Resume file: None
 
 **Phase 9 Overview:**
