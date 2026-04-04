@@ -309,6 +309,15 @@ export default function PublicBookingPage() {
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState("");
   const [phone, setPhone] = useState("");
+  /** Format digits as (XXX) XXX-XXXX */
+  const handlePhoneChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 10);
+    let formatted = digits;
+    if (digits.length > 6) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    else if (digits.length > 3) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    else if (digits.length > 0) formatted = `(${digits}`;
+    setPhone(formatted);
+  };
   const [email, setEmail] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -318,8 +327,16 @@ export default function PublicBookingPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [slotTaken, setSlotTaken] = useState(false);
 
-  // Success state
-  const [confirmation, setConfirmation] = useState<PublicBookingResponse | null>(null);
+  // Success state — persisted in sessionStorage so browser back restores it
+  const [confirmation, setConfirmation] = useState<PublicBookingResponse | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const saved = sessionStorage.getItem(`booking-confirmation-${slug}`);
+      return saved ? (JSON.parse(saved) as PublicBookingResponse) : null;
+    } catch {
+      return null;
+    }
+  });
   const [copied, setCopied] = useState(false);
 
   // Wizard step (0-indexed, matching STEPS array)
@@ -479,13 +496,15 @@ export default function PublicBookingPage() {
     const errs: Record<string, string> = {};
     if (!firstName.trim()) errs.firstName = "Required";
     if (!lastName.trim()) errs.lastName = "Required";
+    if (!dob) errs.dob = "Required";
+    if (!sex) errs.sex = "Required";
     if (!phone.trim()) errs.phone = "Required";
-    if (phone.trim() && !/^[\d\s()+-]{7,20}$/.test(phone.trim()))
-      errs.phone = "Invalid phone number";
+    else if (phone.replace(/\D/g, "").length !== 10)
+      errs.phone = "Enter a 10-digit US phone number";
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
       errs.email = "Invalid email";
     return errs;
-  }, [firstName, lastName, phone, email]);
+  }, [firstName, lastName, dob, sex, phone, email]);
 
   const markTouched = useCallback((field: string) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -500,6 +519,8 @@ export default function PublicBookingPage() {
     setTouched({
       firstName: true,
       lastName: true,
+      dob: true,
+      sex: true,
       phone: true,
       email: true,
     });
@@ -515,9 +536,9 @@ export default function PublicBookingPage() {
         body: JSON.stringify({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          dob: dob || null,
-          sex: sex || null,
-          phone: phone.trim() || null,
+          dob: dob,
+          sex: sex,
+          phone: phone.replace(/\D/g, "") || null,
           email: email.trim() || null,
           provider_id: selectedProvider.id,
           appointment_type: selectedType.value,
@@ -1097,7 +1118,7 @@ export default function PublicBookingPage() {
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
                   onBlur={() => markTouched("phone")}
                   placeholder="(555) 555-5555"
                   className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
@@ -1136,26 +1157,39 @@ export default function PublicBookingPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Date of Birth
+                  Date of Birth <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="date"
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
+                  onBlur={() => markTouched("dob")}
                   max={today}
                   aria-label="Date of birth"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors"
+                  className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
+                    touched.dob && validationErrors.dob
+                      ? "border-red-400 focus:border-red-400"
+                      : "border-gray-200 focus:border-[var(--accent)]"
+                  }`}
                 />
+                {touched.dob && (
+                  <FieldError message={validationErrors.dob} />
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Sex
+                  Sex <span className="text-red-400">*</span>
                 </label>
                 <select
                   value={sex}
                   onChange={(e) => setSex(e.target.value)}
+                  onBlur={() => markTouched("sex")}
                   aria-label="Sex"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors"
+                  className={`w-full px-3 py-2 rounded-lg border text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/30 transition-colors ${
+                    touched.sex && validationErrors.sex
+                      ? "border-red-400 focus:border-red-400"
+                      : "border-gray-200 focus:border-[var(--accent)]"
+                  }`}
                 >
                   <option value="">Select...</option>
                   {SEX_OPTIONS.map((opt) => (
@@ -1164,6 +1198,9 @@ export default function PublicBookingPage() {
                     </option>
                   ))}
                 </select>
+                {touched.sex && (
+                  <FieldError message={validationErrors.sex} />
+                )}
               </div>
             </div>
 
