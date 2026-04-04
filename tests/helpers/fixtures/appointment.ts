@@ -26,6 +26,7 @@ export function makeAppointment(
     encounterShortId: null,
     intakeStatus: null,
     triageFlags: null,
+    checkedInAt: null,
     patientName: "Jane Doe",
     patientChartNumber: 10001,
     providerName: "Dr. Smith",

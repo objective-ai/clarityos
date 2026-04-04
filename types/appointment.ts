@@ -57,6 +57,8 @@ export interface Appointment {
   insurancePayerName?: string | null;
   insuranceCopay?: number | null;
   insuranceEligibility?: string | null;
+  // Wait time tracking (Phase 10.2) — ISO 8601 UTC timestamp set on check-in
+  checkedInAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -261,6 +261,9 @@ class AppointmentResponse(AppBaseModel):
     insurance_copay: float | None = None
     insurance_eligibility: str | None = None  # "active" | "inactive" | ... | None if no insurance
 
+    # Wait time tracking (Phase 10.2)
+    checked_in_at: datetime | None = None
+
     created_at: datetime
     updated_at: datetime
 

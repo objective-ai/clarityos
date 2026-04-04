@@ -344,6 +344,11 @@ class Appointment(TimestampMixin, TenantBase):
     # AI triage results: {urgency: "routine"|"moderate"|"urgent", flags: str[], reasoning: str}
     triage_flags_jsonb: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # Wait time tracking — set automatically when status transitions to ARRIVED
+    checked_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+
     # --- Relationships ---
     patient: Mapped["Patient"] = relationship("Patient", back_populates="appointments")
     provider: Mapped["Staff"] = relationship(

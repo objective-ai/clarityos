@@ -97,6 +97,7 @@ def _build_appointment_response(
         insurance_payer_name=ins.payer.name if ins and ins.payer else None,
         insurance_copay=float(ins.copay_amount) if ins and ins.copay_amount else None,
         insurance_eligibility=ins.eligibility_status if ins else None,
+        checked_in_at=appt.checked_in_at,
         created_at=appt.created_at,
         updated_at=appt.updated_at,
     )
@@ -422,6 +423,8 @@ async def check_in_patient(
         )
 
     appt.status = AppointmentStatus.ARRIVED
+    if appt.checked_in_at is None:
+        appt.checked_in_at = datetime.now(timezone.utc)
 
     await log_action(
         db,
