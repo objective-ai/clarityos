@@ -18,7 +18,7 @@ import { VALID_VIEW_MODES, VIEW_MODE_LABELS } from "@/types/schedule";
 
 import { AppointmentCard } from "@/components/schedule/AppointmentCard";
 import { WeekStrip } from "@/components/schedule/WeekStrip";
-import { BookAppointmentModal } from "@/components/schedule/BookAppointmentModal";
+import { BookingDrawer } from "@/components/schedule/BookingDrawer";
 import { CancelModal, RescheduleModal } from "@/components/schedule/ScheduleModals";
 
 const IntakeLinkModal = dynamic(
@@ -83,7 +83,6 @@ function SchedulePageInner() {
     handleFollowUp,
     handleSendIntake,
     handleMarkNoShow,
-    handleBook,
   } = useScheduleActions(tenant);
 
   const { role } = useEntitlements();
@@ -122,14 +121,10 @@ function SchedulePageInner() {
     fetchAppointments(selectedDate, selectedProviderId || undefined);
   }, [selectedProviderId, selectedDate, fetchAppointments]);
 
-  // Booking state derived from drawer
-  const bookingOpen = drawer.mode === "booking";
-  const bookingDefaults = drawer.mode === "booking" ? drawer.defaults : undefined;
+  // Booking state helpers
   const openBooking = (defaults?: { patientId?: string; providerId?: string; appointmentType?: AppointmentType; patientName?: string; providerName?: string }) => {
     setDrawer({ mode: "booking", defaults });
   };
-  const closeDrawer = () => setDrawer({ mode: "closed" });
-
   // Cancel / reschedule modals
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
@@ -391,12 +386,21 @@ function SchedulePageInner() {
         </div>
       )}
 
-      {/* Modals */}
-      <BookAppointmentModal
-        open={bookingOpen}
-        onClose={closeDrawer}
-        onSubmit={handleBook}
-        defaults={bookingDefaults}
+      {/* Booking drawer */}
+      <BookingDrawer
+        open={drawer.mode === "booking"}
+        onClose={() => setDrawer({ mode: "closed" })}
+        allAppointments={appointments}
+        staffList={staffList.map((s) => ({
+          id: s.id,
+          full_name:
+            s.role === "doctor" || s.role === "owner"
+              ? `Dr. ${s.firstName} ${s.lastName}`
+              : `${s.firstName} ${s.lastName} (${s.role})`,
+        }))}
+        tenant={tenant}
+        timezone={clinicTimezone}
+        defaults={drawer.mode === "booking" ? drawer.defaults : undefined}
       />
       <CancelModal
         open={cancelTarget !== null}
