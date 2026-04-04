@@ -515,8 +515,8 @@ export default function PublicBookingPage() {
         body: JSON.stringify({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          dob: dob || undefined,
-          sex: sex || undefined,
+          dob: dob || null,
+          sex: sex || null,
           phone: phone.trim() || null,
           email: email.trim() || null,
           provider_id: selectedProvider.id,
@@ -534,10 +534,14 @@ export default function PublicBookingPage() {
             "This slot is no longer available. Please choose a different time."
           );
         } else {
-          throw new Error(
-            data?.detail ??
-              "Something went wrong. The appointment was not saved — please try again."
-          );
+          // FastAPI returns detail as string or array of validation objects
+          let errorMsg: string;
+          if (Array.isArray(data?.detail)) {
+            errorMsg = data.detail.map((d: { msg?: string }) => d.msg ?? "Validation error").join(". ");
+          } else {
+            errorMsg = data?.detail ?? "Something went wrong. The appointment was not saved — please try again.";
+          }
+          throw new Error(errorMsg);
         }
         return;
       }
