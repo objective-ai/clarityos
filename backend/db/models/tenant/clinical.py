@@ -12,7 +12,7 @@ import enum
 import secrets
 import uuid
 import datetime as _dt_mod
-from datetime import datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -27,6 +27,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -114,6 +115,15 @@ class ExamSection(str, enum.Enum):
     POSTERIOR_SEGMENT = "posterior_segment"
 
 
+class BlockType(str, enum.Enum):
+    """Type of blocked time slot for staff scheduling."""
+
+    LUNCH = "lunch"
+    HOLIDAY = "holiday"
+    PERSONAL = "personal"
+    OTHER = "other"
+
+
 class AuditAction(str, enum.Enum):
     """Actions tracked in the HIPAA audit log.
 
@@ -198,6 +208,15 @@ class Staff(TimestampMixin, TenantBase):
     )
     encounters: Mapped[list["Encounter"]] = relationship(
         "Encounter", back_populates="provider", foreign_keys="Encounter.provider_id"
+    )
+    weekly_schedules: Mapped[list["StaffWeeklySchedule"]] = relationship(
+        "StaffWeeklySchedule", cascade="all, delete-orphan", lazy="selectin"
+    )
+    blocked_times: Mapped[list["StaffBlockedTime"]] = relationship(
+        "StaffBlockedTime", cascade="all, delete-orphan", lazy="selectin"
+    )
+    attendance: Mapped[list["StaffAttendance"]] = relationship(
+        "StaffAttendance", cascade="all, delete-orphan", lazy="selectin"
     )
 
     @property
@@ -1285,3 +1304,90 @@ class PatientInsurance(TimestampMixin, TenantBase):
             f"<PatientInsurance patient_id={self.patient_id} "
             f"payer_id={self.payer_id} priority={self.priority}>"
         )
+
+
+# ---------------------------------------------------------------------------
+# Staff Scheduling  (Phase 10.4)
+# ---------------------------------------------------------------------------
+
+
+class StaffWeeklySchedule(TenantBase):
+    """Regular weekly availability for a staff member (0=Mon .. 6=Sun)."""
+
+    __tablename__ = "staff_weekly_schedules"
+    __table_args__ = (
+        UniqueConstraint("staff_id", "day_of_week", name="uq_staff_weekly_schedule_day"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)  # 0=Mon .. 6=Sun
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return f"<StaffWeeklySchedule staff_id={self.staff_id} day={self.day_of_week}>"
+
+
+class StaffBlockedTime(TenantBase):
+    """A date-range block on a staff member's calendar (lunch, holiday, etc.)."""
+
+    __tablename__ = "staff_blocked_times"
+    __table_args__ = (
+        Index("ix_staff_blocked_times_staff_start", "staff_id", "start_datetime"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    start_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    block_type: Mapped[str] = mapped_column(String(20), nullable=False, default="other")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<StaffBlockedTime staff_id={self.staff_id} type={self.block_type}>"
+
+
+class StaffAttendance(TenantBase):
+    """Clock-in / clock-out records for a staff member."""
+
+    __tablename__ = "staff_attendance"
+    __table_args__ = (
+        Index("ix_staff_attendance_staff_date", "staff_id", "date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    staff_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("staff.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    clock_in_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    clock_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<StaffAttendance staff_id={self.staff_id} date={self.date}>"
