@@ -34,6 +34,7 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 - ✓ Payer fee schedule wiring into billing workflow — Phase 9.1
 - ✓ Schedule page revamp (5 view modes, FlowBoard, WeekView, detail drawer) — Phase 10.2
 - ✓ Public booking wizard polish (5-step flow, error handling) — Phase 10.2
+- ✓ Public marketing pages (homepage, features, pricing, compare) with auth gate and shared primitives — Phase 11
 
 ### Active
 
@@ -52,7 +53,7 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 ## Context
 
 ### Current State
-Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Phase 10.2 revamped schedule page (5 view modes, FlowBoard Kanban, WeekView, detail drawer, glassmorphism tabs) and polished public booking wizard (5-step flow, proper error handling). Approaching pilot launch with solo optometrist target.
+Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Phase 10.2 revamped schedule page and public booking wizard. Phase 11 added public marketing pages (homepage, /features, /pricing, /compare) with a dedicated `(marketing)` route group, auth redirect gate, 7 reusable primitives, and typed static data modules. ClarityOS now has a public web presence for the pilot launch.
 
 ### Technical Debt (from codebase audit)
 - **5 critical security issues**: dev auth bypass, hardcoded SECRET_KEY, no Next.js route middleware, unconditional mock session, hardcoded Supabase ref in config
