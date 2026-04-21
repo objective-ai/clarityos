@@ -33,7 +33,9 @@ from backend.db.models.tenant.clinical import (
     Patient,
     Sex,
     Staff,
+    StaffBlockedTime,
     StaffRole,
+    StaffWeeklySchedule,
 )
 from backend.db.models.tenant.intake import IntakeStatus, IntakeToken
 from backend.db.session import get_db
@@ -249,24 +251,6 @@ async def get_availability(
     if target_date > max_date:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Cannot book more than {config['max_advance_days']} days in advance.")
 
-    # Get hours for day of week
-    day_name = DAY_NAMES[target_date.weekday()]
-    hours = config["hours"].get(day_name)
-    if hours is None:
-        # Clinic closed on this day
-        provider = (
-            await db.execute(
-                select(Staff).where(Staff.id == provider_id, Staff.tenant_id == tenant.id)
-            )
-        ).scalar_one_or_none()
-        return AvailabilityResponse(
-            date=date,
-            provider_id=provider_id,
-            provider_name=f"{provider.first_name} {provider.last_name}" if provider else "Unknown",
-            slots=[],
-            timezone=tz_name,
-        )
-
     # Validate provider
     provider = (
         await db.execute(
@@ -280,9 +264,62 @@ async def get_availability(
     if provider is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Provider not found or inactive.")
 
-    # Generate candidate slots
-    start_h, start_m = _parse_time(hours["start"])
-    end_h, end_m = _parse_time(hours["end"])
+    # Derive weekday index (0=Mon .. 6=Sun) for schedule lookup
+    weekday_idx = target_date.weekday()
+
+    # Look up DB schedule for this provider + weekday
+    sched_result = await db.execute(
+        select(StaffWeeklySchedule)
+        .where(StaffWeeklySchedule.tenant_id == tenant.id)
+        .where(StaffWeeklySchedule.staff_id == provider_id)
+        .where(StaffWeeklySchedule.day_of_week == weekday_idx)
+        .where(StaffWeeklySchedule.is_active == True)  # noqa: E712
+    )
+    sched_row = sched_result.scalar_one_or_none()
+
+    if sched_row:
+        # DB schedule is the source of truth for this provider
+        start_h = sched_row.start_time.hour
+        start_m = sched_row.start_time.minute
+        end_h = sched_row.end_time.hour
+        end_m = sched_row.end_time.minute
+    else:
+        # Fallback: no DB row → use DEFAULT_HOURS (config-based) for the day
+        day_name = DAY_NAMES[weekday_idx]
+        hours = config["hours"].get(day_name)
+        if hours is None:
+            # Clinic/provider closed on this day — no slots
+            return AvailabilityResponse(
+                date=date,
+                provider_id=provider_id,
+                provider_name=f"{provider.first_name} {provider.last_name}",
+                slots=[],
+                timezone=tz_name,
+            )
+        start_h, start_m = _parse_time(hours["start"])
+        end_h, end_m = _parse_time(hours["end"])
+
+    # Fetch blocked times overlapping target_date for this provider
+    from datetime import time as dt_time  # avoid shadowing top-level `date` import
+
+    day_start_dt = datetime.combine(target_date, dt_time.min).replace(tzinfo=timezone.utc)
+    day_end_dt = datetime.combine(target_date, dt_time.max).replace(tzinfo=timezone.utc)
+    blocks_result = await db.execute(
+        select(StaffBlockedTime)
+        .where(StaffBlockedTime.tenant_id == tenant.id)
+        .where(StaffBlockedTime.staff_id == provider_id)
+        .where(StaffBlockedTime.end_datetime >= day_start_dt)
+        .where(StaffBlockedTime.start_datetime <= day_end_dt)
+    )
+    blocked = blocks_result.scalars().all()
+
+    def _is_blocked(slot_start: datetime, slot_end: datetime) -> bool:
+        """Return True if the slot overlaps any admin-blocked period."""
+        return any(
+            not (slot_end <= b.start_datetime or slot_start >= b.end_datetime)
+            for b in blocked
+        )
+
     interval = config["slot_interval_minutes"]
 
     # Build slot start times (in UTC for DB queries)
@@ -339,8 +376,13 @@ async def get_availability(
                 overlaps = True
                 break
 
-        if not overlaps:
-            available.append(slot_start.isoformat())
+        if overlaps:
+            continue
+
+        if _is_blocked(slot_start, slot_end):
+            continue
+
+        available.append(slot_start.isoformat())
 
     return AvailabilityResponse(
         date=date,
