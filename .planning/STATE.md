@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 10.2-08-PLAN.md
-last_updated: "2026-04-21T08:52:42.537Z"
+stopped_at: Completed 10.4-03-PLAN.md
+last_updated: "2026-04-21T16:45:03.603Z"
 progress:
   total_phases: 12
   completed_phases: 2
-  total_plans: 19
-  completed_plans: 12
+  total_plans: 22
+  completed_plans: 14
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 10.4 (staff-scheduling) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Plan: 2 of 7
 | Phase 10.2 P07 | 8 | 2 tasks | 2 files |
 | Phase 10.2 P08 | 5 | 1 tasks | 2 files |
 | Phase 10.4 P01 | 3 | 3 tasks | 4 files |
+| Phase 10.4 P02 | 20 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -159,6 +160,8 @@ Recent decisions affecting current work:
 - [Phase 10.2]: dob/sex made optional in PublicBookingRequest; frontend sends null not undefined; FastAPI 422 array detail unwrapped to readable sentences
 - [Phase 10.4]: block_type stored as String(20) not SQLAlchemy Enum — avoids native PostgreSQL enum complications
 - [Phase 10.4]: Staff back-references use lazy=selectin for eager loading compatibility
+- [Phase 10.4-03]: _is_blocked() was already defined in public_booking.py but not called — added call in slot loop to complete wire-up
+- [Phase 10.4-03]: public_booking.py imports ORM models only (not staff_schedule routes) — plan independence maintained
 
 ### Pending Todos
 
@@ -170,8 +173,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-04T04:28:50.881Z
-Stopped at: Completed 10.2-08-PLAN.md
+Last session: 2026-04-21T16:44:06Z
+Stopped at: Completed 10.4-03-PLAN.md
 Resume file: None
 
 **Phase 9 Overview:**
