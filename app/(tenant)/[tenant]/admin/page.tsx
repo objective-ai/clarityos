@@ -18,6 +18,7 @@ import type { ThemePreference } from "@/store/themeStore";
 import type { StaffRole } from "@/types/session";
 import { formatClinicDateTime, useClinicTimezone } from "@/lib/timezone";
 import ScheduleSection from "@/components/admin/ScheduleSection";
+import { SystemStatusSection } from "@/components/admin/SystemStatusSection";
 
 // ---------------------------------------------------------------------------
 // Staff type — maps to /api/staff backend response (snake_case → camelCase)
@@ -51,7 +52,14 @@ import {
 // Section definitions
 // ---------------------------------------------------------------------------
 
-type SectionKey = "general" | "staff" | "payers" | "compliance" | "demo" | "schedule";
+type SectionKey =
+  | "general"
+  | "staff"
+  | "payers"
+  | "compliance"
+  | "demo"
+  | "schedule"
+  | "system";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
   {
@@ -110,6 +118,25 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
         <line x1="16" y1="2" x2="16" y2="6" />
         <line x1="8" y1="2" x2="8" y2="6" />
         <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+  },
+  {
+    key: "system",
+    label: "System",
+    icon: (
+      // Heartbeat / pulse — signals live system health
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-4 w-4"
+      >
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
     ),
   },
@@ -2470,11 +2497,36 @@ function PayersSection() {
 // ---------------------------------------------------------------------------
 
 export default function AdminPage() {
-  const { requireRole } = useEntitlements();
+  const { requireRole, has } = useEntitlements();
   const session = useSession();
   const [activeSection, setActiveSection] = useState<SectionKey>("general");
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
   const isAdminOrOwner = session?.user.role === "admin" || session?.user.role === "owner";
+  const canViewSystem = has("view_system_status");
+
+  // Deep-link support: ?section=<key> — respect entitlement when landing on /admin?section=system
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const sec = url.searchParams.get("section");
+    if (!sec) return;
+    if (sec === "system") {
+      if (canViewSystem) setActiveSection("system");
+      // If not owner: we still set activeSection so the "not available" card renders
+      // in the content slot (sidebar entry stays hidden).
+      else setActiveSection("system");
+      return;
+    }
+    const known: SectionKey[] = [
+      "general",
+      "staff",
+      "payers",
+      "compliance",
+      "demo",
+      "schedule",
+    ];
+    if ((known as string[]).includes(sec)) setActiveSection(sec as SectionKey);
+  }, [canViewSystem]);
 
   useEffect(() => {
     setSubtitle("Clinic settings");
@@ -2507,7 +2559,9 @@ export default function AdminPage() {
         {/* Section nav */}
         <nav className="flex flex-row flex-wrap gap-1 lg:flex-col lg:w-44 lg:flex-shrink-0">
           {SECTIONS.filter(
-            (section) => section.key !== "payers" || isAdminOrOwner
+            (section) =>
+              (section.key !== "payers" || isAdminOrOwner) &&
+              (section.key !== "system" || canViewSystem)
           ).map((section) => {
             const active = activeSection === section.key;
             return (
@@ -2535,6 +2589,18 @@ export default function AdminPage() {
           {activeSection === "compliance" && <ComplianceSection />}
           {activeSection === "demo" && <DemoDataSection />}
           {activeSection === "schedule" && <ScheduleSection />}
+          {activeSection === "system" &&
+            (canViewSystem ? (
+              <SystemStatusSection />
+            ) : (
+              // Soft deny for deep-link ?section=system — no leak of section existence
+              <div className="glass-card p-8 text-center">
+                <h2 className="text-subhead mb-2">Not available</h2>
+                <p className="text-caption text-[var(--text-muted)]">
+                  This section isn&apos;t available for your role.
+                </p>
+              </div>
+            ))}
         </div>
       </div>
     </div>
