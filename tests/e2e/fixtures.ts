@@ -6,7 +6,7 @@
  *   - apiCalls: array of { url, status } for all network responses
  *   - consoleErrors: array of console error message strings (filtered)
  */
-import { test as base, Page } from '@playwright/test';
+import { test as base } from '@playwright/test';
 
 interface ApiCall {
   url: string;
