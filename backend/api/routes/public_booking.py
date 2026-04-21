@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -23,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.core.rate_limit import check_rate_limit
 from backend.db.models.public.saas import Tenant
 from backend.db.models.tenant.clinical import (
     Appointment,
@@ -90,8 +90,8 @@ INTAKE_TOKEN_TTL_HOURS = 72
 # Sentinel UUID for public (anonymous) audit entries
 PUBLIC_USER_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
-# Simple in-memory rate limiter (IP -> list of timestamps)
-_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+# Rate limit parameters for the public booking endpoint.
+# Uses the shared backend.core.rate_limit implementation (Phase 10.3-04).
 RATE_LIMIT_MAX = 10
 RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
 
@@ -126,21 +126,6 @@ def _get_booking_config(tenant: Tenant) -> dict:
         "bookable_types": booking.get("bookable_types", DEFAULT_BOOKABLE_TYPES),
         "max_advance_days": booking.get("max_advance_days", DEFAULT_MAX_ADVANCE_DAYS),
     }
-
-
-def _check_rate_limit(ip: str) -> None:
-    """Simple in-memory IP rate limiter. Raises 429 if exceeded."""
-    import time
-
-    now = time.time()
-    # Prune old entries
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if now - t < RATE_LIMIT_WINDOW]
-    if len(_rate_limit_store[ip]) >= RATE_LIMIT_MAX:
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "Too many booking attempts. Please try again later.",
-        )
-    _rate_limit_store[ip].append(now)
 
 
 async def _next_chart_number(tenant_id: uuid.UUID, db: AsyncSession) -> int:
@@ -408,7 +393,7 @@ async def create_public_booking(
     """Create a patient (or reuse existing), appointment, and intake token."""
     # Rate limit
     ip = request.client.host if request.client else "unknown"
-    _check_rate_limit(ip)
+    check_rate_limit(ip, window_seconds=RATE_LIMIT_WINDOW, max_requests=RATE_LIMIT_MAX)
 
     tenant = await _get_tenant_by_slug(slug, db)
     config = _get_booking_config(tenant)

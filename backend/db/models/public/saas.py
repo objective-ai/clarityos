@@ -117,3 +117,34 @@ class TenantMember(TimestampMixin, PublicBase):
     )
     role: Mapped[str] = mapped_column(String(20), default="receptionist")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+# ---------------------------------------------------------------------------
+# System Health (Phase 10.3-04 — uptime / status page data source)
+# ---------------------------------------------------------------------------
+
+
+class SystemHealthSample(PublicBase):
+    """One row per health probe (on-demand or self-pinger).
+
+    Lives in the `public` schema; SaaS-level telemetry, NOT PHI.
+    Consumed by the uptime endpoint (Plan 10.3-05) and the System Status
+    admin panel (Plan 10.3-06).
+    """
+
+    __tablename__ = "system_health_samples"
+    __table_args__ = {"schema": "public"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        index=True,
+    )
+    api_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    pg_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    pg_latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    auth_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    auth_latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    all_green: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
