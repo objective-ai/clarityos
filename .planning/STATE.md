@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 status: unknown
 stopped_at: Completed 10.2-08-PLAN.md
-last_updated: "2026-04-04T04:31:39.284Z"
+last_updated: "2026-04-21T08:52:42.537Z"
 progress:
-  total_phases: 10
+  total_phases: 12
   completed_phases: 2
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 19
+  completed_plans: 12
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** Phase 10.2 — revamp-schedule-booking-page
+**Current focus:** Phase 10.4 — staff-scheduling
 
 ## Current Position
 
-Phase: 10.2 (revamp-schedule-booking-page) — EXECUTING
-Plan: 8 of 8 (complete)
+Phase: 10.4 (staff-scheduling) — EXECUTING
+Plan: 2 of 7
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Plan: 8 of 8 (complete)
 | Phase 10.2 P03 | 25 | 2 tasks | 2 files |
 | Phase 10.2 P07 | 8 | 2 tasks | 2 files |
 | Phase 10.2 P08 | 5 | 1 tasks | 2 files |
+| Phase 10.4 P01 | 3 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -72,7 +73,9 @@ Plan: 8 of 8 (complete)
 - Phase 10.2 inserted after Phase 10: Revamp Schedule & Booking Page (URGENT)
 - Phase 10.3 inserted after Phase 10: Error Monitoring & System Status — Sentry integration (FastAPI + Next.js) + admin status page (URGENT)
 - Phase 10.1 inserted after Phase 10: Insurance Revamp — enrich insurance fields (copay, auth code, eligibility, position, active) (URGENT)
+- Phase 10.4 inserted after Phase 10.3: Staff Scheduling — weekly hours, blocked time, shift overview, clock-in/clock-out, attendance log, CSV payroll export (URGENT)
 - Patient Document Management moved back to V3-08 — research captured in memory (research_document_management.md)
+- Phase 11 added: Marketing pages — /features, /pricing, /compare (Trust & Authority style, compare vs RevolutionEHR/Barti/EyeCloudPro); old phases 11-17 shifted to 12-18
 
 ### Decisions
 
@@ -154,6 +157,8 @@ Recent decisions affecting current work:
 - [Phase 10.2]: staffList mapped at call site to { id, full_name } — keeps BookingDrawer API clean
 - [Phase 10.2-03]: Drawer already existed as skeleton — enhanced wiring rather than rewriting; TimelineView/ClinicView onCardClick passthrough deferred
 - [Phase 10.2]: dob/sex made optional in PublicBookingRequest; frontend sends null not undefined; FastAPI 422 array detail unwrapped to readable sentences
+- [Phase 10.4]: block_type stored as String(20) not SQLAlchemy Enum — avoids native PostgreSQL enum complications
+- [Phase 10.4]: Staff back-references use lazy=selectin for eager loading compatibility
 
 ### Pending Todos
 

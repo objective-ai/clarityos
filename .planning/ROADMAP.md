@@ -24,7 +24,7 @@ All 7 phases complete. Full details archived in phase directories.
 
 ## V2 Milestone (In Progress)
 
-Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 11 → 12 → 13 → 14 → 15 → 16 → 17
+Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 → 11 → 12 → 13 → 14 → 15 → 16 → 17
 
 ### Progress
 
@@ -38,6 +38,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 11 �
 | 10.1 | 3/3 | Complete   | 2026-04-03 | — |
 | 10.2 | 8/8 | Complete    | 2026-04-04 | — |
 | 10.3 | Error Monitoring & System Status | 0/? | Not started | — |
+| 10.4 | 1/7 | In Progress|  | — |
 | 11 | Reporting & Exports | 0/? | Not started | — |
 | 12 | AI Scribe Audio | 0/? | Not started | — |
 | 13 | Mobile/Tablet UX | 0/? | Not started | — |
@@ -81,7 +82,32 @@ Plans:
 **Requirements:** TBD
 **Plans:** None yet — run `/gsd:plan-phase 10.3` to break down
 
-### Phase 11: Reporting & Exports
+### Phase 10.4: Staff Scheduling (INSERTED)
+**Goal:** Full provider availability management — weekly hours per staff, blocked time (holidays/lunch), shift overview grid, clock-in/clock-out with attendance log and CSV payroll export. Admin "Schedule" tab + persistent clock-in button in TopNav.
+**Depends on:** Phase 10.3
+**Requirements:** TBD (to be mapped during /gsd:verify-work — new STAFF-SCHED-* IDs)
+**Plans:** 1/7 plans executed
+
+Plans:
+- [ ] 10.4-01-PLAN.md — Backend foundation: ORM models (StaffWeeklySchedule, StaffBlockedTime, StaffAttendance) + BlockType enum + permissions + Pydantic schemas + Alembic 0014
+- [ ] 10.4-02-PLAN.md — FastAPI routes: schedule CRUD, blocked-time CRUD, availability grid, clock-in/out, clock-status, attendance list, CSV export (+ register in main.py)
+- [ ] 10.4-03-PLAN.md — Public booking integration: source availability from DB schedule + filter blocked times
+- [ ] 10.4-04-PLAN.md — BFF proxy subtree under app/api/staff-schedule/ + types/staffSchedule.ts with camelize transforms
+- [ ] 10.4-05-PLAN.md — Admin Schedule tab: provider selector, weekly editor, blocked-times panel, shift overview, attendance log, CSV export button
+- [ ] 10.4-06-PLAN.md — TopNav ClockInButton component: clock-in/out pill with elapsed timer and 409 re-sync
+- [ ] 10.4-07-PLAN.md — Verification: Playwright e2e (admin schedule + clock flow), pytest timezone helper, tsc clean
+
+### Phase 11: Marketing Pages (/features, /pricing, /compare)
+**Goal:** Build the public marketing site pages — feature highlights, pricing tiers, and competitor comparison (vs RevolutionEHR, Barti, EyeCloudPro) — using the Trust & Authority design system (light mode, #2563EB primary, #F97316 CTA, Lexend/Source Sans 3).
+**Depends on:** Phase 10.x (LandingPage + MarketingNav + MarketingFooter already built)
+**Success Criteria:**
+  1. /features page with icon grid, clinical workflow highlights, and demo CTA
+  2. /pricing page with 3 placeholder tiers and "Schedule a Demo" orange CTA
+  3. /compare page with comparison table vs RevolutionEHR, Barti, and EyeCloudPro
+  4. All pages use shared MarketingNav and MarketingFooter
+**Plans:** None yet — run `/gsd:plan-phase 11` to break down
+
+### Phase 12: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
 **Depends on**: Phase 9 (CMS-1500 generation), Phase 8 (aggregate queries)
 **Success Criteria:**
@@ -90,7 +116,7 @@ Plans:
   3. Encounter page has "Print Summary" button generating patient-friendly encounter summary
   4. Billing page supports batch CMS-1500 export (select multiple → ZIP download)
 
-### Phase 12: AI Scribe Audio
+### Phase 13: AI Scribe Audio
 **Goal**: Clinicians record audio during encounters, transcribed and structured into SOAP notes automatically
 **Depends on**: Phase 10 (sticky mic button + AI Scribe repositioning), Phase 2 (existing ai_scribe.py)
 **Success Criteria:**
@@ -100,7 +126,7 @@ Plans:
   4. User can review and accept auto-populated encounter fields
   5. Audio files stored in Supabase Storage linked to encounter for audit trail
 
-### Phase 13: Mobile/Tablet UX
+### Phase 14: Mobile/Tablet UX
 **Goal**: Key pages are responsive and usable on tablets and phones with touch-friendly interactions
 **Depends on**: All prior phases (responsive pass on existing pages)
 **Success Criteria:**
@@ -109,7 +135,7 @@ Plans:
   3. All interactive elements have minimum 44px tap targets
   4. No horizontal scrolling on mobile for primary content areas
 
-### Phase 14: CRM & Patient Engagement
+### Phase 15: CRM & Patient Engagement
 **Goal**: Appointment reminders, recall campaigns, and manual messaging from patient/schedule views
 **Depends on**: Phase 3 (appointment data), Phase 2 (patient contact info)
 **Success Criteria:**
@@ -119,7 +145,7 @@ Plans:
   4. Patients can opt out of SMS; opt-out stored and respected
   5. Message history (sent, delivered, failed) viewable per patient
 
-### Phase 15: Retail Inventory
+### Phase 16: Retail Inventory
 **Goal**: Product catalog of frames, lenses, and contacts with stock tracking, linked to optical orders
 **Depends on**: Phase 6 (Optical Handoff — Rx data and optical queue)
 **Success Criteria:**
@@ -129,7 +155,7 @@ Plans:
   4. Inventory page shows stock levels filterable by product type
   5. Patient detail page shows order history with status and delivery date
 
-### Phase 16: Optical Order Configuration
+### Phase 17: Optical Order Configuration
 **Goal**: Complete optical order workflow — frame/lens/coating selection, fitting measurements, vision plan entry, lab job ticket PDF, AI Scribe pre-populated suggestions
 **Depends on**: Phase 6 (Optical Handoff), Phase 15 (Retail Inventory)
 **Success Criteria:**
@@ -141,7 +167,7 @@ Plans:
   6. "Generate Job Ticket" produces PDF with both Rx columns, frame, lens, coatings, measurements, and vision plan
   7. AI Scribe optical recommendations appear as ghosted suggestions in order form
 
-### Phase 17: Point of Sale
+### Phase 18: Point of Sale
 **Goal**: Checkout flow for clinical copays and retail purchases with receipt generation and daily close report
 **Depends on**: Phase 16 (optical orders), Phase 9 (fee schedules)
 **Success Criteria:**
