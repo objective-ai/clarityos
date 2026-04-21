@@ -77,10 +77,19 @@ Plans:
 - [ ] 10.2-08-PLAN.md — Gap closure: fix public booking schema + error display
 
 ### Phase 10.3: Error Monitoring & System Status (INSERTED)
-**Goal:** Sentry integration (FastAPI + Next.js) + admin status page showing server health, recent errors, and uptime
+**Goal:** Sentry integration (FastAPI + Next.js) with HIPAA-safe PHI scrubber + OWNER-only Admin System Status page (service health, recent errors, 7-day uptime) + TopNav health dot
 **Depends on:** Phase 10
-**Requirements:** TBD
-**Plans:** None yet — run `/gsd:plan-phase 10.3` to break down
+**Requirements:** [PHASE-10.3-CONTEXT]
+**Plans:** 7 plans
+
+Plans:
+- [ ] 10.3-01-PLAN.md — PHI scrubber (JS + Python) with TDD: deny-list, URL query scrub, clinical body-drop, ignore rules
+- [ ] 10.3-02-PLAN.md — Sentry Next.js 14 wiring: client/server/edge configs, instrumentation hook, withSentryConfig
+- [ ] 10.3-03-PLAN.md — FastAPI sentry_sdk.init with composed before_send; init in main.py before middleware
+- [ ] 10.3-04-PLAN.md — SystemHealthSample ORM + Alembic 0015 + /api/system/health endpoint + 60s self-pinger + BFF proxy
+- [ ] 10.3-05-PLAN.md — /api/system/uptime (7-day rolling SQL) + /api/system/errors BFF proxy to Sentry REST (20s cache, OWNER gate)
+- [ ] 10.3-06-PLAN.md — VIEW_SYSTEM_STATUS permission + Admin System section with three panels + TopNav HealthDot
+- [ ] 10.3-07-PLAN.md — Playwright e2e + runbook docs + human HIPAA verification checkpoint
 
 ### Phase 10.4: Staff Scheduling (INSERTED)
 **Goal:** Full provider availability management — weekly hours per staff, blocked time (holidays/lunch), shift overview grid, clock-in/clock-out with attendance log and CSV payroll export. Admin "Schedule" tab + persistent clock-in button in TopNav.
