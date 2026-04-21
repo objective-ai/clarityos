@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: unknown
 stopped_at: Completed 10.4-03-PLAN.md
-last_updated: "2026-04-21T16:45:03.603Z"
+last_updated: "2026-04-21T16:45:11.450Z"
 progress:
   total_phases: 12
   completed_phases: 2
@@ -162,6 +162,9 @@ Recent decisions affecting current work:
 - [Phase 10.4]: Staff back-references use lazy=selectin for eager loading compatibility
 - [Phase 10.4-03]: _is_blocked() was already defined in public_booking.py but not called — added call in slot loop to complete wire-up
 - [Phase 10.4-03]: public_booking.py imports ORM models only (not staff_schedule routes) — plan independence maintained
+- [Phase 10.4]: Tenant.timezone is a direct column (not settings_jsonb) — _resolve_tenant_tz reads it directly; raises HTTP 400 if missing
+- [Phase 10.4]: staff_schedule.router registered at /api/staff-schedule to avoid conflict with staff.router at /api/staff
+- [Phase 10.4]: TenantContext has no staff_id — resolve_staff(ctx, db) used in clock-in/out routes
 
 ### Pending Todos
 
