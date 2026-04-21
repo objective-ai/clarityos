@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, optical, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, tenant, vitals
+from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, optical, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, tenant, uptime, vitals
 from backend.core.config import settings
 from backend.core.sentry_setup import init_sentry
 
@@ -154,6 +154,11 @@ app.include_router(
     staff_schedule.router,
     prefix="/api/staff-schedule",
     tags=["Staff Schedule"],
+)
+app.include_router(
+    uptime.router,
+    prefix="/api/system",
+    tags=["System Uptime"],
 )
 
 
