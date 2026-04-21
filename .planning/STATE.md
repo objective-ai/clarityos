@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 10.4-07-PLAN.md
-last_updated: "2026-04-21T17:32:21.192Z"
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-04-21T19:47:12.646Z"
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 22
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** Phase 10.4 — staff-scheduling
+**Current focus:** Phase 11 — marketing-pages
 
 ## Current Position
 
-Phase: 10.4 (staff-scheduling) — EXECUTING
-Plan: 6 of 7
+Phase: 11 (marketing-pages) — EXECUTING
+Plan: 1 of 4
 
 ## Performance Metrics
 
@@ -173,6 +173,9 @@ Recent decisions affecting current work:
 - [Phase 10.4]: [Phase 10.4-06]: staffId sourced from session.user.staffId (camelCase) — confirmed via AppSession type in types/session.ts
 - [Phase 10.4]: [Phase 10.4-06]: ClockInButton inserted before theme-toggle in TopNav right-hand action cluster; returns null when staffId absent
 - [Phase 10.4]: getWeekDays accepts string not Date — toYMD called at useMemo call site in ScheduleSection
+- [Phase 11-marketing-pages]: app/page.tsx deleted (not kept as thin re-export) — Next.js App Router treats (marketing)/page.tsx as / making both routes conflict; deletion resolves build error cleanly
+- [Phase 11-marketing-pages]: All five marketing primitives are server components with static inline styles — no use client, no JS hover handlers needed
+- [Phase 11-marketing-pages]: 10 compare rows authored with unverified source comments; Wave 2 polish plan will replace with verified vendor URLs
 
 ### Pending Todos
 
@@ -184,8 +187,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-21T17:32:21.099Z
-Stopped at: Completed 10.4-07-PLAN.md
+Last session: 2026-04-21T19:47:01.848Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
 
 **Phase 9 Overview:**
