@@ -60,6 +60,9 @@ class ClinicalAction(StrEnum):
     MANAGE_APPOINTMENT = "manage_appointment"
     CHECK_IN_PATIENT = "check_in_patient"
     START_EXAM = "start_exam"
+    MANAGE_SCHEDULE = "manage_schedule"  # set/edit staff availability
+    CLOCK_IN_OUT = "clock_in_out"        # self clock-in/out
+    VIEW_ATTENDANCE = "view_attendance"  # read attendance logs + export CSV
 
     # Billing
     VIEW_BILLING = "view_billing"
@@ -125,6 +128,9 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     ClinicalAction.MANAGE_APPOINTMENT:  {_D, _T, _R, _A, _O},
     ClinicalAction.CHECK_IN_PATIENT:    {_D, _T, _R, _A, _O},
     ClinicalAction.START_EXAM:          {_D, _O},
+    ClinicalAction.MANAGE_SCHEDULE:     {_D, _A, _O},
+    ClinicalAction.CLOCK_IN_OUT:        {_D, _T, _R, _A, _O},
+    ClinicalAction.VIEW_ATTENDANCE:     {_A, _O},
 
     # Billing
     ClinicalAction.VIEW_BILLING:        {_D, _A, _O},
