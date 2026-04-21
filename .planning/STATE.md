@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 10.4-06-PLAN.md
-last_updated: "2026-04-21T17:21:05.470Z"
+stopped_at: Completed 10.4-05-PLAN.md
+last_updated: "2026-04-21T17:22:33.684Z"
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 22
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -67,6 +67,7 @@ Plan: 6 of 7
 | Phase 10.4 P02 | 20 | 2 tasks | 2 files |
 | Phase 10.4 P04 | 15 | 2 tasks | 11 files |
 | Phase 10.4 P06 | 8 | 2 tasks | 2 files |
+| Phase 10.4 P05 | 12 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -170,6 +171,7 @@ Recent decisions affecting current work:
 - [Phase 10.4-04]: BFF upstream prefix is /api/staff-schedule/ (not /api/staff/) — all 10 BFF routes proxy to this prefix; CSV export uses raw fetch to stream body (proxyToFastAPI would break streaming)
 - [Phase 10.4]: [Phase 10.4-06]: staffId sourced from session.user.staffId (camelCase) — confirmed via AppSession type in types/session.ts
 - [Phase 10.4]: [Phase 10.4-06]: ClockInButton inserted before theme-toggle in TopNav right-hand action cluster; returns null when staffId absent
+- [Phase 10.4]: getWeekDays accepts string not Date — toYMD called at useMemo call site in ScheduleSection
 
 ### Pending Todos
 
@@ -181,8 +183,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-21T17:21:05.465Z
-Stopped at: Completed 10.4-06-PLAN.md
+Last session: 2026-04-21T17:22:33.515Z
+Stopped at: Completed 10.4-05-PLAN.md
 Resume file: None
 
 **Phase 9 Overview:**
