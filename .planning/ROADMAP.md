@@ -38,7 +38,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 10.1 | 3/3 | Complete   | 2026-04-03 | — |
 | 10.2 | 8/8 | Complete    | 2026-04-04 | — |
 | 10.3 | Error Monitoring & System Status | 0/? | Not started | — |
-| 10.4 | 3/7 | In Progress|  | — |
+| 10.4 | 5/7 | In Progress|  | — |
 | 11 | Reporting & Exports | 0/? | Not started | — |
 | 12 | AI Scribe Audio | 0/? | Not started | — |
 | 13 | Mobile/Tablet UX | 0/? | Not started | — |
@@ -86,7 +86,7 @@ Plans:
 **Goal:** Full provider availability management — weekly hours per staff, blocked time (holidays/lunch), shift overview grid, clock-in/clock-out with attendance log and CSV payroll export. Admin "Schedule" tab + persistent clock-in button in TopNav.
 **Depends on:** Phase 10.3
 **Requirements:** TBD (to be mapped during /gsd:verify-work — new STAFF-SCHED-* IDs)
-**Plans:** 3/7 plans executed
+**Plans:** 5/7 plans executed
 
 Plans:
 - [ ] 10.4-01-PLAN.md — Backend foundation: ORM models (StaffWeeklySchedule, StaffBlockedTime, StaffAttendance) + BlockType enum + permissions + Pydantic schemas + Alembic 0014

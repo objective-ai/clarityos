@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 10.4-04-PLAN.md
-last_updated: "2026-04-21T17:10:00.000Z"
+stopped_at: Completed 10.4-06-PLAN.md
+last_updated: "2026-04-21T17:21:05.470Z"
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 22
-  completed_plans: 14
+  completed_plans: 16
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 10.4 (staff-scheduling) — EXECUTING
-Plan: 4 of 7
+Plan: 6 of 7
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Plan: 4 of 7
 | Phase 10.4 P01 | 3 | 3 tasks | 4 files |
 | Phase 10.4 P02 | 20 | 2 tasks | 2 files |
 | Phase 10.4 P04 | 15 | 2 tasks | 11 files |
+| Phase 10.4 P06 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,8 @@ Recent decisions affecting current work:
 - [Phase 10.4]: staff_schedule.router registered at /api/staff-schedule to avoid conflict with staff.router at /api/staff
 - [Phase 10.4]: TenantContext has no staff_id — resolve_staff(ctx, db) used in clock-in/out routes
 - [Phase 10.4-04]: BFF upstream prefix is /api/staff-schedule/ (not /api/staff/) — all 10 BFF routes proxy to this prefix; CSV export uses raw fetch to stream body (proxyToFastAPI would break streaming)
+- [Phase 10.4]: [Phase 10.4-06]: staffId sourced from session.user.staffId (camelCase) — confirmed via AppSession type in types/session.ts
+- [Phase 10.4]: [Phase 10.4-06]: ClockInButton inserted before theme-toggle in TopNav right-hand action cluster; returns null when staffId absent
 
 ### Pending Todos
 
@@ -178,8 +181,8 @@ None active.
 
 ## Session Continuity
 
-Last session: 2026-04-21T17:10:00Z
-Stopped at: Completed 10.4-04-PLAN.md
+Last session: 2026-04-21T17:21:05.465Z
+Stopped at: Completed 10.4-06-PLAN.md
 Resume file: None
 
 **Phase 9 Overview:**
