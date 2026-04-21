@@ -33,7 +33,9 @@ export type EntitlementKey =
   | "advanced_analytics"
   | "equipment_import"
   // Internal
-  | "super_admin";
+  | "super_admin"
+  // System / admin (role-derived; OWNER-only)
+  | "view_system_status";
 
 // ---------------------------------------------------------------------------
 // Staff role — mirrors Python StaffRole enum

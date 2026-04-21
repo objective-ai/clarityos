@@ -40,6 +40,9 @@ export const Entitlement = {
 
   // ---- Internal ----
   SUPER_ADMIN: "super_admin" as const,
+
+  // ---- System / admin (role-derived — OWNER-only) ----
+  VIEW_SYSTEM_STATUS: "view_system_status" as const,
 } satisfies Record<string, EntitlementKey>;
 
 // ---------------------------------------------------------------------------
@@ -132,6 +135,11 @@ export const ENTITLEMENT_META: Record<
   super_admin: {
     label: "Super Admin",
     description: "Internal cross-tenant support access.",
+    plan: "Add-on",
+  },
+  view_system_status: {
+    label: "System Status",
+    description: "Owner-only view of API health, recent errors, and uptime.",
     plan: "Add-on",
   },
 };

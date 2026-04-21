@@ -78,6 +78,7 @@ class ClinicalAction(StrEnum):
     # Admin
     VIEW_AUDIT_LOG = "view_audit_log"
     MANAGE_STAFF = "manage_staff"
+    VIEW_SYSTEM_STATUS = "view_system_status"  # OWNER-only: system health, errors, uptime
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +147,7 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     # Admin
     ClinicalAction.VIEW_AUDIT_LOG:      {_A, _O},
     ClinicalAction.MANAGE_STAFF:        {_A, _O},
+    ClinicalAction.VIEW_SYSTEM_STATUS:  {_O},
 }
 
 

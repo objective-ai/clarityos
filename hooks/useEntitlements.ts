@@ -143,20 +143,29 @@ export function useEntitlements(): UseEntitlementsReturn {
       /**
        * O(1) Set lookup.
        * Superusers implicitly have all entitlements.
+       *
+       * Role-derived exceptions: `view_system_status` is OWNER-only and is
+       * NOT granted via plan features — it bypasses the entitlements Set and
+       * is evaluated purely from the user's role.
        */
       has: (key: EntitlementKey): boolean => {
         if (user.isSuperuser) return true;
+        if (key === "view_system_status") return user.role === "owner";
         return entitlementSet.has(key);
       },
 
       hasAll: (...keys: EntitlementKey[]): boolean => {
         if (user.isSuperuser) return true;
-        return keys.every((k) => entitlementSet.has(k));
+        return keys.every((k) =>
+          k === "view_system_status" ? user.role === "owner" : entitlementSet.has(k)
+        );
       },
 
       hasAny: (...keys: EntitlementKey[]): boolean => {
         if (user.isSuperuser) return true;
-        return keys.some((k) => entitlementSet.has(k));
+        return keys.some((k) =>
+          k === "view_system_status" ? user.role === "owner" : entitlementSet.has(k)
+        );
       },
 
       requireRole: (...allowedRoles: StaffRole[]): boolean => {
