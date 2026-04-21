@@ -70,7 +70,7 @@ Plan: 8 of 8 (complete)
 
 - Phase 10 added: Encounter Workflow Redesign — pre-test/doctor mode split, sticky mic, AI Scribe at bottom, role-based tab visibility. Old Phases 10-16 renumbered to 11-17.
 - Phase 10.2 inserted after Phase 10: Revamp Schedule & Booking Page (URGENT)
-- Phase 10.5 inserted after Phase 10: Error Monitoring & System Status — Sentry integration (FastAPI + Next.js) + admin status page (URGENT)
+- Phase 10.3 inserted after Phase 10: Error Monitoring & System Status — Sentry integration (FastAPI + Next.js) + admin status page (URGENT)
 - Phase 10.1 inserted after Phase 10: Insurance Revamp — enrich insurance fields (copay, auth code, eligibility, position, active) (URGENT)
 - Patient Document Management moved back to V3-08 — research captured in memory (research_document_management.md)
 

@@ -24,7 +24,7 @@ All 7 phases complete. Full details archived in phase directories.
 
 ## V2 Milestone (In Progress)
 
-Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.5 → 11 → 12 → 13 → 14 → 15 → 16 → 17
+Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 11 → 12 → 13 → 14 → 15 → 16 → 17
 
 ### Progress
 
@@ -37,7 +37,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.5 → 11 �
 | 10 | Encounter Workflow Redesign | 3/3 | Complete | 2026-03-27 |
 | 10.1 | 3/3 | Complete   | 2026-04-03 | — |
 | 10.2 | 8/8 | Complete    | 2026-04-04 | — |
-| 10.5 | Error Monitoring & System Status | 0/? | Not started | — |
+| 10.3 | Error Monitoring & System Status | 0/? | Not started | — |
 | 11 | Reporting & Exports | 0/? | Not started | — |
 | 12 | AI Scribe Audio | 0/? | Not started | — |
 | 13 | Mobile/Tablet UX | 0/? | Not started | — |
@@ -75,11 +75,11 @@ Plans:
 - [ ] 10.2-07-PLAN.md — Gap closure: fix tab visibility, drawer render gate, drawer close controls
 - [ ] 10.2-08-PLAN.md — Gap closure: fix public booking schema + error display
 
-### Phase 10.5: Error Monitoring & System Status (INSERTED)
+### Phase 10.3: Error Monitoring & System Status (INSERTED)
 **Goal:** Sentry integration (FastAPI + Next.js) + admin status page showing server health, recent errors, and uptime
 **Depends on:** Phase 10
 **Requirements:** TBD
-**Plans:** None yet — run `/gsd:plan-phase 10.5` to break down
+**Plans:** None yet — run `/gsd:plan-phase 10.3` to break down
 
 ### Phase 11: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
