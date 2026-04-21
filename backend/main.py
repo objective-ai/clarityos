@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, optical, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, tenant, vitals
 from backend.core.config import settings
+from backend.core.sentry_setup import init_sentry
 
 logger = logging.getLogger("clarityos")
 
@@ -15,6 +16,7 @@ app = FastAPI(
     description="Multi-tenant clinical backend — Supabase Postgres + Auth",
     version="0.1.0",
 )
+init_sentry()  # MUST be before add_middleware/include_router — Sentry ASGI wraps the app on init
 
 
 @app.exception_handler(Exception)
