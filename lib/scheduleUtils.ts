@@ -85,3 +85,115 @@ export function isSlotOccupied(
       return sStart < aEnd && sEnd > aStart;
     });
 }
+
+/** 30-min time slots from 6:00 am to 10:00 pm (33 entries). */
+export function generateTimeSlots(): { label: string; value: string }[] {
+  const slots: { label: string; value: string }[] = [];
+  for (let h = 6; h <= 22; h++) {
+    for (const m of [0, 30]) {
+      if (h === 22 && m === 30) break;
+      const hour12 = h % 12 === 0 ? 12 : h % 12;
+      const ampm = h < 12 ? "am" : "pm";
+      const label = `${hour12}:${m === 0 ? "00" : "30"} ${ampm}`;
+      const value = `${String(h).padStart(2, "0")}:${m === 0 ? "00" : "30"}`;
+      slots.push({ label, value });
+    }
+  }
+  return slots;
+}
+
+/**
+ * Returns CSS left% and width% for a shift bar within a 6am–10pm (960-min) window.
+ * Both startTime and endTime are "HH:MM" strings.
+ */
+export function calcShiftBar(
+  startTime: string,
+  endTime: string
+): { left: string; width: string } {
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  const startMin = sh * 60 + sm;
+  const endMin = eh * 60 + em;
+  const windowStart = 360; // 6am in minutes
+  const windowSize = 960; // 6am–10pm
+  const left = Math.max(0, ((startMin - windowStart) / windowSize) * 100);
+  const width = Math.max(0, ((endMin - startMin) / windowSize) * 100);
+  return { left: `${left.toFixed(1)}%`, width: `${width.toFixed(1)}%` };
+}
+
+/**
+ * Groups blocks that share the same blockType + startTime(HH:MM) + endTime(HH:MM).
+ * Returns only groups with 2+ members (recurring groups).
+ * Key format: "blockType|HH:MM|HH:MM"
+ */
+export function inferRecurGroups(
+  blocks: Array<{ id: string; blockType: string; startDatetime: string; endDatetime: string }>
+): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const b of blocks) {
+    const key = `${b.blockType}|${b.startDatetime.slice(11, 16)}|${b.endDatetime.slice(11, 16)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(b.id);
+  }
+  for (const [key, ids] of groups) {
+    if (ids.length < 2) groups.delete(key);
+  }
+  return groups;
+}
+
+/**
+ * Human-readable block display string.
+ * Examples:
+ *   lunch single  → "Today · 12:00 – 1:00 pm"
+ *   personal      → "Apr 22 · 2:00 – 4:00 pm"
+ *   holiday range → "Apr 28 – 30 · All day"
+ */
+export function formatBlockDisplay(
+  startDatetime: string,
+  endDatetime: string,
+  blockType: string
+): string {
+  const start = new Date(startDatetime);
+  const end = new Date(endDatetime);
+  const isToday = start.toDateString() === new Date().toDateString();
+  const dateStr = isToday
+    ? "Today"
+    : start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  if (blockType === "holiday") {
+    if (start.toDateString() !== end.toDateString()) {
+      const endStr = end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return `${dateStr} – ${endStr} · All day`;
+    }
+    return `${dateStr} · All day`;
+  }
+
+  const fmt = (d: Date) =>
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+  return `${dateStr} · ${fmt(start)} – ${fmt(end)}`;
+}
+
+/**
+ * Generates YYYY-MM-DD strings for the given weekday indices (0=Mon…6=Sun)
+ * starting from startDate, for `weeks` consecutive weeks.
+ * Only returns dates >= startDate.
+ */
+export function generateRepeatDates(
+  startDate: string,
+  weekdays: number[],
+  weeks: number
+): string[] {
+  const start = new Date(startDate + "T00:00:00");
+  const monBased = (start.getDay() + 6) % 7; // convert JS Sun=0 to Mon=0
+  const monday = new Date(start);
+  monday.setDate(monday.getDate() - monBased);
+  const dates: string[] = [];
+  for (let w = 0; w < weeks; w++) {
+    for (const wd of weekdays) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + w * 7 + wd);
+      if (d >= start) dates.push(d.toISOString().slice(0, 10));
+    }
+  }
+  return dates.sort();
+}

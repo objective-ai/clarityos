@@ -12,6 +12,11 @@ import {
   getWaitColor,
   getRoleDefaultView,
   isSlotOccupied,
+  generateTimeSlots,
+  calcShiftBar,
+  inferRecurGroups,
+  formatBlockDisplay,
+  generateRepeatDates,
 } from "./scheduleUtils";
 
 // ---------------------------------------------------------------------------
@@ -278,5 +283,101 @@ describe("isSlotOccupied", () => {
       [noShowAppt]
     );
     expect(result).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateTimeSlots
+// ---------------------------------------------------------------------------
+
+describe("generateTimeSlots", () => {
+  it("returns 33 slots from 6:00 am to 10:00 pm", () => {
+    const slots = generateTimeSlots();
+    expect(slots).toHaveLength(33);
+    expect(slots[0]).toEqual({ label: "6:00 am", value: "06:00" });
+    expect(slots[slots.length - 1]).toEqual({ label: "10:00 pm", value: "22:00" });
+  });
+  it("includes 12:00 pm and 1:00 pm", () => {
+    const slots = generateTimeSlots();
+    expect(slots.find(s => s.value === "12:00")?.label).toBe("12:00 pm");
+    expect(slots.find(s => s.value === "13:00")?.label).toBe("1:00 pm");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// calcShiftBar
+// ---------------------------------------------------------------------------
+
+describe("calcShiftBar", () => {
+  it("9am–5pm fills correct width starting at ~18.8%", () => {
+    // 9am = 540min, window start = 360 (6am), window size = 960
+    // left = (540-360)/960*100 = 18.75% → toFixed(1) → "18.8%"
+    // width = (1020-540)/960*100 = 50.0%
+    const { left, width } = calcShiftBar("09:00", "17:00");
+    expect(left).toBe("18.8%");
+    expect(width).toBe("50.0%");
+  });
+  it("clamps negative left to 0%", () => {
+    const { left } = calcShiftBar("04:00", "05:00");
+    expect(left).toBe("0.0%");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// inferRecurGroups
+// ---------------------------------------------------------------------------
+
+describe("inferRecurGroups", () => {
+  const blocks = [
+    { id: "a", blockType: "lunch", startDatetime: "2026-04-21T12:00:00", endDatetime: "2026-04-21T13:00:00" },
+    { id: "b", blockType: "lunch", startDatetime: "2026-04-22T12:00:00", endDatetime: "2026-04-22T13:00:00" },
+    { id: "c", blockType: "personal", startDatetime: "2026-04-22T14:00:00", endDatetime: "2026-04-22T15:00:00" },
+  ];
+  it("groups 2 lunch blocks with same time", () => {
+    const groups = inferRecurGroups(blocks);
+    expect(groups.has("lunch|12:00|13:00")).toBe(true);
+    expect(groups.get("lunch|12:00|13:00")).toEqual(["a", "b"]);
+  });
+  it("excludes single blocks", () => {
+    const groups = inferRecurGroups(blocks);
+    expect(groups.has("personal|14:00|15:00")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatBlockDisplay
+// ---------------------------------------------------------------------------
+
+describe("formatBlockDisplay", () => {
+  it("shows Today for same-day lunch", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = formatBlockDisplay(`${today}T12:00:00`, `${today}T13:00:00`, "lunch");
+    expect(result).toMatch(/^Today · /);
+    expect(result).toMatch(/12:00/);
+  });
+  it("shows date range for multi-day holiday", () => {
+    const result = formatBlockDisplay("2026-04-28T00:00:00", "2026-04-30T23:59:59", "holiday");
+    expect(result).toMatch(/Apr 28/);
+    expect(result).toMatch(/Apr 30/);
+    expect(result).toContain("All day");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateRepeatDates
+// ---------------------------------------------------------------------------
+
+describe("generateRepeatDates", () => {
+  it("generates Mon/Wed for 2 weeks from a Wednesday start", () => {
+    // Apr 22 = Wednesday, weekdays [0,2] = Mon+Wed
+    const dates = generateRepeatDates("2026-04-22", [0, 2], 2);
+    expect(dates).toContain("2026-04-22"); // Wed of week 1
+    expect(dates).toContain("2026-04-27"); // Mon of week 2
+    expect(dates).toContain("2026-04-29"); // Wed of week 2
+    expect(dates).not.toContain("2026-04-20"); // Mon before start — excluded
+  });
+  it("returns sorted dates", () => {
+    const dates = generateRepeatDates("2026-04-22", [0, 2, 4], 2);
+    expect(dates).toEqual([...dates].sort());
   });
 });
