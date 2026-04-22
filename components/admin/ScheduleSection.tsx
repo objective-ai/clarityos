@@ -386,6 +386,7 @@ export default function ScheduleSection() {
   }
 
   async function deleteAllRecurring(groupIds: string[]) {
+    if (!selectedStaffId) return;
     setDeleteTarget(null);
     setBlocks(prev => prev.filter(b => !groupIds.includes(b.id)));
     await Promise.all(
