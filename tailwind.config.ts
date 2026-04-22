@@ -16,7 +16,6 @@ const config: Config = {
       },
       colors: {
         accent:    "var(--accent)",
-        base:      "var(--bg-base)",
         surface:   "var(--bg-surface)",
         elevated:  "var(--bg-elevated)",
         overlay:   "var(--bg-overlay)",

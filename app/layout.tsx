@@ -6,7 +6,7 @@
  */
 
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono, Lexend, Source_Sans_3 } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
@@ -24,12 +24,32 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
+const lexend = Lexend({
+  subsets: ["latin"],
+  variable: "--font-lexend",
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const sourceSans = Source_Sans_3({
+  subsets: ["latin"],
+  variable: "--font-source-sans",
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: {
     template: "%s | ClarityOS",
-    default: "ClarityOS — Optometry Practice Management",
+    default: "ClarityOS — Optometry EHR & Practice Management",
   },
-  description: "Clinical workflow management for modern optometry practices.",
+  description: "AI-powered clinical documentation, scheduling, and billing — purpose-built for modern optometry practices.",
+  keywords: ["optometry EHR", "eye care practice management", "AI clinical scribe", "optometry billing software"],
+  openGraph: {
+    title: "ClarityOS — Optometry EHR & Practice Management",
+    description: "AI-powered clinical documentation, scheduling, and billing for eye care practices.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -38,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${jakarta.variable} ${jetbrainsMono.variable} ${lexend.variable} ${sourceSans.variable}`} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
