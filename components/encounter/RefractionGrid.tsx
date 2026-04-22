@@ -582,10 +582,9 @@ export function RefractionGrid({
   // Never include isReadOnly or initialRefractions — both create new references on every
   // parent re-render, so including them would call init() again and wipe in-progress input.
   // isReadOnly is handled separately below; initialRefractions is always [] (parent never passes it).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     init(encounterId, initialRefractions, isReadOnly);
-  }, [encounterId]);
+  }, [encounterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update read-only flag independently when it changes (e.g., encounter finalized)
   useEffect(() => {

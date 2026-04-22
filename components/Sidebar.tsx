@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Check, ChevronLeft } from "lucide-react";
@@ -229,10 +230,13 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
         }}
       >
         {logoUrl ? (
-          <img
+          <Image
             src={logoUrl}
             alt="Clinic logo"
-            className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
+            width={32}
+            height={32}
+            className="rounded-lg object-contain flex-shrink-0"
+            unoptimized
           />
         ) : (
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--accent-dim)] border border-[var(--mono-border)]">

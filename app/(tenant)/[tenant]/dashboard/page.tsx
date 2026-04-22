@@ -165,7 +165,7 @@ export default function DashboardPage({
         return new Date(encB.encounterDate).getTime() - new Date(encA.encounterDate).getTime();
       })
       .slice(0, 4);
-  }, [encounters]);
+  }, [encounters, clinicTimezone]);
 
   return (
     <div className="flex flex-col gap-6 stagger">

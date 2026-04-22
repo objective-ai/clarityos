@@ -40,7 +40,7 @@ export default function OpticalPage() {
     const isToday = queueDate === clinicToday(tz);
     setSubtitle(formatDateLong(queueDate) + (isToday ? " · Today" : ""));
     return () => setSubtitle(null);
-  }, [queueDate, setSubtitle]);
+  }, [queueDate, setSubtitle, tz]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
