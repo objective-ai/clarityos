@@ -357,7 +357,7 @@ export default function ScheduleSection() {
           }),
         });
         if (res.ok) newEntries.push(camelizeBlockedTime(await res.json()));
-      } catch { break; }
+      } catch { continue; }
     }
 
     if (newEntries.length > 0) {
@@ -677,6 +677,7 @@ export default function ScheduleSection() {
                     <span className="text-xs text-[var(--text-muted)]">{b.reason}</span>
                   )}
                   <button
+                    type="button"
                     data-testid={`blocked-time-delete-${b.id}`}
                     className="ml-auto text-red-400 text-xs hover:text-red-300"
                     onClick={() => requestDelete(b.id)}
