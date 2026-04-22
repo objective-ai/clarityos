@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   BlockType,
   WeeklyScheduleDay,
@@ -18,8 +17,8 @@ import {
   getWeekDays,
   generateTimeSlots,
   calcShiftBar,
-  inferRecurGroups as _inferRecurGroups,
-  formatBlockDisplay as _formatBlockDisplay,
+  inferRecurGroups,
+  formatBlockDisplay,
   generateRepeatDates,
 } from "@/lib/scheduleUtils";
 
@@ -168,6 +167,7 @@ export default function ScheduleSection() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
 
   const [blocks, setBlocks] = useState<BlockedTime[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; groupIds: string[] } | null>(null);
 
   const [newBlock, setNewBlock] = useState<NewBlockState>(makeDefaultBlock);
 
@@ -370,6 +370,29 @@ export default function ScheduleSection() {
     if (!selectedStaffId) return;
     setBlocks(prev => prev.filter(b => b.id !== blockId));
     await fetch(`/api/staff-schedule/${selectedStaffId}/blocked-times/${blockId}/`, { method: "DELETE" });
+  }
+
+  function requestDelete(blockId: string) {
+    const groups = inferRecurGroups(blocks);
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+    const key = `${block.blockType}|${block.startDatetime.slice(11, 16)}|${block.endDatetime.slice(11, 16)}`;
+    const groupIds = groups.get(key);
+    if (groupIds && groupIds.length >= 2) {
+      setDeleteTarget({ id: blockId, groupIds });
+    } else {
+      deleteBlock(blockId);
+    }
+  }
+
+  async function deleteAllRecurring(groupIds: string[]) {
+    setDeleteTarget(null);
+    setBlocks(prev => prev.filter(b => !groupIds.includes(b.id)));
+    await Promise.all(
+      groupIds.map(id =>
+        fetch(`/api/staff-schedule/${selectedStaffId}/blocked-times/${id}/`, { method: "DELETE" })
+      )
+    );
   }
 
   return (
@@ -587,26 +610,85 @@ export default function ScheduleSection() {
             Add
           </Button>
         </div>
-        <ul className="flex flex-col gap-2">
-          {blocks.map(b => (
-            <li
-              key={b.id}
-              data-testid={`blocked-time-item-${b.id}`}
-              className="flex items-center gap-3 bg-[var(--glass-bg)] rounded px-3 py-2"
-            >
-              <Badge>{b.blockType}</Badge>
-              <span className="text-sm text-[var(--text-primary)]">{b.startDatetime} → {b.endDatetime}</span>
-              <span className="text-sm text-[var(--text-secondary)]">{b.reason}</span>
-              <button
-                data-testid={`blocked-time-delete-${b.id}`}
-                className="ml-auto text-red-400 text-sm"
-                onClick={() => deleteBlock(b.id)}
+        {/* Delete prompt */}
+        {deleteTarget && (
+          <div className="mb-3 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm">
+            <p className="font-medium text-[var(--text-primary)]">Remove this block?</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">This is a recurring block.</p>
+            <div className="flex gap-2 mt-3 flex-wrap">
+              <Button
+                variant="outline"
+                className="text-xs h-7 px-3"
+                onClick={() => { deleteBlock(deleteTarget.id); setDeleteTarget(null); }}
               >
-                Delete
+                Just this one
+              </Button>
+              <Button
+                variant="destructive"
+                className="text-xs h-7 px-3"
+                onClick={() => deleteAllRecurring(deleteTarget.groupIds)}
+              >
+                Delete all recurring
+              </Button>
+              <button
+                type="button"
+                className="text-xs text-[var(--text-muted)] ml-auto"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
               </button>
-            </li>
-          ))}
-          {blocks.length === 0 && <li className="text-[var(--text-muted)] text-sm">No upcoming blocks</li>}
+            </div>
+          </div>
+        )}
+
+        <ul className="flex flex-col gap-2">
+          {(() => {
+            const groups = inferRecurGroups(blocks);
+            return blocks.map(b => {
+              const key = `${b.blockType}|${b.startDatetime.slice(11, 16)}|${b.endDatetime.slice(11, 16)}`;
+              const isRecurring = (groups.get(key)?.length ?? 0) >= 2;
+              const badgeClass =
+                b.blockType === "lunch"
+                  ? "bg-[#2DD4BF]/15 text-[#2DD4BF] border border-[#2DD4BF]/30"
+                  : b.blockType === "holiday"
+                  ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                  : b.blockType === "personal"
+                  ? "bg-violet-500/15 text-violet-400 border border-violet-500/30"
+                  : "bg-[var(--glass-bg)] text-[var(--text-muted)] border border-[var(--glass-border)]";
+              return (
+                <li
+                  key={b.id}
+                  data-testid={`blocked-time-item-${b.id}`}
+                  className="flex items-center gap-3 bg-[var(--glass-bg)] rounded px-3 py-2"
+                >
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass}`}>
+                    {b.blockType}
+                  </span>
+                  <span className="text-sm text-[var(--text-primary)]">
+                    {formatBlockDisplay(b.startDatetime, b.endDatetime, b.blockType)}
+                  </span>
+                  {isRecurring && (
+                    <span className="text-[10px] bg-[#2DD4BF]/10 text-[#2DD4BF] rounded-full px-2">
+                      recurring
+                    </span>
+                  )}
+                  {b.reason && (
+                    <span className="text-xs text-[var(--text-muted)]">{b.reason}</span>
+                  )}
+                  <button
+                    data-testid={`blocked-time-delete-${b.id}`}
+                    className="ml-auto text-red-400 text-xs hover:text-red-300"
+                    onClick={() => requestDelete(b.id)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              );
+            });
+          })()}
+          {blocks.length === 0 && (
+            <li className="text-[var(--text-muted)] text-sm">No upcoming blocks</li>
+          )}
         </ul>
       </Card>
 
