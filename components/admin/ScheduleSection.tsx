@@ -20,7 +20,7 @@ import {
   calcShiftBar,
   inferRecurGroups as _inferRecurGroups,
   formatBlockDisplay as _formatBlockDisplay,
-  generateRepeatDates as _generateRepeatDates,
+  generateRepeatDates,
 } from "@/lib/scheduleUtils";
 
 type StaffLite = { id: string; firstName: string; lastName: string; role: string; isActive: boolean };
@@ -85,7 +85,7 @@ function ToggleSwitch({
 
 const DAY_PILL_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-function _DayPills({
+function DayPills({
   selected,
   onChange,
 }: {
@@ -141,7 +141,35 @@ export default function ScheduleSection() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
 
   const [blocks, setBlocks] = useState<BlockedTime[]>([]);
-  const [newBlock, setNewBlock] = useState({ start: "", end: "", reason: "", type: "other" as BlockType, repeatDays: 0 });
+
+  type NewBlockState = {
+    type: BlockType;
+    date: string;
+    startTime: string;
+    endTime: string;
+    reason: string;
+    repeatWeekdays: number[];
+    dateFrom: string;
+    dateTo: string;
+    note: string;
+  };
+
+  function makeDefaultBlock(): NewBlockState {
+    const today = toYMD(new Date());
+    return {
+      type: "lunch",
+      date: today,
+      startTime: "12:00",
+      endTime: "13:00",
+      reason: "",
+      repeatWeekdays: [],
+      dateFrom: today,
+      dateTo: toYMD(addDays(new Date(), 1)),
+      note: "",
+    };
+  }
+
+  const [newBlock, setNewBlock] = useState<NewBlockState>(makeDefaultBlock);
 
   // --- Task 2b state ---
   const [weekStart, setWeekStart] = useState<Date>(() => {
@@ -290,31 +318,51 @@ export default function ScheduleSection() {
   }
 
   async function addBlock() {
-    if (!selectedStaffId || !newBlock.start || !newBlock.end) return;
-    const startMs = new Date(newBlock.start).getTime();
-    const endMs = new Date(newBlock.end).getTime();
-    const durationMs = endMs - startMs;
-    const count = Math.max(1, (newBlock.repeatDays || 0) + 1);
+    if (!selectedStaffId) return;
+
+    let entries: Array<{ start: string; end: string }> = [];
+
+    if (newBlock.type === "holiday") {
+      if (!newBlock.dateFrom || !newBlock.dateTo) return;
+      entries = [{
+        start: `${newBlock.dateFrom}T00:00:00`,
+        end: `${newBlock.dateTo}T23:59:59`,
+      }];
+    } else if (newBlock.type === "lunch" && newBlock.repeatWeekdays.length > 0) {
+      if (!newBlock.date || !newBlock.startTime || !newBlock.endTime) return;
+      const dates = generateRepeatDates(newBlock.date, newBlock.repeatWeekdays, 52);
+      entries = dates.map(d => ({
+        start: `${d}T${newBlock.startTime}:00`,
+        end: `${d}T${newBlock.endTime}:00`,
+      }));
+    } else {
+      if (!newBlock.date || !newBlock.startTime || !newBlock.endTime) return;
+      entries = [{
+        start: `${newBlock.date}T${newBlock.startTime}:00`,
+        end: `${newBlock.date}T${newBlock.endTime}:00`,
+      }];
+    }
+
     const newEntries: BlockedTime[] = [];
-    for (let i = 0; i < count; i++) {
-      const offsetMs = i * 86_400_000;
+    for (const { start, end } of entries) {
       try {
         const res = await fetch(`/api/staff-schedule/${selectedStaffId}/blocked-times/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            start_datetime: new Date(startMs + offsetMs).toISOString(),
-            end_datetime: new Date(startMs + offsetMs + durationMs).toISOString(),
-            reason: newBlock.reason || null,
+            start_datetime: start,
+            end_datetime: end,
+            reason: newBlock.type === "holiday" ? (newBlock.note || null) : (newBlock.reason || null),
             block_type: newBlock.type,
           }),
         });
         if (res.ok) newEntries.push(camelizeBlockedTime(await res.json()));
       } catch { break; }
     }
+
     if (newEntries.length > 0) {
       setBlocks(prev => [...prev, ...newEntries]);
-      setNewBlock({ start: "", end: "", reason: "", type: "other", repeatDays: 0 });
+      setNewBlock(makeDefaultBlock());
     }
   }
 
@@ -416,32 +464,130 @@ export default function ScheduleSection() {
       {/* --- Blocked Times --- */}
       <Card className="glass-card p-4">
         <h2 className="text-lg font-semibold mb-3">Blocked Times</h2>
-        <div className="flex flex-wrap gap-2 mb-3 items-center">
-          <input type="datetime-local" value={newBlock.start} onChange={e => setNewBlock(b => ({ ...b, start: e.target.value }))} aria-label="Block start" className="bg-[var(--glass-bg)] rounded px-2 py-1 w-52 cursor-pointer" />
-          <span className="text-[var(--text-muted)] text-sm">–</span>
-          <input type="datetime-local" value={newBlock.end} onChange={e => setNewBlock(b => ({ ...b, end: e.target.value }))} aria-label="Block end" className="bg-[var(--glass-bg)] rounded px-2 py-1 w-52 cursor-pointer" />
-          <input type="text" placeholder="Reason" value={newBlock.reason} onChange={e => setNewBlock(b => ({ ...b, reason: e.target.value }))} className="bg-[var(--glass-bg)] rounded px-2 py-1 w-32" />
-          <select value={newBlock.type} onChange={e => setNewBlock(b => ({ ...b, type: e.target.value as BlockType }))} aria-label="Block type" className="bg-[var(--glass-bg)] rounded px-2 py-1">
-            <option value="lunch">Lunch</option>
-            <option value="holiday">Holiday</option>
-            <option value="personal">Personal</option>
-            <option value="other">Other</option>
-          </select>
-          <label className="flex items-center gap-1 text-sm text-[var(--text-secondary)]">
-            Repeat
-            <input
-              type="number"
-              min={0}
-              max={365}
-              value={newBlock.repeatDays || ""}
-              placeholder="0"
-              onChange={e => setNewBlock(b => ({ ...b, repeatDays: parseInt(e.target.value) || 0 }))}
-              className="bg-[var(--glass-bg)] rounded px-2 py-1 w-14 text-center"
-              aria-label="Repeat days"
-            />
-            days
-          </label>
-          <Button data-testid="blocked-time-add" onClick={addBlock} disabled={!selectedStaffId}>Add</Button>
+        {/* Type selector — always visible */}
+        <div className="flex flex-wrap gap-3 mb-4 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Type</label>
+            <select
+              value={newBlock.type}
+              aria-label="Block type"
+              onChange={e => {
+                const type = e.target.value as BlockType;
+                const today = toYMD(new Date());
+                if (type === "lunch") {
+                  setNewBlock({ type, date: today, startTime: "12:00", endTime: "13:00", reason: "", repeatWeekdays: [], dateFrom: today, dateTo: toYMD(addDays(new Date(), 1)), note: "" });
+                } else if (type === "holiday") {
+                  setNewBlock({ type, date: today, startTime: "", endTime: "", reason: "", repeatWeekdays: [], dateFrom: today, dateTo: toYMD(addDays(new Date(), 1)), note: "" });
+                } else {
+                  setNewBlock({ type, date: today, startTime: "", endTime: "", reason: "", repeatWeekdays: [], dateFrom: today, dateTo: toYMD(addDays(new Date(), 1)), note: "" });
+                }
+              }}
+              className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded px-2 py-1 text-[var(--text-primary)] text-sm"
+            >
+              <option value="lunch">Lunch</option>
+              <option value="holiday">Holiday / Vacation</option>
+              <option value="personal">Personal</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          {/* Lunch + Personal/Other: date + time range */}
+          {newBlock.type !== "holiday" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Date</label>
+                <input
+                  type="date"
+                  aria-label="Block date"
+                  value={newBlock.date}
+                  onChange={e => setNewBlock(b => ({ ...b, date: e.target.value }))}
+                  className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded px-2 py-1 text-[var(--text-primary)] text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Start</label>
+                <TimeDropdown
+                  value={newBlock.startTime}
+                  aria-label="Block start"
+                  onChange={v => setNewBlock(b => ({ ...b, startTime: v }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">End</label>
+                <TimeDropdown
+                  value={newBlock.endTime}
+                  aria-label="Block end"
+                  onChange={v => setNewBlock(b => ({ ...b, endTime: v }))}
+                />
+              </div>
+              {newBlock.type !== "lunch" && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Reason</label>
+                  <input
+                    type="text"
+                    placeholder="Optional"
+                    value={newBlock.reason}
+                    onChange={e => setNewBlock(b => ({ ...b, reason: e.target.value }))}
+                    className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded px-2 py-1 text-[var(--text-primary)] text-sm w-36"
+                  />
+                </div>
+              )}
+              {newBlock.type === "lunch" && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Repeat on</label>
+                  <DayPills
+                    selected={newBlock.repeatWeekdays}
+                    onChange={days => setNewBlock(b => ({ ...b, repeatWeekdays: days }))}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Holiday: date range + note */}
+          {newBlock.type === "holiday" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">From</label>
+                <input
+                  type="date"
+                  aria-label="Holiday from date"
+                  value={newBlock.dateFrom}
+                  onChange={e => setNewBlock(b => ({ ...b, dateFrom: e.target.value }))}
+                  className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded px-2 py-1 text-[var(--text-primary)] text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">To</label>
+                <input
+                  type="date"
+                  aria-label="Holiday to date"
+                  value={newBlock.dateTo}
+                  onChange={e => setNewBlock(b => ({ ...b, dateTo: e.target.value }))}
+                  className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded px-2 py-1 text-[var(--text-primary)] text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-muted)] uppercase tracking-wide">Note</label>
+                <input
+                  type="text"
+                  placeholder="Optional"
+                  value={newBlock.note}
+                  onChange={e => setNewBlock(b => ({ ...b, note: e.target.value }))}
+                  className="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded px-2 py-1 text-[var(--text-primary)] text-sm w-36"
+                />
+              </div>
+            </>
+          )}
+
+          <Button
+            data-testid="blocked-time-add"
+            onClick={addBlock}
+            disabled={!selectedStaffId}
+            className="self-end"
+          >
+            Add
+          </Button>
         </div>
         <ul className="flex flex-col gap-2">
           {blocks.map(b => (
