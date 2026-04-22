@@ -74,7 +74,7 @@ function ToggleSwitch({
       aria-label={ariaLabel}
       data-testid={testId}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${checked ? "bg-[#2DD4BF]" : "bg-[var(--glass-border)]"}`}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2DD4BF] focus-visible:ring-offset-1 ${checked ? "bg-[#2DD4BF]" : "bg-[var(--glass-border)]"}`}
     >
       <span
         className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0"}`}
@@ -83,7 +83,7 @@ function ToggleSwitch({
   );
 }
 
-const DAY_PILL_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const DAY_PILL_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 function DayPills({
   selected,
@@ -116,9 +116,6 @@ function DayPills({
     </div>
   );
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-expressions
-void [TimeDropdown, ToggleSwitch, DayPills]; // referenced in Tasks 3-5
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DEFAULT_SCHEDULE: Omit<WeeklyScheduleDay, "id" | "staffId">[] = [
