@@ -162,7 +162,10 @@ export function formatBlockDisplay(
 
   if (blockType === "holiday") {
     if (start.toDateString() !== end.toDateString()) {
-      const endStr = end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+      const endStr = sameMonth
+        ? end.toLocaleDateString("en-US", { day: "numeric" })
+        : end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       return `${dateStr} – ${endStr} · All day`;
     }
     return `${dateStr} · All day`;

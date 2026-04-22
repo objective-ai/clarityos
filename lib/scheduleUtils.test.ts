@@ -357,9 +357,7 @@ describe("formatBlockDisplay", () => {
   });
   it("shows date range for multi-day holiday", () => {
     const result = formatBlockDisplay("2026-04-28T00:00:00", "2026-04-30T23:59:59", "holiday");
-    expect(result).toMatch(/Apr 28/);
-    expect(result).toMatch(/Apr 30/);
-    expect(result).toContain("All day");
+    expect(result).toBe("Apr 28 – 30 · All day");
   });
 });
 
