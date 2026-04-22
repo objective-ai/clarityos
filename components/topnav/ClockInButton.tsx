@@ -15,10 +15,14 @@ export default function ClockInButton() {
   useEffect(() => {
     if (!staffId) return;
     (async () => {
-      const res = await fetch("/api/staff-schedule/clock-status/");
-      if (!res.ok) return;
-      const raw = await res.json();
-      setStatus(camelizeClockStatus(raw));
+      try {
+        const res = await fetch("/api/staff-schedule/clock-status/");
+        if (!res.ok) return;
+        const raw = await res.json();
+        setStatus(camelizeClockStatus(raw));
+      } catch {
+        /* transient network error — keep status null, retry on next mount */
+      }
     })();
   }, [staffId]);
 
@@ -47,16 +51,17 @@ export default function ClockInButton() {
   async function handleClick() {
     if (!staffId || loading) return;
     setLoading(true);
-    const path = status?.clockedIn
-      ? "/api/staff-schedule/clock-out/"
-      : "/api/staff-schedule/clock-in/";
-    const res = await fetch(path, { method: "POST" });
-    if (res.status === 409) {
-      const r2 = await fetch("/api/staff-schedule/clock-status/");
-      if (r2.ok) setStatus(camelizeClockStatus(await r2.json()));
-    } else if (res.ok) {
-      const r2 = await fetch("/api/staff-schedule/clock-status/");
-      if (r2.ok) setStatus(camelizeClockStatus(await r2.json()));
+    try {
+      const path = status?.clockedIn
+        ? "/api/staff-schedule/clock-out/"
+        : "/api/staff-schedule/clock-in/";
+      const res = await fetch(path, { method: "POST" });
+      if (res.status === 409 || res.ok) {
+        const r2 = await fetch("/api/staff-schedule/clock-status/");
+        if (r2.ok) setStatus(camelizeClockStatus(await r2.json()));
+      }
+    } catch {
+      /* transient network error — loading spinner clears, status unchanged */
     }
     setLoading(false);
   }
