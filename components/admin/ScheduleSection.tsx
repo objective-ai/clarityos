@@ -131,6 +131,33 @@ const DEFAULT_SCHEDULE: Omit<WeeklyScheduleDay, "id" | "staffId">[] = [
 function toYMD(d: Date): string { return d.toISOString().slice(0, 10); }
 function addDays(d: Date, n: number): Date { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 
+type NewBlockState = {
+  type: BlockType;
+  date: string;
+  startTime: string;
+  endTime: string;
+  reason: string;
+  repeatWeekdays: number[];
+  dateFrom: string;
+  dateTo: string;
+  note: string;
+};
+
+function makeDefaultBlock(): NewBlockState {
+  const today = toYMD(new Date());
+  return {
+    type: "lunch",
+    date: today,
+    startTime: "12:00",
+    endTime: "13:00",
+    reason: "",
+    repeatWeekdays: [],
+    dateFrom: today,
+    dateTo: toYMD(addDays(new Date(), 1)),
+    note: "",
+  };
+}
+
 export default function ScheduleSection() {
   // --- Task 2a state ---
   const [staff, setStaff] = useState<StaffLite[]>([]);
@@ -141,33 +168,6 @@ export default function ScheduleSection() {
   const [scheduleSaving, setScheduleSaving] = useState(false);
 
   const [blocks, setBlocks] = useState<BlockedTime[]>([]);
-
-  type NewBlockState = {
-    type: BlockType;
-    date: string;
-    startTime: string;
-    endTime: string;
-    reason: string;
-    repeatWeekdays: number[];
-    dateFrom: string;
-    dateTo: string;
-    note: string;
-  };
-
-  function makeDefaultBlock(): NewBlockState {
-    const today = toYMD(new Date());
-    return {
-      type: "lunch",
-      date: today,
-      startTime: "12:00",
-      endTime: "13:00",
-      reason: "",
-      repeatWeekdays: [],
-      dateFrom: today,
-      dateTo: toYMD(addDays(new Date(), 1)),
-      note: "",
-    };
-  }
 
   const [newBlock, setNewBlock] = useState<NewBlockState>(makeDefaultBlock);
 
@@ -476,8 +476,6 @@ export default function ScheduleSection() {
                 const today = toYMD(new Date());
                 if (type === "lunch") {
                   setNewBlock({ type, date: today, startTime: "12:00", endTime: "13:00", reason: "", repeatWeekdays: [], dateFrom: today, dateTo: toYMD(addDays(new Date(), 1)), note: "" });
-                } else if (type === "holiday") {
-                  setNewBlock({ type, date: today, startTime: "", endTime: "", reason: "", repeatWeekdays: [], dateFrom: today, dateTo: toYMD(addDays(new Date(), 1)), note: "" });
                 } else {
                   setNewBlock({ type, date: today, startTime: "", endTime: "", reason: "", repeatWeekdays: [], dateFrom: today, dateTo: toYMD(addDays(new Date(), 1)), note: "" });
                 }

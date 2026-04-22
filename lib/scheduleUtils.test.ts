@@ -69,6 +69,7 @@ describe("getWaitMinutes", () => {
     const result = getWaitMinutes({
       status: "scheduled",
       startTime: new Date().toISOString(),
+      checkedInAt: null,
     });
     expect(result).toBeNull();
   });
@@ -77,6 +78,7 @@ describe("getWaitMinutes", () => {
     const result = getWaitMinutes({
       status: "confirmed",
       startTime: new Date().toISOString(),
+      checkedInAt: null,
     });
     expect(result).toBeNull();
   });
@@ -85,6 +87,7 @@ describe("getWaitMinutes", () => {
     const result = getWaitMinutes({
       status: "cancelled",
       startTime: new Date().toISOString(),
+      checkedInAt: null,
     });
     expect(result).toBeNull();
   });
@@ -93,6 +96,7 @@ describe("getWaitMinutes", () => {
     const result = getWaitMinutes({
       status: "no_show",
       startTime: new Date().toISOString(),
+      checkedInAt: null,
     });
     expect(result).toBeNull();
   });
@@ -101,7 +105,7 @@ describe("getWaitMinutes", () => {
     const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
     const now = new Date();
     const result = getWaitMinutes(
-      { status: "arrived", startTime: twentyMinutesAgo },
+      { status: "arrived", startTime: twentyMinutesAgo, checkedInAt: null },
       now
     );
     expect(result).toBeGreaterThanOrEqual(20);
@@ -112,7 +116,7 @@ describe("getWaitMinutes", () => {
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const now = new Date();
     const result = getWaitMinutes(
-      { status: "in_pretest", startTime: tenMinutesAgo },
+      { status: "in_pretest", startTime: tenMinutesAgo, checkedInAt: null },
       now
     );
     expect(result).toBeGreaterThanOrEqual(10);
@@ -122,7 +126,7 @@ describe("getWaitMinutes", () => {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const now = new Date();
     const result = getWaitMinutes(
-      { status: "in_exam", startTime: fiveMinutesAgo },
+      { status: "in_exam", startTime: fiveMinutesAgo, checkedInAt: null },
       now
     );
     expect(result).toBeGreaterThanOrEqual(5);
@@ -132,6 +136,7 @@ describe("getWaitMinutes", () => {
     const result = getWaitMinutes({
       status: "completed",
       startTime: new Date().toISOString(),
+      checkedInAt: null,
     });
     expect(result).toBeNull();
   });
@@ -140,6 +145,7 @@ describe("getWaitMinutes", () => {
     const result = getWaitMinutes({
       status: "finalized",
       startTime: new Date().toISOString(),
+      checkedInAt: null,
     });
     expect(result).toBeNull();
   });
