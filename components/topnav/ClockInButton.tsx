@@ -86,7 +86,7 @@ export default function ClockInButton() {
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors",
         isIn
           ? "bg-[#2DD4BF] text-black hover:bg-[#25b8a4]"
-          : "bg-white/10 text-white/80 hover:bg-white/20",
+          : "border border-[var(--glass-border)] text-[var(--text-primary)] hover:bg-[var(--glass-bg)]",
       ].join(" ")}
     >
       <svg

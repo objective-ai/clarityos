@@ -207,7 +207,7 @@ export default function ScheduleSection() {
               key={s.id}
               data-testid={`schedule-provider-pill-${s.id}`}
               onClick={() => setSelectedStaffId(s.id)}
-              className={`px-3 py-1.5 rounded-full text-sm ${selectedStaffId === s.id ? "bg-[#2DD4BF] text-black" : "bg-white/10 text-white/80 hover:bg-white/20"}`}
+              className={`px-3 py-1.5 rounded-full text-sm border ${selectedStaffId === s.id ? "bg-[#2DD4BF] text-black border-[#2DD4BF]" : "border-[var(--glass-border)] text-[var(--text-primary)] hover:bg-[var(--glass-bg)]"}`}
             >
               {s.firstName} {s.lastName}
             </button>
