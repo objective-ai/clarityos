@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { FileText, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { formatClinicDateTime, useClinicTimezone } from "@/lib/timezone";
 import {
@@ -47,6 +48,7 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Load addenda on mount
   const loadAddenda = useCallback(async () => {
@@ -54,13 +56,24 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
       const data = await apiFetch<Addendum[]>(
         `/api/encounters/${encounterId}/addenda`
       );
-      setAddenda(data);
+      setAddenda(data ?? []);
     } catch {
       // Silently fail — empty list is fine for first load
     } finally {
       setLoading(false);
     }
   }, [encounterId]);
+
+  // Focus and scroll textarea into view when form opens.
+  // autoFocus is unreliable on dynamically-rendered elements; this ensures
+  // the textarea is always interactive and not hidden behind the fixed nav bar.
+  useEffect(() => {
+    if (!showForm) return;
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [showForm]);
 
   useEffect(() => {
     loadAddenda();
@@ -75,7 +88,7 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
         `/api/encounters/${encounterId}/addenda`,
         { method: "POST", body: JSON.stringify({ content }) }
       );
-      setAddenda((prev) => [...prev, newAddendum]);
+      if (newAddendum) setAddenda((prev) => [...prev, newAddendum]);
       setContent("");
       setShowForm(false);
     } catch (err) {
@@ -94,19 +107,7 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
     <Card className="glass-card">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <svg
-            className="w-4 h-4 text-teal-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-            />
-          </svg>
+          <FileText className="w-4 h-4 text-teal-400" />
           Addenda
           {addenda.length > 0 && (
             <span className="text-xs text-white/50 font-normal">
@@ -149,12 +150,12 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
         {showForm && (
           <div className="space-y-2">
             <textarea
+              ref={textareaRef}
               className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-teal-400/50 resize-y min-h-[80px]"
               placeholder="Type your addendum here..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={3}
-              autoFocus
             />
             {error && <p className="text-xs text-red-400">{error}</p>}
             <div className="flex gap-2 justify-end">
@@ -190,19 +191,7 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
             onClick={() => setShowForm(true)}
             className="text-teal-400 hover:text-teal-300 hover:bg-teal-500/10"
           >
-            <svg
-              className="w-4 h-4 mr-1.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4.5v15m7.5-7.5h-15"
-              />
-            </svg>
+            <Plus className="w-4 h-4 mr-1.5" />
             Add Addendum
           </Button>
         )}
@@ -213,19 +202,7 @@ export function AddendumSection({ encounterId }: AddendumSectionProps) {
         <DialogContent className="glass-card border-white/10 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-amber-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"
-                />
-              </svg>
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
               Confirm Addendum
             </DialogTitle>
             <DialogDescription className="text-white/60">
