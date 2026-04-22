@@ -17,7 +17,7 @@ import {
 import {
   getWeekDays,
   generateTimeSlots,
-  calcShiftBar as _calcShiftBar,
+  calcShiftBar,
   inferRecurGroups as _inferRecurGroups,
   formatBlockDisplay as _formatBlockDisplay,
   generateRepeatDates as _generateRepeatDates,
@@ -85,7 +85,7 @@ function ToggleSwitch({
 
 const DAY_PILL_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-function DayPills({
+function _DayPills({
   selected,
   onChange,
 }: {
@@ -354,35 +354,61 @@ export default function ScheduleSection() {
         </div>
         {scheduleLoading ? <p className="text-[var(--text-muted)]">Loading…</p> : (
           <div className="flex flex-col gap-2">
-            {scheduleDays.map((d, i) => (
-              <div key={d.dayOfWeek} className="flex items-center gap-3">
-                <label className="text-sm w-10 shrink-0">{DAY_LABELS[d.dayOfWeek]}</label>
-                <input
-                  type="checkbox"
-                  data-testid={`schedule-day-toggle-${d.dayOfWeek}`}
-                  checked={d.isActive}
-                  aria-label={`${DAY_LABELS[d.dayOfWeek]} active`}
-                  onChange={e => setScheduleDays(prev => prev.map((x, ix) => ix === i ? { ...x, isActive: e.target.checked } : x))}
-                />
-                <input
-                  type="time"
-                  data-testid={`schedule-day-start-${d.dayOfWeek}`}
-                  value={d.startTime}
-                  disabled={!d.isActive}
-                  onChange={e => setScheduleDays(prev => prev.map((x, ix) => ix === i ? { ...x, startTime: e.target.value } : x))}
-                  className="bg-[var(--glass-bg)] rounded px-2 py-1 w-36 cursor-pointer"
-                />
-                <span className="text-[var(--text-muted)] text-sm">–</span>
-                <input
-                  type="time"
-                  data-testid={`schedule-day-end-${d.dayOfWeek}`}
-                  value={d.endTime}
-                  disabled={!d.isActive}
-                  onChange={e => setScheduleDays(prev => prev.map((x, ix) => ix === i ? { ...x, endTime: e.target.value } : x))}
-                  className="bg-[var(--glass-bg)] rounded px-2 py-1 w-36 cursor-pointer"
-                />
-              </div>
-            ))}
+            {scheduleDays.map((d, i) => {
+              const bar = d.isActive ? calcShiftBar(d.startTime, d.endTime) : null;
+              return (
+                <div key={d.dayOfWeek} className="flex items-center gap-3 py-1">
+                  <ToggleSwitch
+                    checked={d.isActive}
+                    aria-label={`${DAY_LABELS[d.dayOfWeek]} active`}
+                    data-testid={`schedule-day-toggle-${d.dayOfWeek}`}
+                    onChange={active =>
+                      setScheduleDays(prev =>
+                        prev.map((x, ix) => (ix === i ? { ...x, isActive: active } : x))
+                      )
+                    }
+                  />
+                  <span
+                    className={`text-sm w-8 shrink-0 ${d.isActive ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-muted)]"}`}
+                  >
+                    {DAY_LABELS[d.dayOfWeek]}
+                  </span>
+                  {d.isActive ? (
+                    <>
+                      <TimeDropdown
+                        value={d.startTime}
+                        aria-label={`${DAY_LABELS[d.dayOfWeek]} start`}
+                        data-testid={`schedule-day-start-${d.dayOfWeek}`}
+                        onChange={v =>
+                          setScheduleDays(prev =>
+                            prev.map((x, ix) => (ix === i ? { ...x, startTime: v } : x))
+                          )
+                        }
+                      />
+                      <span className="text-[var(--text-muted)] text-xs">–</span>
+                      <TimeDropdown
+                        value={d.endTime}
+                        aria-label={`${DAY_LABELS[d.dayOfWeek]} end`}
+                        data-testid={`schedule-day-end-${d.dayOfWeek}`}
+                        onChange={v =>
+                          setScheduleDays(prev =>
+                            prev.map((x, ix) => (ix === i ? { ...x, endTime: v } : x))
+                          )
+                        }
+                      />
+                      <div className="flex-1 h-2 bg-[var(--glass-bg)] rounded-full overflow-hidden min-w-[60px]">
+                        <div
+                          className="h-full rounded-full bg-[#2DD4BF] opacity-70"
+                          style={{ marginLeft: bar!.left, width: bar!.width }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-[var(--text-muted)]">Off</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>
