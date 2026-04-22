@@ -61,7 +61,7 @@ export function ServiceHealthPanel({ refreshKey, onFetched }: Props) {
         </div>
       )}
       {data && (
-        <div className="mt-4 text-xs text-white/50">
+        <div className="mt-4 text-xs text-[var(--text-muted)]">
           Version <span className="font-mono">{data.version}</span>
           {" · "}checked {new Date(data.checkedAt).toLocaleTimeString()}
         </div>
@@ -80,14 +80,14 @@ function HealthCard({
   latencyMs: number | null;
 }) {
   return (
-    <div className="border border-white/10 rounded-lg p-4">
+    <div className="border border-[var(--glass-border)] rounded-lg p-4">
       <div className="flex items-center gap-2">
         <span
           className={`inline-block w-2.5 h-2.5 rounded-full ${dotColor(status)}`}
         />
         <span className="font-medium">{name}</span>
       </div>
-      <div className="mt-2 text-sm text-white/70">
+      <div className="mt-2 text-sm text-[var(--text-secondary)]">
         {status}
         {latencyMs !== null ? ` · ${latencyMs}ms` : ""}
       </div>

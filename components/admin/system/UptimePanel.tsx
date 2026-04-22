@@ -51,7 +51,7 @@ export function UptimePanel({ refreshKey }: Props) {
           />
         </dl>
       ) : (
-        <div className="text-white/50">Loading uptime…</div>
+        <div className="text-[var(--text-muted)]">Loading uptime…</div>
       )}
     </div>
   );
@@ -60,7 +60,7 @@ export function UptimePanel({ refreshKey }: Props) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-white/50 text-xs uppercase tracking-wide">
+      <div className="text-[var(--text-muted)] text-xs uppercase tracking-wide">
         {label}
       </div>
       <div className="mt-1 font-medium">{value}</div>

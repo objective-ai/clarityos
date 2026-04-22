@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,9 +98,10 @@ async def sample_health_now(db: AsyncSession) -> HealthResponse:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/health/", response_model=HealthResponse, response_model_by_alias=True)
+@router.get("/health/")
 async def get_health(request: Request, db: AsyncSession = Depends(get_db)):
     """Unauthenticated probe — rate-limited by IP to 10 req/min."""
     ip = request.client.host if request.client else "unknown"
     check_rate_limit(ip, window_seconds=60, max_requests=10)
-    return await sample_health_now(db)
+    result = await sample_health_now(db)
+    return JSONResponse(content=result.model_dump(by_alias=True, mode="json"))

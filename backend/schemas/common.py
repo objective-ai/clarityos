@@ -22,13 +22,26 @@ class AppBaseModel(BaseModel):
 
 
 class CamelCaseModel(AppBaseModel):
-    """Base model that serializes fields as camelCase in JSON."""
+    """Base model that serializes fields as camelCase in JSON.
+
+    Overrides model_dump/model_dump_json to default by_alias=True so
+    FastAPI response serialization always emits camelCase without requiring
+    response_model_by_alias=True on every route.
+    """
 
     model_config = ConfigDict(
         from_attributes=True,
         alias_generator=to_camel,
         populate_by_name=True,
     )
+
+    def model_dump(self, **kwargs):
+        kwargs.setdefault("by_alias", True)
+        return super().model_dump(**kwargs)
+
+    def model_dump_json(self, **kwargs):
+        kwargs.setdefault("by_alias", True)
+        return super().model_dump_json(**kwargs)
 
 
 class TimestampSchema(AppBaseModel):

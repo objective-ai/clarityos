@@ -50,7 +50,7 @@ export async function GET(_req: NextRequest) {
   } = await supabase.auth.getUser();
 
   const role = extractRole(user as SupabaseUserLike | null);
-  if (!user || role !== "OWNER") {
+  if (!user || role?.toLowerCase() !== "owner") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

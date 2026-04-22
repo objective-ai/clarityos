@@ -24,6 +24,7 @@ Uptime SQL (portable form):
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, Table, func as sa_func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,11 +91,11 @@ def _iso_utc_z(dt: datetime | None) -> str | None:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-@router.get("/uptime/", response_model=UptimeSummary, response_model_by_alias=True)
+@router.get("/uptime/")
 async def get_uptime(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> UptimeSummary:
+):
     """Return 7-day uptime percentage + sample counts.
 
     Uptime = count(all_green=true) / count(*) over rows where
@@ -123,10 +124,11 @@ async def get_uptime(
     green = int(result.green or 0)
     pct = round((green / total) * 100.0, 2) if total > 0 else 0.0
 
-    return UptimeSummary(
+    summary = UptimeSummary(
         uptime_pct=pct,
         samples_total=total,
         samples_green=green,
         window_start=_iso_utc_z(result.window_start),
         window_end=_iso_utc_z(result.window_end),
     )
+    return JSONResponse(content=summary.model_dump(by_alias=True, mode="json"))

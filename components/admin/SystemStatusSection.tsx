@@ -45,11 +45,11 @@ export function SystemStatusSection() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">System Status</h1>
-          <p className="text-sm text-white/60 mt-1">
+          <p className="text-sm text-[var(--text-secondary)] mt-1">
             Live health, errors, and uptime — owner-only.
           </p>
         </div>
-        <div className="flex items-center gap-3 text-sm text-white/60">
+        <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
           <span data-testid="system-status-updated">
             Updated{" "}
             {lastUpdated
@@ -59,7 +59,7 @@ export function SystemStatusSection() {
           <button
             type="button"
             onClick={onRefresh}
-            className="px-3 py-1.5 rounded-md border border-white/10 hover:border-white/30 text-white"
+            className="px-3 py-1.5 rounded-md border border-[var(--glass-border)] hover:border-[var(--text-muted)] text-[var(--text-primary)]"
           >
             Refresh
           </button>

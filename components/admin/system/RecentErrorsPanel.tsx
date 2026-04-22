@@ -36,13 +36,13 @@ export function RecentErrorsPanel({ refreshKey }: Props) {
       <h2 className="text-lg font-medium mb-4">
         Recent Errors{" "}
         {data?.cached ? (
-          <span className="text-xs text-white/40">(cached)</span>
+          <span className="text-xs text-[var(--text-muted)]">(cached)</span>
         ) : null}
       </h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-white/50">
+            <tr className="text-left text-[var(--text-muted)]">
               <th className="py-2">Title</th>
               <th>Count</th>
               <th>Last Seen</th>
@@ -51,7 +51,7 @@ export function RecentErrorsPanel({ refreshKey }: Props) {
           </thead>
           <tbody>
             {(data?.issues ?? []).map((i: ErrorIssue) => (
-              <tr key={i.id} className="border-t border-white/5">
+              <tr key={i.id} className="border-t border-[var(--border-subtle)]">
                 <td className="py-2">
                   <a
                     href={i.permalink}
@@ -62,19 +62,19 @@ export function RecentErrorsPanel({ refreshKey }: Props) {
                     {i.title}
                   </a>
                   {i.culprit ? (
-                    <div className="text-xs text-white/40 font-mono">
+                    <div className="text-xs text-[var(--text-muted)] font-mono">
                       {i.culprit}
                     </div>
                   ) : null}
                 </td>
                 <td>{i.count}</td>
                 <td>{new Date(i.lastSeen).toLocaleString()}</td>
-                <td className="text-white/60">{i.environment ?? "—"}</td>
+                <td className="text-[var(--text-secondary)]">{i.environment ?? "—"}</td>
               </tr>
             ))}
             {(!data || data.issues.length === 0) && (
               <tr>
-                <td colSpan={4} className="py-4 text-white/50">
+                <td colSpan={4} className="py-4 text-[var(--text-muted)]">
                   No unresolved issues.
                 </td>
               </tr>
