@@ -97,7 +97,7 @@ async def sample_health_now(db: AsyncSession) -> HealthResponse:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/health/", response_model=HealthResponse)
+@router.get("/health/", response_model=HealthResponse, response_model_by_alias=True)
 async def get_health(request: Request, db: AsyncSession = Depends(get_db)):
     """Unauthenticated probe — rate-limited by IP to 10 req/min."""
     ip = request.client.host if request.client else "unknown"

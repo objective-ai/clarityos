@@ -10,10 +10,10 @@ independence. Both sets of schemas are surfaced to the frontend via the BFF
 types in types/system.ts.
 """
 
-from pydantic import BaseModel
+from backend.schemas.common import CamelCaseModel
 
 
-class UptimeSummary(BaseModel):
+class UptimeSummary(CamelCaseModel):
     """7-day rolling uptime window returned by GET /api/system/uptime/."""
 
     uptime_pct: float
@@ -23,7 +23,7 @@ class UptimeSummary(BaseModel):
     window_end: str | None = None
 
 
-class ErrorIssue(BaseModel):
+class ErrorIssue(CamelCaseModel):
     """Normalized Sentry issue (produced by the BFF /api/system/errors proxy,
     exposed here for backend documentation / future server-side consumers)."""
 
@@ -39,7 +39,7 @@ class ErrorIssue(BaseModel):
     culprit: str | None = None
 
 
-class ErrorIssueList(BaseModel):
+class ErrorIssueList(CamelCaseModel):
     """Envelope for a page of Sentry issues."""
 
     issues: list[ErrorIssue]

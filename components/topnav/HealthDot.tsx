@@ -9,7 +9,10 @@ type DotColor = "green" | "amber" | "red" | "unknown";
 
 function rollup(d: HealthResponse | null): DotColor {
   if (!d) return "unknown";
-  const values = [d.api, d.postgres.status, d.supabaseAuth.status];
+  const values = [d.api, d.postgres?.status, d.supabaseAuth?.status].filter(
+    Boolean,
+  ) as string[];
+  if (values.length === 0) return "unknown";
   if (values.some((v) => v === "down")) return "red";
   if (values.some((v) => v === "degraded")) return "amber";
   return "green";

@@ -90,7 +90,7 @@ def _iso_utc_z(dt: datetime | None) -> str | None:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-@router.get("/uptime/", response_model=UptimeSummary)
+@router.get("/uptime/", response_model=UptimeSummary, response_model_by_alias=True)
 async def get_uptime(
     request: Request,
     db: AsyncSession = Depends(get_db),

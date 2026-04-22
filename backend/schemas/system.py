@@ -10,17 +10,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from backend.schemas.common import CamelCaseModel
 
 
-class DependencyStatus(BaseModel):
+class DependencyStatus(CamelCaseModel):
     """Health of a single downstream dependency."""
 
     status: Literal["ok", "degraded", "down"]
     latency_ms: int
 
 
-class HealthResponse(BaseModel):
+class HealthResponse(CamelCaseModel):
     """Shape of GET /api/system/health/.
 
     `api` is always "ok" — if the FastAPI process itself were down
