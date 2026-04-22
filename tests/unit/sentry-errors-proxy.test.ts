@@ -31,12 +31,10 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-// Helper to import the route AFTER env + mocks are configured, and to
-// reset the module-level cache between tests.
+// Helper to import the route AFTER env + mocks are configured.
+// vi.resetModules() in beforeEach ensures a fresh module (and fresh cache) each test.
 async function loadRoute() {
-  const mod = await import("../../app/api/system/errors/route");
-  mod.__resetCache();
-  return mod;
+  return import("../../app/api/system/errors/route");
 }
 
 function fakeReq(): any {
@@ -45,6 +43,7 @@ function fakeReq(): any {
 
 // ── Env setup ────────────────────────────────────────────────────────────
 beforeEach(() => {
+  vi.resetModules(); // fresh module = fresh cache; replaces __resetCache()
   vi.restoreAllMocks();
   process.env.SENTRY_ORG = "org";
   process.env.SENTRY_PROJECT = "proj";

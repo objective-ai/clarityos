@@ -27,10 +27,10 @@ import type { ErrorIssueList } from "@/types/system";
 let cache: { at: number; payload: ErrorIssueList } | null = null;
 const TTL_MS = 20_000;
 
-// Exported for tests so they can reset the cache between cases.
-export function __resetCache() {
+function __resetCache() {
   cache = null;
 }
+void __resetCache; // keep reference so tree-shaker doesn't warn
 
 interface SupabaseUserLike {
   app_metadata?: { role?: string } | null;
