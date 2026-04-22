@@ -28,7 +28,8 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { test, expect, type Page } from './fixtures';
+import { type Page, type Route } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 const TENANT = 'sunview';
 const DOCTOR_AUTH_FILE = path.resolve(
@@ -39,7 +40,7 @@ const doctorAuthExists = fs.existsSync(DOCTOR_AUTH_FILE);
 
 // Helper: mock the health endpoint with a given response body
 async function mockHealth(page: Page, body: unknown): Promise<void> {
-  await page.route('**/api/system/health', (route) =>
+  await page.route('**/api/system/health', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -52,7 +53,7 @@ async function mockErrors(
   page: Page,
   issues: Array<Record<string, unknown>>
 ): Promise<void> {
-  await page.route('**/api/system/errors', (route) =>
+  await page.route('**/api/system/errors', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -66,7 +67,7 @@ async function mockErrors(
 }
 
 async function mockUptime(page: Page): Promise<void> {
-  await page.route('**/api/system/uptime', (route) =>
+  await page.route('**/api/system/uptime', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
