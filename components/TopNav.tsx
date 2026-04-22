@@ -13,6 +13,7 @@ import type { PatientHeaderData } from "@/types/session";
 import type { PatientInsurance } from "@/types/billing";
 import { formatClinicDate } from "@/lib/timezone";
 import ClockInButton from "@/components/topnav/ClockInButton";
+import { HealthDot } from "@/components/topnav/HealthDot";
 
 const ELIG_DOT: Record<string, string> = {
   active: "bg-emerald-400",
@@ -230,6 +231,7 @@ export function TopNav({ patient }: TopNavProps) {
       </div>
 
       <div className="flex items-center gap-2">
+        <HealthDot />
         <ClockInButton />
         <Button
           variant="ghost"
