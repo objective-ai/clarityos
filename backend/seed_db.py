@@ -89,6 +89,7 @@ from backend.db.models.tenant.clinical import (
     Sex,
     Staff,
     StaffRole,
+    StaffWeeklySchedule,
     Superbill,
     SuperbillLineItem,
     VitalsAndPretest,
@@ -347,6 +348,7 @@ def seed_tenant_schema(session: Session) -> None:
     """Seed TENANT schema (clinic_sunview). Called after SET search_path."""
 
     _seed_staff(session)
+    _seed_staff_schedules(session)
     _seed_patients(session)
     _seed_appointments(session)
     _seed_encounters(session)
@@ -418,6 +420,32 @@ def _seed_staff(session: Session) -> None:
         session.add(Staff(**sd))
         ok(f"Created Staff: {sd['first_name']} {sd['last_name']} ({sd['role'].value})")
 
+    session.flush()
+
+
+# ── Staff Weekly Schedules ────────────────────────────────────────────────
+
+def _seed_staff_schedules(session: Session) -> None:
+    step("Seeding Staff Weekly Schedules (Mon-Fri 9-5)")
+
+    staff_ids = [STAFF_SARAH_ID, STAFF_MARCUS_ID, STAFF_DUY_ID, STAFF_EMILY_ID]
+    for staff_id in staff_ids:
+        for dow in range(7):
+            existing = session.query(StaffWeeklySchedule).filter_by(
+                staff_id=staff_id, day_of_week=dow
+            ).first()
+            if existing:
+                continue
+            session.add(StaffWeeklySchedule(
+                id=uuid.uuid4(),
+                tenant_id=TENANT_ID,
+                staff_id=staff_id,
+                day_of_week=dow,
+                start_time=datetime.time(9, 0),
+                end_time=datetime.time(17, 0),
+                is_active=(dow < 5),  # Mon-Fri active, Sat-Sun off
+            ))
+    ok("Created weekly schedules for 4 staff members")
     session.flush()
 
 
