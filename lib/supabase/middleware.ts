@@ -55,8 +55,12 @@ export async function updateSession(request: NextRequest) {
   // This provides defense-in-depth: unauthenticated requests to protected /api/* routes
   // are rejected here even if a BFF handler forgets to call proxyToFastAPI().
   const isPublicRoute =
+    pathname === "/" ||
     pathname === "/login" ||
     pathname === "/health" ||
+    pathname === "/features" ||
+    pathname === "/pricing" ||
+    pathname === "/compare" ||
     pathname.startsWith("/intake") ||
     pathname.startsWith("/book") ||
     pathname.startsWith("/api/public/") ||
@@ -65,7 +69,7 @@ export async function updateSession(request: NextRequest) {
     pathname === "/favicon.ico";
 
   // If not authenticated and trying to access a protected route, redirect to login
-  if (!user && !isPublicRoute && pathname !== "/") {
+  if (!user && !isPublicRoute) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("returnTo", pathname);
