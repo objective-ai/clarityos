@@ -35,6 +35,7 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 - ✓ Schedule page revamp (5 view modes, FlowBoard, WeekView, detail drawer) — Phase 10.2
 - ✓ Public booking wizard polish (5-step flow, error handling) — Phase 10.2
 - ✓ Public marketing pages (homepage, features, pricing, compare) with auth gate and shared primitives — Phase 11
+- ✓ Sentry error monitoring (PHI scrubber, prod-gated init, system health endpoint, OWNER-only status page + TopNav HealthDot) — Phase 10.3
 
 ### Active
 
@@ -53,7 +54,7 @@ Clinicians can complete a full eye exam encounter — from vitals through finali
 ## Context
 
 ### Current State
-Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Phase 10.2 revamped schedule page and public booking wizard. Phase 11 added public marketing pages (homepage, /features, /pricing, /compare) with a dedicated `(marketing)` route group, auth redirect gate, 7 reusable primitives, and typed static data modules. ClarityOS now has a public web presence for the pilot launch.
+Full-stack EHR with Supabase Auth, FastAPI backend, and real PostgreSQL data through all workflows. Phases 1-9 complete: encounter lifecycle, AI Scribe, scheduling, analytics, billing with E/M crosswalk and payer fee schedules. Phase 9.1 closed auth hardening gaps. Phase 10.2 revamped schedule page and public booking wizard. Phase 11 added public marketing pages. Phase 10.3 wired Sentry into both runtimes with a PHI scrubber (43 tests), a system health self-pinger, and an OWNER-only Admin > System status page with ServiceHealth/RecentErrors/Uptime panels and TopNav HealthDot. Staging HIPAA canary verification deferred.
 
 ### Technical Debt (from codebase audit)
 - **5 critical security issues**: dev auth bypass, hardcoded SECRET_KEY, no Next.js route middleware, unconditional mock session, hardcoded Supabase ref in config
@@ -91,4 +92,4 @@ California solo and small-group optometry practices (1-4 providers). The product
 | Move Python backend out of `app/` directory | Resolves Next.js App Router namespace conflict | — Pending |
 
 ---
-*Last updated: 2026-04-03 after Phase 10.2 completion*
+*Last updated: 2026-04-29 after Phase 10.3 completion*
