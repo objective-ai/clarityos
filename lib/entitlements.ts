@@ -43,6 +43,9 @@ export const Entitlement = {
 
   // ---- System / admin (role-derived — OWNER-only) ----
   VIEW_SYSTEM_STATUS: "view_system_status" as const,
+
+  // ---- CRM (Phase 12) ----
+  MESSAGING: "messaging" as const,
 } satisfies Record<string, EntitlementKey>;
 
 // ---------------------------------------------------------------------------
@@ -64,6 +67,7 @@ export const PLAN_FEATURES: Record<string, EntitlementKey[]> = {
     Entitlement.ICD10_DIAGNOSES,
     Entitlement.BILLING_EXPORT,
     Entitlement.MULTI_PROVIDER,
+    Entitlement.MESSAGING,
   ],
   Premium: [
     Entitlement.SCHEDULING,
@@ -75,6 +79,7 @@ export const PLAN_FEATURES: Record<string, EntitlementKey[]> = {
     Entitlement.AI_SCRIBE,
     Entitlement.ADVANCED_ANALYTICS,
     Entitlement.EQUIPMENT_IMPORT,
+    Entitlement.MESSAGING,
   ],
 };
 
@@ -141,5 +146,10 @@ export const ENTITLEMENT_META: Record<
     label: "System Status",
     description: "Owner-only view of API health, recent errors, and uptime.",
     plan: "Add-on",
+  },
+  messaging: {
+    label: "Patient Messaging",
+    description: "Automated reminders, recall campaigns, manual SMS/email, and inbound triage.",
+    plan: "Plus",
   },
 };

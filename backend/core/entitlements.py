@@ -16,3 +16,7 @@ class Entitlement(StrEnum):
     MULTI_PROVIDER = "MULTI_PROVIDER"
     AI_SCRIBE = "AI_SCRIBE"
     ADVANCED_ANALYTICS = "ADVANCED_ANALYTICS"
+    # CRM (Phase 12) — patient messaging (SMS + email reminders, recall, manual,
+    # inbound triage). Lowercase wire key 'messaging' is what the JWT hook /
+    # PLAN_FEATURES (lib/entitlements.ts) references; included in Plus + Premium.
+    MESSAGING = "MESSAGING"

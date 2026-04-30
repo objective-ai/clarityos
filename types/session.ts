@@ -35,7 +35,9 @@ export type EntitlementKey =
   // Internal
   | "super_admin"
   // System / admin (role-derived; OWNER-only)
-  | "view_system_status";
+  | "view_system_status"
+  // CRM (Phase 12)
+  | "messaging";
 
 // ---------------------------------------------------------------------------
 // Staff role — mirrors Python StaffRole enum

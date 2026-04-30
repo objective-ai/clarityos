@@ -114,6 +114,29 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **SCH-15**: Public booking page at /book/[slug] uses light/white theme with 5-step wizard (Type, Provider, Date+Time, Info, Confirm)
 - [x] **SCH-16**: Public booking wizard validates patient info, shows slot availability from backend, and displays success state on confirm
 
+### CRM & Patient Engagement (Phase 12)
+
+- [ ] **CRM-01**: Operational appointment reminders sent automatically at 7d, 72h, 24h pre-appointment via patient's preferred channel(s)
+- [ ] **CRM-02**: Staff can manually send a message from patient detail header, schedule kebab, inbox reply, or bulk-select on schedule
+- [ ] **CRM-03**: Recall reminders triggered for patients whose last finalized encounter > 12 months ago AND no future appointment, surfaced in staff-approved queue
+- [ ] **CRM-04**: Patients can opt out of SMS via STOP keyword (Twilio Advanced Opt-Out + DB sync); opt-out respected on every send via preflight check
+- [ ] **CRM-05**: Per-patient message history viewable on patient detail Messages tab with states (queued/sent/delivered/read/failed)
+- [ ] **CRM-06**: Per-channel × per-purpose consent flags (4 flags) captured at intake/booking with explicit timestamps for TCPA audit trail
+- [ ] **CRM-07**: Twilio + email-provider webhooks verify provider signatures and update message status idempotently by provider_message_id
+- [ ] **CRM-08**: Quiet hours 9pm–8am patient-local enforced by scheduler; messages deferred to next allowed window
+- [ ] **CRM-09**: Daily per-clinic spend cap with 80% warn + 100% hard-stop with admin override
+- [ ] **CRM-10**: Bulk-send safeguards: max 50 recipients, throttle 1 msg/sec, mandatory preview-confirm, single batch_id audit
+- [ ] **CRM-11**: Inbound non-STOP SMS classified by Claude into 6 categories; reschedule/cancellation tagged float to top of inbox
+- [ ] **CRM-12**: "Draft with AI" composer button: staff intent → HIPAA-safe message respecting opt-out + minor routing
+- [ ] **CRM-13**: Onboarding wizard with test-send + "I received them" gate before clinic_messaging_enabled=true
+- [ ] **CRM-14**: Per-clinic dedicated local Twilio number auto-provisioned during wizard step 3
+- [ ] **CRM-15**: /messaging/analytics page (reminder funnel, recall conversion, opt-out trend, cost+volume) + dashboard hero cards
+- [ ] **CRM-16**: Monthly "Communications Compliance Report" PDF export, OWNER-gated
+- [ ] **CRM-17**: messaging entitlement key added to lib/entitlements.ts and backend/core/entitlements.py; included in Plus + Premium plans
+- [ ] **CRM-18**: Minors (<18) route to Guardian (name+phone+email+relationship); 18th-birthday "switch to patient" prompt
+- [ ] **CRM-19**: Household bundling: shared contact + same-day appointments → single bundled SMS
+- [ ] **CRM-20**: Bounce fallback: 3 fails on preferred channel → auto-flip to alternate + "needs update" badge
+
 ## v2 Requirements
 
 Deferred to future milestone. Tracked but not in current roadmap.
@@ -249,13 +272,33 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SCH-14 | Phase 10.2 | Complete |
 | SCH-15 | Phase 10.2 | Complete |
 | SCH-16 | Phase 10.2 | Complete |
+| CRM-01 | Phase 12 | Pending |
+| CRM-02 | Phase 12 | Pending |
+| CRM-03 | Phase 12 | Pending |
+| CRM-04 | Phase 12 | Pending |
+| CRM-05 | Phase 12 | Pending |
+| CRM-06 | Phase 12 | Pending |
+| CRM-07 | Phase 12 | Pending |
+| CRM-08 | Phase 12 | Pending |
+| CRM-09 | Phase 12 | Pending |
+| CRM-10 | Phase 12 | Pending |
+| CRM-11 | Phase 12 | Pending |
+| CRM-12 | Phase 12 | Pending |
+| CRM-13 | Phase 12 | Pending |
+| CRM-14 | Phase 12 | Pending |
+| CRM-15 | Phase 12 | Pending |
+| CRM-16 | Phase 12 | Pending |
+| CRM-17 | Phase 12 | Pending |
+| CRM-18 | Phase 12 | Pending |
+| CRM-19 | Phase 12 | Pending |
+| CRM-20 | Phase 12 | Pending |
 
 **Coverage:**
-- Total requirements: 83
+- Total requirements: 103
 - Complete: 67
-- Pending: 16
+- Pending: 36
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-04-03 — Phase 10.2 schedule & booking revamp (16 SCH requirements added)*
+*Last updated: 2026-04-29 — Phase 12 CRM & patient engagement (20 CRM requirements added)*
