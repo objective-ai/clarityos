@@ -172,6 +172,26 @@ class AuditAction(str, enum.Enum):
     UPDATE_INSURANCE = "update_insurance"
     DELETE_INSURANCE = "delete_insurance"
     GENERATE_PDF = "generate_pdf"
+    # CRM & messaging actions (added in Phase 12 — migration 0016_crm_messaging)
+    # Stored as VARCHAR(50); no ALTER TYPE needed (see 0008_claims_basics.py:78).
+    MESSAGE_SENT = "message_sent"
+    MESSAGE_DELIVERED = "message_delivered"
+    MESSAGE_FAILED = "message_failed"
+    MESSAGE_READ = "message_read"
+    MESSAGE_DEFERRED = "message_deferred"  # quiet hours
+    INBOUND_MESSAGE_RECEIVED = "inbound_message_received"
+    OPT_OUT_RECORDED = "opt_out_recorded"
+    OPT_IN_RECORDED = "opt_in_recorded"
+    CONSENT_GRANTED = "consent_granted"
+    CONSENT_REVOKED = "consent_revoked"
+    CHANNEL_PREFERENCE_UPDATED = "channel_preference_updated"
+    TEMPLATE_CREATED = "template_created"
+    TEMPLATE_UPDATED = "template_updated"
+    BULK_MESSAGE_BATCH_CREATED = "bulk_message_batch_created"
+    RECALL_QUEUE_RUN_STARTED = "recall_queue_run_started"
+    RECALL_QUEUE_RUN_COMPLETED = "recall_queue_run_completed"
+    MESSAGING_ENABLED = "messaging_enabled"
+    MESSAGING_DISABLED = "messaging_disabled"
 
 
 # ---------------------------------------------------------------------------
