@@ -75,8 +75,10 @@ def signed_twilio_webhook_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[.
     Uses real twilio.request_validator.RequestValidator so signature is byte-correct.
     """
     from twilio.request_validator import RequestValidator
+    from backend.core.config import settings as _settings
     auth_token = "test_auth_token_phase_12"
     monkeypatch.setenv("TWILIO_AUTH_TOKEN", auth_token)
+    monkeypatch.setattr(_settings, "TWILIO_AUTH_TOKEN", auth_token)
     validator = RequestValidator(auth_token)
 
     def _factory(
@@ -111,10 +113,13 @@ def postmark_webhook_request_factory(monkeypatch: pytest.MonkeyPatch) -> Callabl
     """
     import json
 
+    from backend.core.config import settings as _settings
     user = "postmark_webhook_user"
     pw = "test_postmark_webhook_pw_phase_12"
     monkeypatch.setenv("POSTMARK_WEBHOOK_USER", user)
     monkeypatch.setenv("POSTMARK_WEBHOOK_PASSWORD", pw)
+    monkeypatch.setattr(_settings, "POSTMARK_WEBHOOK_USER", user)
+    monkeypatch.setattr(_settings, "POSTMARK_WEBHOOK_PASSWORD", pw)
     token = base64.b64encode(f"{user}:{pw}".encode()).decode()
 
     def _factory(payload: dict[str, Any] | None = None) -> dict[str, Any]:

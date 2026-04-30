@@ -25,6 +25,19 @@ class Settings(BaseSettings):
     # ── CORS ──────────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:3001"]
 
+    # ── Messaging (Phase 12 — Twilio + Postmark) ──────────────────────────
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_MESSAGING_SERVICE_SID: str | None = None
+    WEBHOOK_INTERNAL_SECRET: str | None = None
+    MESSAGING_TEST_ALLOWLIST: str = ""
+    EMAIL_PROVIDER: str = "postmark"
+    POSTMARK_SERVER_TOKEN: str | None = None
+    POSTMARK_FROM_EMAIL: str | None = None
+    POSTMARK_WEBHOOK_USER: str | None = None
+    POSTMARK_WEBHOOK_PASSWORD: str | None = None
+    MESSAGING_SCHEDULER_ENABLED: bool = True
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
