@@ -25,23 +25,27 @@ must_haves:
     - "Cadence is idempotent — re-running tick does not duplicate sends (uses appointments.reminders_sent_count + last_reminder_sent_at gates)"
     - "Scheduler asyncio loop is gated by MESSAGING_SCHEDULER_ENABLED env (Pitfall 7)"
     - "Scheduler uses pg_advisory_lock to prevent multi-instance duplicate sends (RESEARCH § Pattern 2)"
-    - "Scheduler tick processes deferred messages (deferred_until <= now) by re-dispatching"
-    - "Scheduler tick processes household bundling for same-day same-phone group"
+    - "Scheduler tick CALLS bundle_household_reminders before dispatching — multi-member household groups produce ONE bundled SMS to the household primary contact, singletons dispatch as before (CRM-19 reminder-side bundling fires in production, not just unit tests)"
+    - "Scheduler tick CANCELS deferred messages whose deferred_until <= now (v1 limitation: deferred manual sends are NOT re-dispatched; user must re-send the next morning). Scope note in Plan + SUMMARY documents this."
     - "Inbound classifier (Claude Haiku) returns one of 6 labels: reschedule_request, cancellation, question_clinical, question_billing, thank_you, spam"
     - "Classifier sets InboundMessage.classification + classification_confidence; runs as background task (non-blocking webhook)"
   artifacts:
     - path: "backend/services/messaging/scheduler.py"
-      provides: "tick_messaging_scheduler, _scheduler_loop, advisory-lock helpers"
+      provides: "tick_messaging_scheduler, _scheduler_loop, advisory-lock helpers, _process_tenant calls bundle_household_reminders"
       exports: ["tick_messaging_scheduler", "start_scheduler", "stop_scheduler"]
     - path: "backend/services/messaging/reminder_cadence.py"
-      provides: "compute_due_reminders, dispatch_reminder"
-      exports: ["compute_due_reminders", "dispatch_reminder", "REMINDER_OFFSETS"]
+      provides: "compute_due_reminders, dispatch_reminder, bundle_household_reminders, render_bundled_body, dispatch_bundled_reminder"
+      exports: ["compute_due_reminders", "dispatch_reminder", "bundle_household_reminders", "render_bundled_body", "dispatch_bundled_reminder", "REMINDER_OFFSETS"]
     - path: "backend/services/messaging/classifier.py"
       provides: "classify_inbound_async (called from webhook handler)"
       exports: ["classify_inbound_async", "INBOUND_LABELS"]
     - path: "backend/main.py"
       contains: "_messaging_task"
   key_links:
+    - from: "backend/services/messaging/scheduler.py"
+      to: "backend/services/messaging/reminder_cadence.py"
+      via: "bundle_household_reminders(due, fetch_patient=...) — called BEFORE the dispatch loop"
+      pattern: "bundle_household_reminders\\("
     - from: "backend/services/messaging/scheduler.py"
       to: "backend/services/messaging/sender.py"
       via: "dispatch() — only callsite for actual sends"
@@ -53,12 +57,14 @@ must_haves:
 ---
 
 <objective>
-Implement the background scheduler that drives appointment reminders + processes deferred messages, plus the inbound SMS classifier that the webhook in Plan 12-04 already calls.
+Implement the background scheduler that drives appointment reminders + the inbound SMS classifier that the webhook in Plan 12-04 already calls.
 
 The scheduler mirrors the proven Phase 10.3 self-pinger pattern: asyncio.create_task on startup, gated by env var, advisory-lock for multi-instance safety. Tick every 5 minutes.
 
+**v1 scope decision (deferred-message handling):** Manual sends that hit quiet hours are persisted with `status='deferred'` and `deferred_until=<next 8am clinic-local>`. At v1 the scheduler CANCELS these rows when their deferred_until passes — it does NOT re-dispatch. The clinic user re-composes the message the following morning if still relevant. This avoids reconstructing the original guard chain (PHI scan, opt-out re-check, cost cap re-check, AI-draft state) from a stored row, which is risky for clinical data correctness. Documented in CONTEXT.md scope.
+
 Output:
-- 3 service modules: scheduler (loop), reminder_cadence (the "what's due" logic), classifier (Claude Haiku)
+- 3 service modules: scheduler (loop), reminder_cadence (the "what's due" logic + household bundling), classifier (Claude Haiku)
 - main.py startup hook registration
 - 3 test files using freezegun for deterministic time travel
 </objective>
@@ -126,7 +132,7 @@ INBOUND_LABELS (RESEARCH lines 731-744):
 <tasks>
 
 <task type="auto" tdd="true">
-  <name>Task 1: Reminder cadence service (compute_due_reminders + dispatch_reminder)</name>
+  <name>Task 1: Reminder cadence service (compute_due_reminders + dispatch_reminder + bundle_household_reminders + dispatch_bundled_reminder)</name>
   <files>
     backend/services/messaging/reminder_cadence.py,
     backend/tests/messaging/test_reminder_cadence.py
@@ -146,7 +152,9 @@ INBOUND_LABELS (RESEARCH lines 731-744):
     - Test 6: Skips appointment if reminders_sent_count for that touch already incremented (idempotent)
     - Test 7: dispatch_reminder builds DispatchRequest with correct template_kind (reminder_7d / reminder_72h / reminder_24h) + tokens (patient_first_name, appt_date, appt_time, etc.)
     - Test 8: Increments appointments.reminders_sent_count + sets last_reminder_sent_at after dispatch
-    - Test 9: Household bundling: if 2+ appointments share contact phone + same date, returns one bundled DispatchRequest
+    - Test 9: bundle_household_reminders: 2 due reminders sharing phone+date are grouped under one key
+    - Test 10: render_bundled_body produces a single SMS body that names both patients ("Reminder for Jane and Bob: appointments on Tue Jun 4")
+    - Test 11: dispatch_bundled_reminder dispatches ONE message via dispatch() to the household primary contact (first appointment's patient) and increments reminders_sent_count for ALL appointments in the bundle
   </behavior>
   <action>
 Create `backend/services/messaging/reminder_cadence.py`:
@@ -155,6 +163,7 @@ Create `backend/services/messaging/reminder_cadence.py`:
 """Appointment reminder cadence: 7d / 72h / 24h pre-appointment.
 
 Per CONTEXT.md line 31. Idempotent via appointments.reminders_sent_count counter.
+CRM-19 household bundling: dispatch_bundled_reminder sends ONE SMS for multi-member groups.
 """
 from __future__ import annotations
 
@@ -162,7 +171,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Awaitable, Callable, Literal
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select, update
@@ -172,7 +181,6 @@ from backend.core.security import TenantContext
 from backend.db.models.tenant.clinical import Appointment, Patient
 from backend.db.models.tenant.messaging import MessageTemplate, TemplateKind
 from .sender import dispatch, DispatchRequest, OptOutBlocked
-from .recipient_resolver import bundle_household_recipients, render_bundled_body
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +218,6 @@ async def compute_due_reminders(db: AsyncSession, tenant_id: UUID, *, now: datet
     window_end = now + timedelta(minutes=_DUE_WINDOW_MINUTES)
 
     for touch_idx, hours_before, kind in REMINDER_OFFSETS:
-        # Range query: start_time should be (now + offset) ± window
         start_lower = now + timedelta(hours=hours_before)
         start_upper = window_end + timedelta(hours=hours_before)
 
@@ -237,17 +244,134 @@ async def compute_due_reminders(db: AsyncSession, tenant_id: UUID, *, now: datet
     return out
 
 
+async def bundle_household_reminders(
+    due_list: list[DueReminder],
+    *,
+    fetch_patient: Callable[[UUID], Awaitable[dict]],
+) -> dict[tuple[str, str, int, str], list[DueReminder]]:
+    """Group due reminders by (shared_contact, ISO_date, touch_index, template_kind).
+
+    Returns dict keyed on (phone_or_email, ISO_date, touch_index, template_kind).
+    Caller dispatches one bundled message via dispatch_bundled_reminder for groups
+    with size > 1, individual sends for size == 1.
+
+    NOTE: keying includes touch_index + template_kind so a 7d touch and a 24h touch
+    on the same household same-date are NOT bundled together.
+    """
+    groups: dict[tuple[str, str, int, str], list[DueReminder]] = defaultdict(list)
+    for d in due_list:
+        patient = await fetch_patient(d.patient_id)
+        contact = patient.get("contact_info_jsonb", {}) or {}
+        key_contact = contact.get("phone_e164") or contact.get("email") or ""
+        if not key_contact:
+            # Patients with no contact get their own singleton group keyed by patient_id
+            key_contact = f"missing:{d.patient_id}"
+        key_date = d.appt_start_time.date().isoformat()
+        groups[(key_contact, key_date, d.touch_index, d.template_kind)].append(d)
+    return groups
+
+
+def render_bundled_body(
+    bundle: list[DueReminder],
+    *,
+    patient_first_names: list[str],
+    clinic_name: str,
+) -> str:
+    """Render ONE SMS body covering multiple household members.
+
+    Pattern: "Reminder for {Names} from {clinic_name}: appointments on {date}.
+    Reply YES to confirm or visit our portal to reschedule."
+    """
+    if len(patient_first_names) == 1:
+        names = patient_first_names[0]
+    elif len(patient_first_names) == 2:
+        names = f"{patient_first_names[0]} and {patient_first_names[1]}"
+    else:
+        names = ", ".join(patient_first_names[:-1]) + f", and {patient_first_names[-1]}"
+    appt_date = bundle[0].appt_start_time.strftime("%a %b %d")
+    return (
+        f"Reminder for {names} from {clinic_name}: appointments on {appt_date}. "
+        f"Reply YES to confirm or visit our portal to reschedule."
+    )
+
+
+async def dispatch_bundled_reminder(
+    db: AsyncSession,
+    ctx: TenantContext,
+    *,
+    bundle: list[DueReminder],
+    fetch_patient: Callable[[UUID], Awaitable[dict]],
+    fetch_template: Callable[[str, str, str], Awaitable[dict]],
+    fetch_tenant: Callable[[], Awaitable[dict]],
+    status_callback_url: str = "",
+) -> None:
+    """Dispatch ONE SMS to the household primary contact and update ALL bundled appointments."""
+    assert len(bundle) >= 1
+    primary_due = bundle[0]
+    primary_patient = await fetch_patient(primary_due.patient_id)
+    tenant = await fetch_tenant()
+
+    # Collect first names IN STABLE ORDER (sorted by appointment_id) so output is deterministic
+    first_names: list[str] = []
+    for d in sorted(bundle, key=lambda x: str(x.appointment_id)):
+        p = await fetch_patient(d.patient_id) if d.patient_id != primary_due.patient_id else primary_patient
+        first_names.append(p.get("first_name", "") or "")
+
+    body = render_bundled_body(bundle, patient_first_names=first_names, clinic_name=tenant["name"])
+
+    contact = primary_patient["contact_info_jsonb"] or {}
+    preferred_channel = contact.get("preferred_channel", "sms")
+    if preferred_channel not in ("sms", "email"):
+        preferred_channel = "sms"
+    language = contact.get("preferred_language", "en")
+    template = await fetch_template(primary_due.template_kind, preferred_channel, language)
+
+    req = DispatchRequest(
+        tenant_id=ctx.tenant_id,
+        patient_id=primary_due.patient_id,           # billing/audit ownership = primary contact
+        channel=preferred_channel,
+        purpose="operational",
+        template_id=template["id"],
+        template_kind=primary_due.template_kind,
+        body_override=body,                          # bundled body bypasses single-patient template render
+        tokens={},                                   # render already happened
+        appointment_id=primary_due.appointment_id,
+        actor_user_id=None,
+        force_outside_quiet_hours=False,
+        language=language,
+        bundled_appointment_ids=[d.appointment_id for d in bundle],  # audited in dispatch()
+    )
+
+    try:
+        await dispatch(db, ctx, req, patient=primary_patient, tenant=tenant, template=template,
+                        status_callback_url=status_callback_url)
+    except OptOutBlocked as exc:
+        logger.info("Bundled reminder %s skipped: %s", primary_due.template_kind, exc.code)
+
+    # Increment reminders_sent_count for ALL appointments in the bundle (idempotency)
+    for d in bundle:
+        await db.execute(
+            update(Appointment)
+            .where(Appointment.id == d.appointment_id)
+            .values(
+                reminders_sent_count=d.touch_index + 1,
+                last_reminder_sent_at=datetime.now(timezone.utc),
+                reminder_status=d.template_kind,
+            )
+        )
+
+
 async def dispatch_reminder(
     db: AsyncSession,
     ctx: TenantContext,
     *,
     due: DueReminder,
-    fetch_patient: callable,
-    fetch_template: callable,
-    fetch_tenant: callable,
+    fetch_patient: Callable[[UUID], Awaitable[dict]],
+    fetch_template: Callable[[str, str, str], Awaitable[dict]],
+    fetch_tenant: Callable[[], Awaitable[dict]],
     status_callback_url: str = "",
 ) -> None:
-    """Dispatch a single reminder + increment idempotency counters."""
+    """Dispatch a single (singleton) reminder + increment idempotency counters."""
     patient = await fetch_patient(due.patient_id)
     tenant = await fetch_tenant()
     contact = patient["contact_info_jsonb"]
@@ -258,13 +382,12 @@ async def dispatch_reminder(
 
     template = await fetch_template(due.template_kind, preferred_channel, language)
 
-    # Build per-recipient tokens
-    appt_local = due.appt_start_time.astimezone()  # caller may pass tenant TZ — kept simple here
+    appt_local = due.appt_start_time.astimezone()
     tokens = {
         "patient_first_name": patient["first_name"],
         "appt_date": appt_local.strftime("%b %d"),
         "appt_time": appt_local.strftime("%-I:%M %p"),
-        "provider_name": "your provider",  # TODO: join with appointment.staff
+        "provider_name": "your provider",
         "clinic_name": tenant["name"],
         "confirm_link": f"https://app.clarityos.app/confirm/{due.appointment_id}",
         "reschedule_link": f"https://app.clarityos.app/reschedule/{due.appointment_id}",
@@ -279,7 +402,7 @@ async def dispatch_reminder(
         template_kind=due.template_kind,
         tokens=tokens,
         appointment_id=due.appointment_id,
-        actor_user_id=None,  # scheduler-originated
+        actor_user_id=None,
         force_outside_quiet_hours=False,
         language=language,
     )
@@ -290,8 +413,6 @@ async def dispatch_reminder(
     except OptOutBlocked as exc:
         logger.info("Reminder %s skipped for appt %s: %s", due.template_kind, due.appointment_id, exc.code)
 
-    # Increment counter regardless of dispatch outcome — failures don't get retried at the next tick
-    # (retries are owned by the message_log retry policy, not the scheduler)
     await db.execute(
         update(Appointment)
         .where(Appointment.id == due.appointment_id)
@@ -301,25 +422,11 @@ async def dispatch_reminder(
             reminder_status=due.template_kind,
         )
     )
-
-
-async def bundle_household_reminders(due_list: list[DueReminder], *, fetch_patient: callable) -> dict[tuple[str, str], list[DueReminder]]:
-    """Group due reminders by (shared_contact, date) for household bundling.
-
-    Returns dict keyed on (phone_or_email, ISO_date), value is list of due items in that bundle.
-    Caller dispatches one bundled SMS for groups with size > 1, individual sends for size == 1.
-    """
-    groups: dict[tuple[str, str], list[DueReminder]] = defaultdict(list)
-    for d in due_list:
-        patient = await fetch_patient(d.patient_id)
-        contact = patient.get("contact_info_jsonb", {})
-        key_contact = contact.get("phone_e164") or contact.get("email") or ""
-        key_date = d.appt_start_time.date().isoformat()
-        groups[(key_contact, key_date)].append(d)
-    return groups
 ```
 
-Create `backend/tests/messaging/test_reminder_cadence.py` covering all 9 behaviors.
+NOTE: `DispatchRequest` may need a `bundled_appointment_ids: list[UUID] | None = None` field added in Plan 12-03's sender.py. If it doesn't exist, add it as part of this task and ensure `dispatch()` audits the list (so the audit trail records the household scope).
+
+Create `backend/tests/messaging/test_reminder_cadence.py` covering all 11 behaviors.
   </action>
   <verify>
     <automated>cd backend && pytest tests/messaging/test_reminder_cadence.py -x -q</automated>
@@ -334,13 +441,15 @@ Create `backend/tests/messaging/test_reminder_cadence.py` covering all 9 behavio
     - `grep -c "async def compute_due_reminders" backend/services/messaging/reminder_cadence.py` returns 1
     - `grep -c "async def dispatch_reminder" backend/services/messaging/reminder_cadence.py` returns 1
     - `grep -c "async def bundle_household_reminders" backend/services/messaging/reminder_cadence.py` returns 1
-    - `cd backend && pytest tests/messaging/test_reminder_cadence.py -x -q` exits 0 with at least 9 tests
+    - `grep -c "def render_bundled_body" backend/services/messaging/reminder_cadence.py` returns 1
+    - `grep -c "async def dispatch_bundled_reminder" backend/services/messaging/reminder_cadence.py` returns 1
+    - `cd backend && pytest tests/messaging/test_reminder_cadence.py -x -q` exits 0 with at least 11 tests
   </acceptance_criteria>
-  <done>Cadence module computes 3-touch schedule, idempotent, household bundles. ≥9 tests pass.</done>
+  <done>Cadence module computes 3-touch schedule, idempotent, household bundle group + render + dispatch helpers all exported. ≥11 tests pass.</done>
 </task>
 
 <task type="auto" tdd="true">
-  <name>Task 2: Scheduler asyncio loop + advisory lock + main.py startup hook</name>
+  <name>Task 2: Scheduler asyncio loop + advisory lock + main.py startup hook + WIRED household bundling + deferred message cancellation</name>
   <files>
     backend/services/messaging/scheduler.py,
     backend/main.py,
@@ -348,17 +457,18 @@ Create `backend/tests/messaging/test_reminder_cadence.py` covering all 9 behavio
   </files>
   <read_first>
     - backend/main.py (full file — find the Phase 10.3 `_self_pinger_task` block; mirror the pattern)
-    - backend/services/messaging/reminder_cadence.py (Task 1 — compute_due_reminders, dispatch_reminder)
+    - backend/services/messaging/reminder_cadence.py (Task 1 — compute_due_reminders, dispatch_reminder, bundle_household_reminders, render_bundled_body, dispatch_bundled_reminder)
     - backend/services/messaging/sender.py (dispatch — for processing deferred messages)
     - .planning/phases/12-crm-patient-engagement/12-RESEARCH.md (lines 354-393 — Pattern 2 reference; Pitfall 7 — env-gated startup)
   </read_first>
   <behavior>
     - Test 1: tick_messaging_scheduler with no due reminders + no deferred messages: returns immediately, no DB writes
-    - Test 2: tick_messaging_scheduler with one due reminder: dispatches it, increments appointment.reminders_sent_count
-    - Test 3: tick_messaging_scheduler picks up deferred MessageLog rows where deferred_until <= now and dispatches via the same code path
-    - Test 4: When MESSAGING_SCHEDULER_ENABLED=false: start_scheduler is a no-op (Pitfall 7)
-    - Test 5: pg_advisory_lock acquisition failure (lock held by another instance): tick exits without processing
-    - Test 6: Loop exception inside tick is caught + logged; loop continues running
+    - Test 2: tick_messaging_scheduler with one due reminder for a singleton household: dispatches via dispatch_reminder (singleton path), increments appointment.reminders_sent_count
+    - Test 3: **CRM-19 household bundling fires in production** — two due reminders for two patients sharing the same `phone_e164` + same date + same touch_index produce ONE call to dispatch() (via dispatch_bundled_reminder), NOT two. Verified by counting `dispatch.call_count == 1` and asserting both appointments' `reminders_sent_count` were incremented.
+    - Test 4: tick_messaging_scheduler picks up deferred MessageLog rows where deferred_until <= now and CANCELS them (status='cancelled', failure_reason set) — v1 limitation, no re-dispatch.
+    - Test 5: When MESSAGING_SCHEDULER_ENABLED=false: start_scheduler is a no-op (Pitfall 7)
+    - Test 6: pg_advisory_lock acquisition failure (lock held by another instance): tick exits without processing
+    - Test 7: Loop exception inside tick is caught + logged; loop continues running
   </behavior>
   <action>
 **Step 1.** Create `backend/services/messaging/scheduler.py`:
@@ -367,6 +477,13 @@ Create `backend/tests/messaging/test_reminder_cadence.py` covering all 9 behavio
 """Background scheduler — 5-minute tick, advisory-locked, env-gated.
 
 Mirrors Phase 10.3 self-pinger pattern (backend/main.py:170-211).
+
+CRM-19: _process_tenant calls bundle_household_reminders BEFORE the dispatch loop.
+  Multi-member groups → one dispatch_bundled_reminder call (one SMS per household).
+  Singleton groups → dispatch_reminder as before.
+
+v1 limitation: Deferred manual messages are CANCELLED when their deferred_until passes.
+  No re-dispatch — see Plan 12-06 objective for rationale.
 """
 from __future__ import annotations
 
@@ -389,23 +506,14 @@ _task: asyncio.Task | None = None
 
 
 async def tick_messaging_scheduler(db: AsyncSession) -> dict[str, int]:
-    """One scheduler iteration. Returns counts dict {due_count, deferred_count, sent}.
-
-    Steps:
-      1. Acquire pg_advisory_lock — bail if another instance holds it
-      2. For every tenant with messaging_enabled=true:
-         a. Process due reminders (compute_due_reminders → dispatch_reminder)
-         b. Process deferred messages (status='deferred' AND deferred_until <= now)
-      3. Release lock
-    """
+    """One scheduler iteration. Returns counts dict."""
     got_lock = (await db.execute(select(func.pg_try_advisory_lock(_ADVISORY_LOCK_KEY)))).scalar()
     if not got_lock:
         logger.info("messaging scheduler: another instance holds the lock, skipping tick")
-        return {"due_count": 0, "deferred_count": 0, "sent": 0, "skipped_lock": 1}
+        return {"due_count": 0, "bundled_groups": 0, "deferred_cancelled": 0, "sent": 0, "skipped_lock": 1}
 
-    counts = {"due_count": 0, "deferred_count": 0, "sent": 0, "skipped_lock": 0}
+    counts = {"due_count": 0, "bundled_groups": 0, "deferred_cancelled": 0, "sent": 0, "skipped_lock": 0}
     try:
-        # Iterate messaging-enabled tenants
         from backend.db.models.public.saas import Tenant
         tenants = (await db.execute(select(Tenant))).scalars().all()
         for tenant in tenants:
@@ -421,15 +529,32 @@ async def tick_messaging_scheduler(db: AsyncSession) -> dict[str, int]:
 
 
 async def _process_tenant(db: AsyncSession, tenant_id: UUID, counts: dict) -> None:
-    from .reminder_cadence import compute_due_reminders, dispatch_reminder
+    """Process one tenant's due reminders + cancel-expired deferred messages.
+
+    Order:
+      1. Compute due reminders.
+      2. Bundle by household (CRM-19) — call bundle_household_reminders BEFORE the dispatch loop.
+      3. For each group:
+           - size > 1 → dispatch_bundled_reminder (ONE SMS to household primary)
+           - size == 1 → dispatch_reminder (singleton)
+      4. Cancel-expired deferred messages (v1 — no re-dispatch).
+    """
+    from .reminder_cadence import (
+        compute_due_reminders, dispatch_reminder,
+        bundle_household_reminders, dispatch_bundled_reminder,
+    )
     from backend.core.security import TenantContext
 
-    # Build a system TenantContext (scheduler has no user)
     ctx = TenantContext(user_id=UUID("00000000-0000-0000-0000-000000000000"),
                          tenant_id=tenant_id, role="system", staff_id=None)
 
     due = await compute_due_reminders(db, tenant_id)
     counts["due_count"] += len(due)
+    if not due:
+        deferred_count = await _process_deferred(db, ctx, tenant_id)
+        counts["deferred_cancelled"] += deferred_count
+        await db.commit()
+        return
 
     # Closures for fetchers (mirror Plan 12-05 helpers)
     async def fetch_patient(pid):
@@ -450,7 +575,6 @@ async def _process_tenant(db: AsyncSession, tenant_id: UUID, counts: dict) -> No
                  MessageTemplate.deleted_at.is_(None)),
         ).limit(1))).scalar_one_or_none()
         if not t:
-            # Fallback to default for kind+channel
             t = (await db.execute(sel(MessageTemplate).where(
                 and_(MessageTemplate.tenant_id == tenant_id, MessageTemplate.kind == kind,
                      MessageTemplate.channel == channel, MessageTemplate.is_default == True,
@@ -470,28 +594,57 @@ async def _process_tenant(db: AsyncSession, tenant_id: UUID, counts: dict) -> No
                 "twilio_phone_number": ms.get("twilio_phone_number"),
                 "resend_from_email": ms.get("resend_from_email")}
 
-    for d in due:
-        try:
-            await dispatch_reminder(db, ctx, due=d,
-                                    fetch_patient=fetch_patient,
-                                    fetch_template=fetch_template,
-                                    fetch_tenant=fetch_tenant,
-                                    status_callback_url=_callback_url(d.template_kind))
-            counts["sent"] += 1
-        except Exception as exc:
-            logger.warning("scheduler dispatch_reminder failed for %s: %s", d.appointment_id, exc)
+    # === CRM-19 wiring: bundle BEFORE dispatching ===
+    bundled_groups = await bundle_household_reminders(due, fetch_patient=fetch_patient)
+    counts["bundled_groups"] += len(bundled_groups)
 
-    # Process deferred messages
-    deferred_count = await _process_deferred(db, ctx, tenant_id, fetch_patient, fetch_template, fetch_tenant)
-    counts["deferred_count"] += deferred_count
+    callback_url = _callback_url("sms")
+
+    for key, group in bundled_groups.items():
+        try:
+            if len(group) > 1:
+                # Multi-member household → ONE bundled SMS to primary contact
+                await dispatch_bundled_reminder(
+                    db, ctx, bundle=group,
+                    fetch_patient=fetch_patient,
+                    fetch_template=fetch_template,
+                    fetch_tenant=fetch_tenant,
+                    status_callback_url=callback_url,
+                )
+                counts["sent"] += 1
+            else:
+                # Singleton — dispatch as a normal per-patient reminder
+                await dispatch_reminder(
+                    db, ctx, due=group[0],
+                    fetch_patient=fetch_patient,
+                    fetch_template=fetch_template,
+                    fetch_tenant=fetch_tenant,
+                    status_callback_url=callback_url,
+                )
+                counts["sent"] += 1
+        except Exception as exc:
+            logger.warning("scheduler dispatch failed for group %s: %s", key, exc)
+
+    # Cancel deferred messages whose window has passed (v1 limitation — no re-dispatch)
+    deferred_count = await _process_deferred(db, ctx, tenant_id)
+    counts["deferred_cancelled"] += deferred_count
     await db.commit()
 
 
-async def _process_deferred(db, ctx, tenant_id, fetch_patient, fetch_template, fetch_tenant) -> int:
-    """Re-dispatch messages whose deferred_until has passed."""
+async def _process_deferred(db, ctx, tenant_id) -> int:
+    """v1: CANCEL deferred messages whose deferred_until has passed.
+
+    Rationale (see Plan 12-06 objective):
+      Reconstructing the original guard chain (PHI scan, opt-out re-check, cost cap,
+      AI-draft state) from a stored row is risky for clinical data correctness. The
+      clinic user re-composes the message the next morning if it's still relevant.
+
+    A future v2 may re-dispatch with `force_outside_quiet_hours=True` from a stored
+    payload, but it requires durable payload storage + re-validation against current
+    consent state.
+    """
     from sqlalchemy import select
     from backend.db.models.tenant.messaging import MessageLog, MessageStatus
-    from .sender import dispatch, DispatchRequest
 
     rows = (await db.execute(
         select(MessageLog).where(
@@ -504,14 +657,8 @@ async def _process_deferred(db, ctx, tenant_id, fetch_patient, fetch_template, f
 
     count = 0
     for log in rows:
-        # Mark as queued so it doesn't double-pick — re-dispatch via direct provider call would skip the guard chain.
-        # Simplest: mark cancelled here, create a fresh dispatch by re-running cadence on the next tick.
-        # That introduces gap risk. Better: directly send via twilio_client/resend_client since the row already exists?
-        # That would bypass the guard chain.
-        # Decision: mark this log row's deferred_until forward to skip, then re-create via cadence — see SUMMARY.
-        # NOTE: For pilot, accept a single-tick re-evaluation. This MUST be reviewed in V2 scaling.
         log.status = MessageStatus.CANCELLED.value
-        log.failure_reason = "Re-evaluated next tick"
+        log.failure_reason = "Deferred window expired (v1: not re-dispatched). User must re-send."
         count += 1
     await db.flush()
     return count
@@ -520,7 +667,7 @@ async def _process_deferred(db, ctx, tenant_id, fetch_patient, fetch_template, f
 def _callback_url(kind: str) -> str:
     from backend.core.config import settings
     base = settings.PUBLIC_BASE_URL or "https://app.clarityos.app"
-    return f"{base}/api/webhooks/twilio"  # all reminders are SMS by default
+    return f"{base}/api/webhooks/twilio"
 
 
 async def _scheduler_loop() -> None:
@@ -565,9 +712,26 @@ async def _stop_messaging_scheduler() -> None:
     stop_scheduler()
 ```
 
-**Step 3.** Create `backend/tests/messaging/test_scheduler.py` covering all 6 behaviors. Use `frozen_clock` + `disable_messaging_scheduler` autouse fixture override pattern. Test 5 uses a monkeypatched `pg_try_advisory_lock` returning False.
+**Step 3.** Create `backend/tests/messaging/test_scheduler.py` covering all 7 behaviors. Use `frozen_clock` + `disable_messaging_scheduler` autouse fixture override pattern. Test 6 uses a monkeypatched `pg_try_advisory_lock` returning False.
 
-NOTE on the deferred-message gap: this Plan stubs `_process_deferred` with mark-cancelled. Real re-dispatch is a complexity beyond pilot — document in SUMMARY for V2 attention.
+Critical Test 3 outline (CRM-19 wiring):
+```python
+@pytest.mark.asyncio
+async def test_household_bundling_dispatches_one_sms(monkeypatch, db, freeze_time):
+    """CRM-19: 2 reminders for same household at same time → 1 dispatch() call."""
+    # Seed 2 patients with the same phone_e164 + 2 appointments same date same time
+    # Both fall in the 24h reminder window
+    dispatch_mock = AsyncMock()
+    monkeypatch.setattr("backend.services.messaging.reminder_cadence.dispatch", dispatch_mock)
+    counts = await tick_messaging_scheduler(db)
+    assert dispatch_mock.call_count == 1            # ← ONE bundled send, not two
+    assert counts["bundled_groups"] == 1
+    # Both appointments' reminders_sent_count incremented
+    appt1 = (await db.execute(select(Appointment).where(...))).scalar_one()
+    appt2 = (await db.execute(select(Appointment).where(...))).scalar_one()
+    assert appt1.reminders_sent_count == 1
+    assert appt2.reminders_sent_count == 1
+```
   </action>
   <verify>
     <automated>cd backend && pytest tests/messaging/test_scheduler.py -x -q</automated>
@@ -579,11 +743,14 @@ NOTE on the deferred-message gap: this Plan stubs `_process_deferred` with mark-
     - `grep -c "async def tick_messaging_scheduler" backend/services/messaging/scheduler.py` returns 1
     - `grep -c "async def _scheduler_loop" backend/services/messaging/scheduler.py` returns 1
     - `grep -c "asyncio.create_task" backend/services/messaging/scheduler.py` returns at least 1
+    - `grep -E "bundle_household_reminders\\(" backend/services/messaging/scheduler.py | wc -l` returns at least 1 — **CRM-19 BLOCKER FIX: bundling actually wired into _process_tenant**
+    - `grep -c "dispatch_bundled_reminder" backend/services/messaging/scheduler.py` returns at least 1
     - `grep -c "from backend.services.messaging.scheduler import start_scheduler" backend/main.py` returns 1
     - `grep -c "_start_messaging_scheduler\\|_stop_messaging_scheduler" backend/main.py` returns at least 2
-    - `cd backend && pytest tests/messaging/test_scheduler.py -x -q` exits 0 with at least 6 tests
+    - `grep -c "test_household_bundling_dispatches_one_sms\\|test_household_bundling_one_dispatch" backend/tests/messaging/test_scheduler.py` returns at least 1 (CRM-19 production wiring test)
+    - `cd backend && pytest tests/messaging/test_scheduler.py -x -q` exits 0 with at least 7 tests
   </acceptance_criteria>
-  <done>Scheduler with advisory lock + env gate + 5-min tick. main.py registered. ≥6 tests pass.</done>
+  <done>Scheduler with advisory lock + env gate + 5-min tick + WIRED CRM-19 household bundling (one SMS per household, not per patient) + v1 deferred-message cancellation. main.py registered. ≥7 tests pass including CRM-19 wiring test.</done>
 </task>
 
 <task type="auto" tdd="true">
@@ -685,7 +852,6 @@ async def _classify(body: str) -> tuple[str, str]:
     )
     raw = response.content[0].text.strip().lower()
     label = raw if raw in INBOUND_LABELS else "spam"
-    # Confidence proxy: exact-match → high; partial-substring → medium; default → low
     if raw in INBOUND_LABELS:
         confidence = "high"
     elif any(lbl in raw for lbl in INBOUND_LABELS):
@@ -719,24 +885,30 @@ Create `backend/tests/messaging/test_classifier.py` with all 6 behaviors. Use `m
 </tasks>
 
 <verification>
-1. `cd backend && pytest tests/messaging/test_reminder_cadence.py tests/messaging/test_scheduler.py tests/messaging/test_classifier.py -x -q` → exits 0; ≥21 tests
+1. `cd backend && pytest tests/messaging/test_reminder_cadence.py tests/messaging/test_scheduler.py tests/messaging/test_classifier.py -x -q` → exits 0; ≥24 tests
 2. `grep -c "MESSAGING_SCHEDULER_ENABLED" backend/services/messaging/scheduler.py backend/main.py` → ≥2
-3. `cd backend && python -c "from services.messaging.scheduler import start_scheduler, stop_scheduler, tick_messaging_scheduler; from services.messaging.reminder_cadence import compute_due_reminders, dispatch_reminder; from services.messaging.classifier import classify_inbound_async, INBOUND_LABELS"` → exits 0
-4. `cd backend && python -c "import services.messaging.scheduler as s; assert s._task is None"` → exits 0 (no eager start)
-5. `cd backend && python -c "import services.messaging.classifier as c; assert c._client is None"` → exits 0 (lazy init)
+3. `grep -E "bundle_household_reminders\\(" backend/services/messaging/scheduler.py` → ≥1 line (CRM-19 wired in production code path, not just defined in cadence module)
+4. `cd backend && python -c "from services.messaging.scheduler import start_scheduler, stop_scheduler, tick_messaging_scheduler; from services.messaging.reminder_cadence import compute_due_reminders, dispatch_reminder, bundle_household_reminders, dispatch_bundled_reminder, render_bundled_body; from services.messaging.classifier import classify_inbound_async, INBOUND_LABELS"` → exits 0
+5. `cd backend && python -c "import services.messaging.scheduler as s; assert s._task is None"` → exits 0 (no eager start)
+6. `cd backend && python -c "import services.messaging.classifier as c; assert c._client is None"` → exits 0 (lazy init)
 </verification>
 
 <success_criteria>
 - Reminder cadence (7d/72h/24h) implemented with idempotency counter
+- bundle_household_reminders + dispatch_bundled_reminder defined in cadence module AND called from scheduler._process_tenant — CRM-19 fires in production
 - Scheduler asyncio loop registered + advisory-lock + env-gated + Pitfall 7 safe
+- Deferred-message handling matches the truth claim: scheduler CANCELS expired deferred manuals (v1 limitation, no re-dispatch). No internal contradiction.
 - Classifier returns one of 6 labels via Claude Haiku, exception-swallow, lazy-init
-- ≥21 tests pass across 3 files
+- ≥24 tests pass across 3 files (was 21 before adding bundle render + bundle dispatch + scheduler bundling production wiring tests)
 </success_criteria>
 
 <output>
 After completion, create `.planning/phases/12-crm-patient-engagement/12-06-SUMMARY.md` documenting:
 - Final REMINDER_OFFSETS list
-- Decision on deferred-message re-dispatch path (Plan stubs as cancel-and-recompute; document V2 work to fix)
+- Confirmation that scheduler._process_tenant calls bundle_household_reminders BEFORE the dispatch loop and produces ONE SMS per multi-member household group (CRM-19 production wiring)
+- v1 deferred-message handling: CANCEL on expiry; document that V2 work would need durable payload storage + re-validation
+- Whether DispatchRequest needed `bundled_appointment_ids` field (Plan 12-03 sender extension)
 - Tick interval chosen (5min as planned, or 10/15)
 - Test count by file
+</output>
 </output>

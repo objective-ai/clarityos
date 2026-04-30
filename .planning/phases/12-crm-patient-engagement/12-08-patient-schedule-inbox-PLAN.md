@@ -24,6 +24,7 @@ must_haves:
     - "Patient detail page has a new Messages tab that shows MessageTimeline + Message button + ChannelPreferenceChip on header"
     - "Schedule appointment row has kebab menu with 'Message Patient' that opens MessageComposer"
     - "Schedule supports bulk-select mode with up-to-50 enforcement and a 'Send Selected' toolbar action"
+    - "Bulk-select toolbar populates messagingStore.bulkRecipients (defined in Plan 12-07) BEFORE calling openComposer('bulk:<id>', 'bulk') — toolbar consumes the store, does NOT extend it"
     - "Global Inbox page at /messaging/inbox lists InboundMessages with classification filter, opens reply via MessageComposer"
     - "TopNav shows unread inbox badge with accent count (max '99+')"
     - "AppointmentCard shows new 'reminder sent' indicator when appointment.last_reminder_sent_at is set + 'confirmed' green dot when patient_confirmed_at is set"
@@ -33,7 +34,7 @@ must_haves:
     - path: "app/(tenant)/[tenant]/messaging/inbox/page.tsx"
       provides: "Global inbound triage page"
     - path: "components/schedule/BulkSelectToolbar.tsx"
-      provides: "Toolbar that appears when ≥1 schedule rows are checked"
+      provides: "Toolbar that appears when ≥1 schedule rows are checked; consumes messagingStore.setBulkRecipients (owned by Plan 12-07)"
     - path: "lib/api/messaging.ts"
       provides: "Client-side fetch helpers for /api/messaging/* endpoints"
   key_links:
@@ -45,6 +46,10 @@ must_haves:
       to: "components/messaging/MessageComposer.tsx"
       via: "openComposer + history fetch"
       pattern: "MessageComposer|MessageTimeline"
+    - from: "components/schedule/BulkSelectToolbar.tsx"
+      to: "store/messagingStore.ts"
+      via: "setBulkRecipients(refs) before openComposer"
+      pattern: "setBulkRecipients|BulkRecipientStub"
 ---
 
 <objective>
@@ -53,7 +58,7 @@ Wire up the messaging primitives into the existing patient + schedule + TopNav s
 Output:
 - Patient detail page Messages tab (entry point 1)
 - Schedule appointment kebab → Message Patient (entry point 2)
-- Schedule bulk-select toolbar (entry point 4)
+- Schedule bulk-select toolbar (entry point 4) — consumes `messagingStore.setBulkRecipients` (defined in Plan 12-07)
 - Global Inbox page (entry point 3, plus inbound triage UI)
 - TopNav unread badge
 - lib/api/messaging.ts client-side fetch helpers
@@ -82,7 +87,8 @@ From Plan 12-07:
 - components/messaging/MessageTimeline (props: messages: MessageLog[])
 - components/messaging/ChannelPreferenceChip
 - components/messaging/InboxItem
-- store/messagingStore (useMessagingStore with openComposer, closeComposer, inboxUnreadCount)
+- store/messagingStore (useMessagingStore with openComposer, closeComposer, inboxUnreadCount, bulkRecipients, setBulkRecipients, clearBulkRecipients)
+- store/messagingStore exports `BulkRecipientStub` type — import from there, do NOT redeclare locally
 
 From Plan 12-05 (BFF endpoints):
 - GET /api/messaging/history/[patientId] → MessageLog[]
@@ -210,7 +216,6 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
 
   async function handleSend(payload: any) {
     await messagingApi.sendMessage({ patient_id: patientId, ...payload });
-    // Refresh history
     const h = await messagingApi.getHistory(patientId);
     setHistory(h);
   }
@@ -286,7 +291,7 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
 </task>
 
 <task type="auto" tdd="false">
-  <name>Task 2: Schedule kebab + bulk-select toolbar + AppointmentCard reminder/confirmed indicators + AppointmentDetailDrawer Message button</name>
+  <name>Task 2: Schedule kebab + bulk-select toolbar (CONSUMES messagingStore.setBulkRecipients) + AppointmentCard reminder/confirmed indicators + AppointmentDetailDrawer Message button</name>
   <files>
     components/schedule/AppointmentCard.tsx,
     components/schedule/AppointmentDetailDrawer.tsx,
@@ -297,6 +302,7 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
     - components/schedule/AppointmentCard.tsx (full file — extend, do not rewrite; existing reminders for status colors + intake icon)
     - components/schedule/AppointmentDetailDrawer.tsx (full file — has existing actions section)
     - app/(tenant)/[tenant]/schedule/page.tsx (full file — view-mode tabs + render loop)
+    - store/messagingStore.ts (Plan 12-07 — confirm bulkRecipients + setBulkRecipients + BulkRecipientStub are exported here; we ONLY consume, do NOT extend)
     - .planning/phases/12-crm-patient-engagement/12-UI-SPEC.md (line 56 — bulk select max 50)
     - .planning/phases/12-crm-patient-engagement/12-CONTEXT.md (lines 58-65 — entry points + bulk safeguards)
   </read_first>
@@ -316,28 +322,34 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
 - onClick: calls `openComposer(patient_id, "schedule_kebab")` and closes the drawer.
 - Place between existing actions (after "Start Exam" / "Cancel" buttons).
 
-**Step 3.** Create `components/schedule/BulkSelectToolbar.tsx`:
+**Step 3.** Create `components/schedule/BulkSelectToolbar.tsx` (CONSUMES bulkRecipients ownership from Plan 12-07's messagingStore — does NOT extend the store):
 
 ```tsx
 "use client";
-import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, X } from "lucide-react";
-import { useMessagingStore } from "@/store/messagingStore";
+import { useMessagingStore, type BulkRecipientStub } from "@/store/messagingStore";
 
 interface Props {
   selectedAppointmentIds: string[];
-  selectedPatientData: Array<{ patient_id: string; appointment_id: string; first_name: string }>;
+  selectedPatientData: BulkRecipientStub[];   // imported type from messagingStore (Plan 12-07)
   onClearSelection: () => void;
 }
 
 const MAX_BULK = 50;
 
 export function BulkSelectToolbar({ selectedAppointmentIds, selectedPatientData, onClearSelection }: Props) {
-  const { openComposer } = useMessagingStore();
+  const { openComposer, setBulkRecipients } = useMessagingStore();
   const count = selectedAppointmentIds.length;
   if (count === 0) return null;
   const exceeds = count > MAX_BULK;
+
+  function handleOpenBulkComposer() {
+    // Populate the store BEFORE opening the composer.
+    // bulkRecipients is owned by Plan 12-07's messagingStore — we only consume.
+    setBulkRecipients(selectedPatientData);
+    openComposer(`bulk:${Date.now()}`, "bulk");
+  }
 
   return (
     <div role="toolbar" className="glass-card flex items-center justify-between p-4 sticky top-0 z-10">
@@ -353,7 +365,7 @@ export function BulkSelectToolbar({ selectedAppointmentIds, selectedPatientData,
         <Button
           variant="default"
           disabled={exceeds || count === 0}
-          onClick={() => openComposer(`bulk:${Date.now()}`, "bulk")}
+          onClick={handleOpenBulkComposer}
           className="min-h-[var(--touch-target)]"
         >
           <MessageSquare className="w-4 h-4 mr-2" aria-hidden />
@@ -370,12 +382,13 @@ export function BulkSelectToolbar({ selectedAppointmentIds, selectedPatientData,
 
 **Step 4.** Edit `app/(tenant)/[tenant]/schedule/page.tsx`:
 - Add bulk-select state: `const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())`
-- Add a bulk-select toggle button in the header (visible to receptionist + owner roles)
+- Add bulk-select toggle button in the header (visible to receptionist + owner roles)
 - When bulk mode active, show checkboxes on each AppointmentCard (pass `bulkMode` + `onSelectChange` props down)
-- Render `<BulkSelectToolbar selectedAppointmentIds={[...selectedIds]} ... onClearSelection={() => setSelectedIds(new Set())} />` above the schedule view list
-- The MessageComposer in bulk mode (entry point: "bulk") needs the patient list passed; useMessagingStore should expose a `bulkRecipients` field — extend the store if not already covered. The composer reads bulkRecipients from store rather than props, so the toolbar populates store before opening.
+- Build `selectedPatientData: BulkRecipientStub[]` from the schedule's loaded appointments by filtering on selectedIds
+- Render `<BulkSelectToolbar selectedAppointmentIds={[...selectedIds]} selectedPatientData={selectedPatientData} onClearSelection={() => setSelectedIds(new Set())} />` above the schedule view list
+- The composer reads `useMessagingStore((s) => s.bulkRecipients)` to render the recipient list — already populated by the toolbar.
 
-NOTE: This task may need a small `messagingStore` extension (`bulkRecipients: BulkRecipientStub[] | null` + `setBulkRecipients`). Add to store if missing — keeps drift contained. Update the store file accordingly.
+NOTE: This task does NOT modify `store/messagingStore.ts`. Plan 12-07 owns the store and exports `bulkRecipients`, `setBulkRecipients`, `clearBulkRecipients`, and the `BulkRecipientStub` type. If any of those are missing when this plan is executed, that is a Plan 12-07 bug — file a gap closure on 12-07, do not edit the store from this plan.
   </action>
   <verify>
     <automated>npx tsc --noEmit</automated>
@@ -389,10 +402,14 @@ NOTE: This task may need a small `messagingStore` extension (`bulkRecipients: Bu
     - `grep -c "openComposer" components/schedule/AppointmentDetailDrawer.tsx` returns at least 1
     - `grep -c "export function BulkSelectToolbar" components/schedule/BulkSelectToolbar.tsx` returns 1
     - `grep -c "MAX_BULK = 50" components/schedule/BulkSelectToolbar.tsx` returns 1
+    - `grep -c "setBulkRecipients" components/schedule/BulkSelectToolbar.tsx` returns at least 1
+    - `grep -c "BulkRecipientStub" components/schedule/BulkSelectToolbar.tsx` returns at least 1 (imported, not redeclared)
+    - `grep -c "from \"@/store/messagingStore\"" components/schedule/BulkSelectToolbar.tsx` returns 1
     - `grep -c "BulkSelectToolbar" "app/(tenant)/[tenant]/schedule/page.tsx"` returns at least 1
+    - `git diff --name-only HEAD store/messagingStore.ts | wc -l` returns 0 (Plan 12-08 MUST NOT modify the store — Plan 12-07 owns it)
     - `npx tsc --noEmit` exits 0
   </acceptance_criteria>
-  <done>Schedule integrates kebab + bulk + reminder indicators + drawer Message button. tsc clean.</done>
+  <done>Schedule integrates kebab + bulk + reminder indicators + drawer Message button. BulkSelectToolbar consumes messagingStore (Plan 12-07 ownership respected) — no store edits in this plan. tsc clean.</done>
 </task>
 
 <task type="auto" tdd="false">
@@ -465,7 +482,6 @@ export default function InboxPage() {
 
   const selected = items.find((x) => x.id === selectedId) ?? null;
 
-  // Load patient prefs when a thread is selected
   useEffect(() => {
     if (selected?.patientId) {
       messagingApi.getPreferences(selected.patientId).then(setPrefs).catch(() => setPrefs(null));
@@ -476,7 +492,6 @@ export default function InboxPage() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-[380px_1fr] gap-4 h-[calc(100vh-120px)]">
-      {/* LEFT: list */}
       <Card className="glass-card flex flex-col">
         <div className="p-4 border-b border-[var(--glass-border)]">
           <div className="relative mb-3">
@@ -529,7 +544,6 @@ export default function InboxPage() {
         </CardContent>
       </Card>
 
-      {/* RIGHT: thread + reply composer */}
       <Card className="glass-card flex flex-col">
         {selected ? (
           <>
@@ -568,7 +582,7 @@ export default function InboxPage() {
       {isComposerOpen && composerPatientId && prefs && (
         <MessageComposer
           patientId={composerPatientId}
-          patientFirstName=""  // Inbox doesn't pre-fetch first names; composer handles empty by fetching internally OR we skip token use
+          patientFirstName=""
           consents={prefs.consents}
           templates={templates}
           onSend={async (payload) => {
@@ -598,9 +612,7 @@ import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { useMessagingStore } from "@/store/messagingStore";
 
-// Inside TopNav render:
 const inboxUnreadCount = useMessagingStore((s) => s.inboxUnreadCount);
-// ...
 <Link
   href={`/${tenant}/messaging/inbox`}
   className="relative inline-flex items-center justify-center w-10 h-10 rounded hover:bg-[var(--bg-overlay)]"
@@ -643,7 +655,9 @@ const inboxUnreadCount = useMessagingStore((s) => s.inboxUnreadCount);
 2. `find app/\(tenant\)/\[tenant\]/messaging -name "*.tsx" | wc -l` → at least 1 (inbox page; recall + analytics in Plan 12-09)
 3. `grep -c "MessagesTab" "app/(tenant)/[tenant]/patients/[patientId]/page.tsx"` → ≥1
 4. `grep -c "BulkSelectToolbar" "app/(tenant)/[tenant]/schedule/page.tsx"` → ≥1
-5. Manual visual smoke (deferred to Plan 12-10): open a patient, click Messages tab, see empty state; open schedule, open kebab on a card, see "Message Patient" item.
+5. `grep -c "setBulkRecipients" components/schedule/BulkSelectToolbar.tsx` → ≥1 (consumes Plan 12-07's store)
+6. `git diff --name-only HEAD store/messagingStore.ts` → empty (Plan 12-08 does NOT modify the store)
+7. Manual visual smoke (deferred to Plan 12-10): open a patient, click Messages tab, see empty state; open schedule, open kebab on a card, see "Message Patient" item.
 </verification>
 
 <success_criteria>
@@ -652,6 +666,7 @@ const inboxUnreadCount = useMessagingStore((s) => s.inboxUnreadCount);
 - TopNav unread badge with 99+ cap
 - Inbox page with filter tabs + thread + reply composer
 - lib/api/messaging.ts has typed wrappers for all 9+ /api/messaging/* endpoints
+- BulkSelectToolbar consumes (does not extend) Plan 12-07's messagingStore — store ownership stays in Plan 12-07
 - All UI-SPEC copy verbatim
 - tsc clean
 </success_criteria>
@@ -659,6 +674,7 @@ const inboxUnreadCount = useMessagingStore((s) => s.inboxUnreadCount);
 <output>
 After completion, create `.planning/phases/12-crm-patient-engagement/12-08-SUMMARY.md` documenting:
 - Final tab count on patient detail page
-- Whether messagingStore needed bulkRecipients extension (Task 2 note)
+- Confirmation that Plan 12-08 did NOT modify store/messagingStore.ts (ownership stays in Plan 12-07 per checker fix)
 - Any kebab/bulk integration deviations
+</output>
 </output>

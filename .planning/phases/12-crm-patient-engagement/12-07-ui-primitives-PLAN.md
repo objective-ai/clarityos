@@ -34,14 +34,14 @@ must_haves:
     - "MessageComposer supports channel selector, template picker, free-form body, live preview, SMS segment count, PHI scan soft-warn, Draft with AI button"
     - "MessageComposer blocks send (disabled state) when patient has opted out of selected channel/purpose"
     - "MessageStatusIcon renders 5 states (queued/sent/delivered/read/failed) with correct lucide icons + color tokens"
-    - "Zustand stores manage composer draft + inbox unread count + recall selection state"
+    - "Zustand stores manage composer draft + inbox unread count + recall selection state + bulkRecipients (used by schedule bulk-send entry point in Plan 12-08)"
     - "lib/messaging/sms-segments.ts mirrors backend count_sms_segments logic (TS port)"
     - "lib/messaging/phi-scan.ts mirrors backend scrub denylist (client-side soft-warn — server still re-validates)"
   artifacts:
     - path: "components/messaging/MessageComposer.tsx"
       provides: "Single composer used at all 4 entry points"
     - path: "store/messagingStore.ts"
-      provides: "useMessagingStore — composer draft + send state + inbox unread count"
+      provides: "useMessagingStore — composer draft + send state + inbox unread count + bulkRecipients"
     - path: "lib/messaging/sms-segments.ts"
       exports: ["countSmsSegments"]
     - path: "lib/messaging/phi-scan.ts"
@@ -64,7 +64,7 @@ Build the shared messaging UI primitives + utility libs + Zustand stores. All fo
 
 Output:
 - 9 components in `components/messaging/` matching UI-SPEC component inventory
-- 2 Zustand stores (composer state + recall selection)
+- 2 Zustand stores (composer state + recall selection). messagingStore is THE owner of all composer-adjacent state — including the `bulkRecipients` field consumed by Plan 12-08's schedule bulk-send entry point. We declare it here so Plan 12-08 doesn't silently extend the store.
 - 3 utility libs in `lib/messaging/` (TS ports of backend logic — sms-segments, phi-scan, composer-preview)
 - 3 vitest unit test files
 </objective>
@@ -301,7 +301,7 @@ export function previewMessage(input: PreviewInput): PreviewResult {
 </task>
 
 <task type="auto" tdd="false">
-  <name>Task 2: Zustand stores (messagingStore + recallQueueStore)</name>
+  <name>Task 2: Zustand stores (messagingStore + recallQueueStore) — messagingStore OWNS bulkRecipients (consumed by Plan 12-08 schedule bulk entry)</name>
   <files>
     store/messagingStore.ts,
     store/recallQueueStore.ts
@@ -310,20 +310,35 @@ export function previewMessage(input: PreviewInput): PreviewResult {
     - store/encounterStore.ts (existing Zustand devtools + persist + selectors pattern)
     - types/messaging.ts (Plan 12-01)
     - .planning/phases/12-crm-patient-engagement/12-UI-SPEC.md (lines 130-176 — page-level layouts where stores are consumed)
+    - .planning/phases/12-crm-patient-engagement/12-CONTEXT.md (lines 58-65 — bulk send is composer entry point #4; needs a recipient list living in store so the toolbar can populate it before opening composer)
   </read_first>
   <action>
 **Step 1.** Create `store/messagingStore.ts`:
 
+`messagingStore` owns ALL composer-adjacent state — including `bulkRecipients` which Plan 12-08's `BulkSelectToolbar` populates before calling `openComposer(...)`. We declare it here (not in 12-08) so store ownership is in one plan and Plan 12-08 only consumes it.
+
 ```typescript
 /**
- * Messaging store: composer draft state, send state, inbox unread count.
+ * Messaging store: composer draft state, send state, inbox unread count, bulk recipients.
  *
  * Composer draft is per-patient — keyed by patient_id so navigation away
  * preserves what staff was typing.
+ *
+ * bulkRecipients is set by the schedule bulk-select toolbar (Plan 12-08) BEFORE calling
+ * openComposer(`bulk:<id>`, "bulk"). The composer reads this list when in bulk mode.
+ * It is NOT persisted (clears on page reload — bulk sends should not survive a refresh).
  */
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { MessageChannel, MessagePurpose } from "@/types/messaging";
+
+export interface BulkRecipientStub {
+  patientId: string;
+  appointmentId?: string;
+  firstName: string;
+  lastName?: string;
+  preferredChannel: MessageChannel;
+}
 
 interface ComposerDraft {
   body: string;
@@ -340,6 +355,9 @@ interface MessagingState {
   composerEntryPoint: "patient_header" | "schedule_kebab" | "inbox_reply" | "bulk" | null;
   drafts: Record<string, ComposerDraft>; // keyed by patient_id (or "bulk:<batch_uuid>")
 
+  // Bulk recipients (populated by Plan 12-08's BulkSelectToolbar before openComposer)
+  bulkRecipients: BulkRecipientStub[];
+
   // Send state (transient)
   isSending: boolean;
   lastError: string | null;
@@ -351,6 +369,8 @@ interface MessagingState {
   closeComposer(): void;
   setDraft(patientId: string, partial: Partial<ComposerDraft>): void;
   clearDraft(patientId: string): void;
+  setBulkRecipients(refs: BulkRecipientStub[]): void;
+  clearBulkRecipients(): void;
   setSending(value: boolean): void;
   setError(error: string | null): void;
   setInboxUnreadCount(count: number): void;
@@ -372,6 +392,7 @@ export const useMessagingStore = create<MessagingState>()(
         composerPatientId: null,
         composerEntryPoint: null,
         drafts: {},
+        bulkRecipients: [],
         isSending: false,
         lastError: null,
         inboxUnreadCount: 0,
@@ -379,7 +400,8 @@ export const useMessagingStore = create<MessagingState>()(
         openComposer: (patientId, entryPoint) =>
           set({ isComposerOpen: true, composerPatientId: patientId, composerEntryPoint: entryPoint }),
         closeComposer: () =>
-          set({ isComposerOpen: false, composerPatientId: null, composerEntryPoint: null, lastError: null }),
+          set({ isComposerOpen: false, composerPatientId: null, composerEntryPoint: null,
+                lastError: null, bulkRecipients: [] }),
         setDraft: (patientId, partial) =>
           set((s) => ({
             drafts: { ...s.drafts, [patientId]: { ...DEFAULT_DRAFT, ...s.drafts[patientId], ...partial } },
@@ -390,13 +412,16 @@ export const useMessagingStore = create<MessagingState>()(
             delete next[patientId];
             return { drafts: next };
           }),
+        setBulkRecipients: (refs) => set({ bulkRecipients: refs }),
+        clearBulkRecipients: () => set({ bulkRecipients: [] }),
         setSending: (value) => set({ isSending: value }),
         setError: (error) => set({ lastError: error }),
         setInboxUnreadCount: (count) => set({ inboxUnreadCount: count }),
       }),
       {
         name: "messaging-store",
-        partialize: (s) => ({ drafts: s.drafts }),  // only persist drafts; transient flags reset on reload
+        // Only persist drafts. Transient flags + bulkRecipients reset on reload.
+        partialize: (s) => ({ drafts: s.drafts }),
       }
     ),
     { name: "messagingStore", enabled: process.env.NODE_ENV !== "production" }
@@ -465,12 +490,15 @@ export const useRecallQueueStore = create<RecallQueueState>()(
     - `grep -c "export const useMessagingStore" store/messagingStore.ts` returns 1
     - `grep -c "export const useRecallQueueStore" store/recallQueueStore.ts` returns 1
     - `grep -c "openComposer\\|closeComposer\\|setDraft\\|clearDraft" store/messagingStore.ts` returns at least 4
+    - `grep -c "bulkRecipients" store/messagingStore.ts` returns at least 4 (interface field, state init, setBulkRecipients action, clear on closeComposer) — owned here per Warning 5 fix
+    - `grep -c "setBulkRecipients\\|clearBulkRecipients" store/messagingStore.ts` returns at least 2
+    - `grep -c "BulkRecipientStub" store/messagingStore.ts` returns at least 2 (type export + usage)
     - `grep -c "toggleSelect\\|selectAll\\|clearSelection" store/recallQueueStore.ts` returns at least 3
     - `grep -c "devtools" store/messagingStore.ts` returns at least 1
     - `grep -c "persist" store/messagingStore.ts` returns at least 1
     - `npx tsc --noEmit` exits 0
   </acceptance_criteria>
-  <done>2 Zustand stores with full action API; messagingStore persists drafts; both have devtools.</done>
+  <done>2 Zustand stores with full action API. messagingStore owns bulkRecipients + BulkRecipientStub type (Plan 12-08 only consumes). messagingStore persists drafts only; both have devtools.</done>
 </task>
 
 <task type="auto" tdd="false">
@@ -492,7 +520,7 @@ export const useRecallQueueStore = create<RecallQueueState>()(
     - components/ui/badge.tsx (variants — destructive, success, warning, info, secondary)
     - components/ui/dialog.tsx (Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter)
     - lib/messaging/composer-preview.ts (Task 1 — previewMessage)
-    - store/messagingStore.ts (Task 2)
+    - store/messagingStore.ts (Task 2 — bulkRecipients now lives here)
     - types/messaging.ts (Plan 12-01)
   </read_first>
   <action>
@@ -508,7 +536,7 @@ interface MessageComposerProps {
   defaultChannel?: MessageChannel;
   defaultPurpose?: MessagePurpose;
   appointmentId?: string;
-  bulkRecipientCount?: number;           // > 0 => bulk mode
+  bulkRecipientCount?: number;           // > 0 => bulk mode (read from store via useMessagingStore in caller)
   onSend: (payload: { body: string; subject?: string; channel: MessageChannel;
                        templateId?: string; }) => Promise<void>;
   onClose: () => void;
@@ -522,7 +550,7 @@ Wiring:
 - On every body keystroke, call `previewMessage` (memoized).
 - Disable Send when `preview.blocked === true`. Show `OptOutWarning` instead of Send button.
 - On Send click: spinner state, call `onSend()`, on success `onClose()`, on error show inline error message under composer (no close).
-- Bulk mode (`bulkRecipientCount > 0`): show "Sending to X patients" header, mandatory preview Dialog before final send.
+- Bulk mode (`bulkRecipientCount > 0`): show "Sending to X patients" header, mandatory preview Dialog before final send. Caller reads recipients via `useMessagingStore((s) => s.bulkRecipients)`.
 - Draft with AI: opens an intent input + "Generate" button. Submits to `/api/messaging/ai-draft` via fetch; streams response into body field.
 
 **ChannelPreferenceChip.tsx**:
@@ -641,11 +669,12 @@ Native `<progress>` element styled — green when < 80%, amber 80-99%, red 100%.
 2. `npx tsc --noEmit` → exits 0
 3. `find components/messaging -name "*.tsx" | wc -l` → 9 (no emails subdirectory components yet — those came in Plan 12-02 emails/)
 4. `grep -rE "#[0-9a-fA-F]{6}" components/messaging/ --include='*.tsx'` → empty (CSS vars only)
+5. `grep -c "bulkRecipients" store/messagingStore.ts` → ≥4 (store ownership confirmed; Plan 12-08 will not silently extend the store)
 </verification>
 
 <success_criteria>
 - 3 utility libs covering segment count + PHI scan + composer preview, ≥15 vitest tests pass
-- 2 Zustand stores with devtools (and persist on messagingStore drafts)
+- 2 Zustand stores with devtools (and persist on messagingStore drafts). messagingStore owns `bulkRecipients` + `BulkRecipientStub` type — declared once here so Plan 12-08 only consumes.
 - 9 UI components matching UI-SPEC component inventory + interaction contracts
 - All copy verbatim from UI-SPEC Copywriting Contract
 - No raw hex colors anywhere
@@ -655,5 +684,7 @@ Native `<progress>` element styled — green when < 80%, amber 80-99%, red 100%.
 After completion, create `.planning/phases/12-crm-patient-engagement/12-07-SUMMARY.md` documenting:
 - Vitest test count by file
 - Final list of UI components built
+- Confirmation that bulkRecipients + BulkRecipientStub are exported from messagingStore (so Plan 12-08 can import directly)
 - Any deviations from UI-SPEC interaction contracts (and why)
+</output>
 </output>

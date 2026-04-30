@@ -11,6 +11,9 @@ files_modified:
   - app/(tenant)/[tenant]/settings/messaging/page.tsx
   - components/messaging/TemplatesEditor.tsx
   - components/Sidebar.tsx
+  - lib/api/messaging.ts
+  - app/api/messaging/templates/[id]/route.ts
+  - backend/api/routes/messaging.py
 autonomous: true
 gap_closure: false
 requirements: [CRM-03, CRM-09, CRM-15]
@@ -22,6 +25,8 @@ must_haves:
     - "/messaging/analytics page shows reminder funnel + recall conversion + opt-out trend + cost & volume — all 4 charts inline (Phase 8 SSR pattern)"
     - "Date range picker (7d/30d/90d/YTD/custom) drives all 4 charts"
     - "/settings/messaging page has Templates and Preferences tabs; Preferences includes daily cost cap slider + CostCapBar visualization"
+    - "TemplatesEditor calls messagingApi.updateTemplate(id, body) — added to lib/api/messaging.ts in this plan since Plan 12-08 didn't ship it"
+    - "PATCH /api/messaging/templates/[id] BFF route exists in this plan, proxying via proxyToFastAPI to backend's per-template PATCH"
     - "Sidebar navigation includes 'Messaging' section with Inbox + Recall Queue + Analytics + Settings sublinks (gated by useEntitlements().has('messaging'))"
   artifacts:
     - path: "app/(tenant)/[tenant]/messaging/recall-queue/page.tsx"
@@ -32,6 +37,11 @@ must_haves:
       provides: "Templates + Preferences tabs"
     - path: "components/messaging/TemplatesEditor.tsx"
       provides: "Per-kind+language template body editor"
+    - path: "lib/api/messaging.ts"
+      provides: "Extended with updateTemplate(id, body) helper"
+      exports: ["messagingApi.updateTemplate"]
+    - path: "app/api/messaging/templates/[id]/route.ts"
+      provides: "BFF proxy for PATCH /api/messaging/templates/{id}"
   key_links:
     - from: "app/(tenant)/[tenant]/messaging/recall-queue/page.tsx"
       to: "store/recallQueueStore.ts"
@@ -41,15 +51,28 @@ must_haves:
       to: "lib/api/messaging.ts"
       via: "messagingApi.getAnalytics(rangeDays)"
       pattern: "messagingApi.getAnalytics"
+    - from: "components/messaging/TemplatesEditor.tsx"
+      to: "lib/api/messaging.ts"
+      via: "messagingApi.updateTemplate(id, body)"
+      pattern: "messagingApi.updateTemplate"
+    - from: "app/api/messaging/templates/[id]/route.ts"
+      to: "backend/api/routes/messaging.py"
+      via: "proxyToFastAPI('/api/messaging/templates/{id}/')"
+      pattern: "proxyToFastAPI.*templates"
 ---
 
 <objective>
 Build the 3 standalone messaging pages — Recall Queue, Analytics, Settings — and wire them into the Sidebar navigation. Recharts charts on the analytics page MUST be defined inline (Phase 8 SSR-safety memory note).
 
+Also: explicitly extend `lib/api/messaging.ts` with `updateTemplate(id, body)` and ship a per-template BFF PATCH route at `app/api/messaging/templates/[id]/route.ts`. These were originally noted as "add if missing" in this plan's Task 3 but never declared in `files_modified` — now they are first-class outputs (per checker Warning 6 fix). Plan 12-05 may also need a corresponding backend route; we extend `backend/api/routes/messaging.py` if not already present.
+
 Output:
 - 3 new page routes under `app/(tenant)/[tenant]/messaging/` and `app/(tenant)/[tenant]/settings/messaging/`
 - 1 new component (TemplatesEditor)
 - Sidebar navigation update with messaging entitlement gate
+- `lib/api/messaging.ts` updateTemplate addition
+- `app/api/messaging/templates/[id]/route.ts` BFF PATCH proxy
+- `backend/api/routes/messaging.py` PATCH `/templates/{id}` if not present from Plan 12-05
 </objective>
 
 <execution_context>
@@ -64,8 +87,11 @@ Output:
 @.planning/phases/12-crm-patient-engagement/12-05-SUMMARY.md
 @.planning/phases/12-crm-patient-engagement/12-07-SUMMARY.md
 @./CLAUDE.md
+@.claude/rules/bff-api.md
 @app/(tenant)/[tenant]/analytics/page.tsx
 @components/Sidebar.tsx
+@lib/bff.ts
+@backend/api/routes/messaging.py
 
 <interfaces>
 From Plan 12-07:
@@ -74,10 +100,13 @@ From Plan 12-07:
 - store/recallQueueStore (useRecallQueueStore)
 
 From Plan 12-08:
-- lib/api/messaging.ts — all 9+ messagingApi.* functions
+- lib/api/messaging.ts — all 9+ messagingApi.* functions (this plan ADDS updateTemplate)
 
 From Plan 12-01:
 - types/messaging.ts — RecallCandidate, MessagingSettings, MessageTemplate, etc.
+
+From Plan 12-05:
+- backend/api/routes/messaging.py — has GET /templates and POST /templates. Verify whether PATCH /templates/{id} exists; if not, add it in this plan's Task 3.
 
 From Phase 8 (analytics/page.tsx):
 - Recharts inline pattern (no extracted chart components — SSR-safety memory note)
@@ -87,6 +116,9 @@ From Phase 8 (analytics/page.tsx):
 From components/Sidebar.tsx:
 - existing nav structure with `useEntitlements().has(...)` gating
 - nav-item.active accent left-border pattern (UI-SPEC line 98)
+
+From lib/bff.ts:
+- proxyToFastAPI(req, "/api/messaging/...") — trailing slash on upstream URL required
 </interfaces>
 </context>
 
@@ -370,7 +402,6 @@ export default function MessagingAnalyticsPage() {
         </div>
       </header>
 
-      {/* KPI row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="glass-card"><CardContent className="p-4">
           <p className="text-caption uppercase tracking-widest text-[var(--text-muted)]">Sent</p>
@@ -390,7 +421,6 @@ export default function MessagingAnalyticsPage() {
         </CardContent></Card>
       </div>
 
-      {/* Chart 1: Reminder funnel */}
       <Card className="glass-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <h2 className="text-subhead">Reminder Funnel</h2>
@@ -411,7 +441,6 @@ export default function MessagingAnalyticsPage() {
         </CardContent>
       </Card>
 
-      {/* Chart 2: Recall conversion */}
       <Card className="glass-card">
         <CardHeader><h2 className="text-subhead">Recall Conversion</h2></CardHeader>
         <CardContent>
@@ -422,7 +451,6 @@ export default function MessagingAnalyticsPage() {
         </CardContent>
       </Card>
 
-      {/* Chart 3: Opt-out trend */}
       <Card className="glass-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <h2 className="text-subhead">Opt-out Trend</h2>
@@ -443,7 +471,6 @@ export default function MessagingAnalyticsPage() {
         </CardContent>
       </Card>
 
-      {/* Chart 4: Cost & Volume */}
       <Card className="glass-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <h2 className="text-subhead">Cost & Volume</h2>
@@ -494,19 +521,101 @@ export default function MessagingAnalyticsPage() {
 </task>
 
 <task type="auto" tdd="false">
-  <name>Task 3: Settings/Messaging page (Templates + Preferences tabs) + TemplatesEditor component</name>
+  <name>Task 3: Settings/Messaging page (Templates + Preferences tabs) + TemplatesEditor + lib/api/messaging.ts updateTemplate + BFF /templates/[id] PATCH route + backend per-template PATCH if missing</name>
   <files>
     app/(tenant)/[tenant]/settings/messaging/page.tsx,
-    components/messaging/TemplatesEditor.tsx
+    components/messaging/TemplatesEditor.tsx,
+    lib/api/messaging.ts,
+    app/api/messaging/templates/[id]/route.ts,
+    backend/api/routes/messaging.py
   </files>
   <read_first>
     - app/(tenant)/[tenant]/settings/page.tsx (existing settings page pattern; check if Tabs component is in use)
     - components/messaging/CostCapBar.tsx (Plan 12-07)
-    - lib/api/messaging.ts (Plan 12-08 — messagingApi.getTemplates / updateSettings)
+    - lib/api/messaging.ts (Plan 12-08 — full file; we APPEND updateTemplate)
+    - lib/bff.ts (proxyToFastAPI helper — used by the new BFF route)
+    - backend/api/routes/messaging.py (Plan 12-05 — verify whether `PATCH /templates/{id}` already exists; if not, add)
     - .planning/phases/12-crm-patient-engagement/12-UI-SPEC.md (lines 168-175 — Settings tab layout)
     - lib/messaging/phi-scan.ts (Plan 12-07 — for client-side template body warn)
   </read_first>
   <action>
+**Step 0 (NEW per checker Warning 6).** Extend `lib/api/messaging.ts`. After the existing `getTemplates` line in the `messagingApi` object literal, add:
+
+```typescript
+  updateTemplate: (id: string, body: Partial<MessageTemplate>) =>
+    jsonFetch<MessageTemplate>(`/api/messaging/templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+```
+
+Use Edit (not Write) to keep all other helpers from Plan 12-08 intact. Confirm: `messagingApi.updateTemplate` is callable from TS at compile time after this edit.
+
+**Step 0a (NEW per checker Warning 6).** Create `app/api/messaging/templates/[id]/route.ts`:
+
+```typescript
+/**
+ * BFF proxy for per-template PATCH (and DELETE if needed by the editor in v1).
+ * Trailing slash on upstream URL is required (CLAUDE.md project rule + bff-api.md).
+ */
+import { NextRequest } from "next/server";
+import { proxyToFastAPI } from "@/lib/bff";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  return proxyToFastAPI(request, `/api/messaging/templates/${params.id}/`);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  return proxyToFastAPI(request, `/api/messaging/templates/${params.id}/`);
+}
+```
+
+**Step 0b (NEW per checker Warning 6).** In `backend/api/routes/messaging.py`, verify whether a per-template PATCH route exists. If `PATCH /templates/{template_id}` is NOT present, add it:
+
+```python
+@router.patch("/templates/{template_id}/")
+async def update_template(
+    template_id: UUID,
+    payload: TemplateUpdate,                                                 # Pydantic model from Plan 12-05's schemas/messaging.py — extend if missing
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    if ctx.role not in ("owner", "admin"):
+        raise HTTPException(403, "OWNER or ADMIN role required to edit templates")
+    from sqlalchemy import select
+    from backend.db.models.tenant.messaging import MessageTemplate
+    t = (await db.execute(
+        select(MessageTemplate).where(
+            MessageTemplate.id == template_id,
+            MessageTemplate.tenant_id == ctx.tenant_id,
+            MessageTemplate.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not t:
+        raise HTTPException(404, "Template not found")
+
+    update_dict = payload.model_dump(exclude_unset=True, by_alias=False)
+    for k, v in update_dict.items():
+        setattr(t, k, v)
+    await log_action(db, ctx, AuditAction.MESSAGE_TEMPLATE_UPDATED,
+                     resource_type="message_template", resource_id=t.id,
+                     metadata={"fields_changed": list(update_dict.keys())})
+    await db.flush()
+    await db.refresh(t)
+    return TemplateRead.model_validate(t, from_attributes=True)
+```
+
+If `TemplateUpdate` Pydantic model doesn't exist in `backend/schemas/messaging.py`, add it as a `MessageTemplateBase` partial (all fields Optional). If `AuditAction.MESSAGE_TEMPLATE_UPDATED` enum value is missing, add it in `backend/db/models/tenant/clinical.py` (Phase 9 added similar enum entries — follow that migration pattern).
+
 **Step 1.** Create `components/messaging/TemplatesEditor.tsx`:
 
 ```tsx
@@ -593,13 +702,6 @@ export function TemplatesEditor({ templates, onChange }: Props) {
 }
 ```
 
-NOTE: `messagingApi.updateTemplate` doesn't exist in Plan 12-08; add it to `lib/api/messaging.ts` if not there:
-```ts
-updateTemplate: (id: string, body: Partial<MessageTemplate>) =>
-  jsonFetch<MessageTemplate>(`/api/messaging/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-```
-Also need a corresponding BFF route at `app/api/messaging/templates/[id]/route.ts` (single-template PATCH/DELETE) — add if missing from Plan 12-05.
-
 **Step 2.** Create `app/(tenant)/[tenant]/settings/messaging/page.tsx`:
 
 ```tsx
@@ -668,7 +770,7 @@ export default function MessagingSettingsPage() {
           <Card className="glass-card">
             <CardHeader><h2 className="text-subhead">Daily Cost Cap</h2></CardHeader>
             <CardContent className="space-y-3">
-              <CostCapBar spentCents={0 /* fetched from settings if added */} capCents={capDraft} />
+              <CostCapBar spentCents={0} capCents={capDraft} />
               <input
                 type="range" min={500} max={10000} step={500}
                 value={capDraft} onChange={(e) => setCapDraft(Number(e.target.value))}
@@ -700,13 +802,19 @@ export default function MessagingSettingsPage() {
     - `grep -c "export function TemplatesEditor" components/messaging/TemplatesEditor.tsx` returns 1
     - `grep -c "scanForPhi" components/messaging/TemplatesEditor.tsx` returns at least 1 (live PHI warn)
     - `grep -c "messagingApi.updateTemplate" components/messaging/TemplatesEditor.tsx` returns at least 1
+    - `grep -c "updateTemplate" lib/api/messaging.ts` returns at least 1 — **Warning 6 fix: helper added**
+    - `test -f app/api/messaging/templates/\[id\]/route.ts && echo OK` → "OK" — **Warning 6 fix: BFF PATCH route exists**
+    - `grep -c "proxyToFastAPI" "app/api/messaging/templates/[id]/route.ts"` returns at least 1
+    - `grep -cE "/api/messaging/templates/.*params.id.*/" "app/api/messaging/templates/[id]/route.ts"` returns at least 1 (trailing slash on upstream — bff-api.md rule)
+    - `grep -c "export async function PATCH" "app/api/messaging/templates/[id]/route.ts"` returns 1
+    - `grep -c "@router.patch(\"/templates/{template_id}/\"" backend/api/routes/messaging.py` returns at least 1 (added if missing)
     - `grep -c "export default function MessagingSettingsPage" "app/(tenant)/[tenant]/settings/messaging/page.tsx"` returns 1
     - `grep -c "Templates\\|Preferences" "app/(tenant)/[tenant]/settings/messaging/page.tsx"` returns at least 2
     - `grep -c "CostCapBar\\|TemplatesEditor" "app/(tenant)/[tenant]/settings/messaging/page.tsx"` returns at least 2
     - `grep -c "messagingApi.getSettings\\|messagingApi.updateSettings" "app/(tenant)/[tenant]/settings/messaging/page.tsx"` returns at least 2
     - `npx tsc --noEmit` exits 0
   </acceptance_criteria>
-  <done>Settings page with Templates + Preferences tabs; cost cap slider + cost cap bar; live PHI warn in template editor.</done>
+  <done>Settings page with Templates + Preferences tabs; cost cap slider + cost cap bar; live PHI warn in template editor. lib/api/messaging.ts updateTemplate added. BFF templates/[id] PATCH route declared in this plan. Backend PATCH /templates/{id} present (added if missing).</done>
 </task>
 
 </tasks>
@@ -715,7 +823,10 @@ export default function MessagingSettingsPage() {
 1. `npx tsc --noEmit` → exits 0
 2. `find app/\(tenant\)/\[tenant\]/messaging app/\(tenant\)/\[tenant\]/settings/messaging -name "*.tsx" | wc -l` → at least 4 (inbox + recall-queue + analytics + settings)
 3. `grep -rE "import.*from \"@/components/.*Chart" "app/(tenant)/[tenant]/messaging/analytics/page.tsx"` → empty (charts inline, SSR-safety)
-4. Manual smoke (deferred to Plan 12-10): visit each new page, confirm renders without errors.
+4. `test -f app/api/messaging/templates/\[id\]/route.ts` → succeeds (Warning 6 fix)
+5. `grep -c "updateTemplate" lib/api/messaging.ts` → ≥1 (Warning 6 fix)
+6. `grep -c "@router.patch(\"/templates/{template_id}/\"" backend/api/routes/messaging.py` → ≥1
+7. Manual smoke (deferred to Plan 12-10): visit each new page, confirm renders without errors.
 </verification>
 
 <success_criteria>
@@ -724,12 +835,17 @@ export default function MessagingSettingsPage() {
 - Recharts inline in analytics page (mirrors Phase 8 SSR pattern)
 - Templates editor with live PHI scan
 - Cost cap slider + visualization
+- `lib/api/messaging.ts` extended with updateTemplate helper (Warning 6 fix)
+- `app/api/messaging/templates/[id]/route.ts` BFF PATCH route shipped (Warning 6 fix)
+- Backend PATCH `/templates/{id}` present (added in this plan if Plan 12-05 didn't ship it)
 - All UI-SPEC copy verbatim
 </success_criteria>
 
 <output>
 After completion, create `.planning/phases/12-crm-patient-engagement/12-09-SUMMARY.md` documenting:
 - Final tab/section list per page
-- Whether Plan 12-08's lib/api/messaging.ts needed updateTemplate added (Task 3 mention)
-- Whether Plan 12-05 needed a single-template PATCH BFF route added
+- Confirmation that lib/api/messaging.ts.updateTemplate was added in this plan (per checker Warning 6)
+- Confirmation that app/api/messaging/templates/[id]/route.ts BFF PATCH route shipped here
+- Whether backend/api/routes/messaging.py needed PATCH /templates/{id} (and whether TemplateUpdate / AuditAction.MESSAGE_TEMPLATE_UPDATED were already in place)
+</output>
 </output>

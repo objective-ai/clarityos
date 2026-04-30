@@ -747,7 +747,7 @@ This document is the phase-gate evidence. Every requirement (CRM-01 through CRM-
 | CRM-01 | 12-06 | pytest backend/tests/messaging/test_reminder_cadence.py — 9 tests pass; manual: 1 reminder fires at scheduled time in staging | ⬜ |
 | CRM-02 | 12-05 + 12-08 | pytest test_routes_send.py + Playwright patient-messages-tab.spec.ts pass | ⬜ |
 | CRM-03 | 12-05 + 12-09 | pytest test_routes_recall.py + Playwright recall-queue.spec.ts pass | ⬜ |
-| CRM-04 | 12-03 + 12-04 | pytest test_opt_out_guard.py + test_twilio_webhook.py STOP-keyword tests pass | ⬜ |
+| CRM-04 | 12-03 + 12-04 | pytest test_opt_out_guard.py + canonical contract test `backend/tests/messaging/test_twilio_webhook.py::test_inbound_stop_records_optout` pass (this test name is the canonical CRM-04 contract) | ⬜ |
 | CRM-05 | 12-04 + 12-08 | pytest test_resend_webhook.py status callback + Playwright patient-messages-tab.spec.ts pass | ⬜ |
 | CRM-06 | 12-01 + 12-05 | pytest test_routes_misc.py preferences PATCH covers all 4 consent flags + audit emit | ⬜ |
 | CRM-07 | 12-04 | pytest test_twilio_webhook.py + test_resend_webhook.py signature tests pass (CONTRACT TEST) | ⬜ |

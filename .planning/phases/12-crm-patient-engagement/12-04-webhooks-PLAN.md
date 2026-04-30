@@ -15,7 +15,7 @@ files_modified:
   - backend/tests/messaging/test_resend_webhook.py
 autonomous: true
 gap_closure: false
-requirements: [CRM-04, CRM-05, CRM-07, CRM-11]
+requirements: [CRM-04, CRM-05, CRM-07, CRM-11, CRM-20]
 
 must_haves:
   truths:
@@ -27,6 +27,7 @@ must_haves:
     - "Inbound STOP keyword updates patient.contact_info.sms_opted_out_at via Twilio Advanced Opt-Out — but webhook ALSO syncs DB as belt-and-suspenders"
     - "/api/webhooks/* paths added to public route allowlist in lib/supabase/middleware.ts"
     - "Webhook endpoints respond <2s even when Claude classifier is slow (Pitfall 8)"
+    - "Webhook-driven failure events (Twilio undelivered/failed, Resend bounced/complained) call record_bounce so the bounce-fallback counter increments on the PRIMARY production path (CRM-20)"
   artifacts:
     - path: "backend/api/routes/webhooks.py"
       provides: "POST /api/webhooks/twilio + /api/webhooks/resend handlers"
@@ -46,6 +47,10 @@ must_haves:
       to: "backend/db/models/tenant/messaging.py"
       via: "UPSERT MessageLog by provider_message_id"
       pattern: "provider_message_id"
+    - from: "backend/api/routes/webhooks.py"
+      to: "backend/services/messaging/bounce_tracker.py"
+      via: "record_bounce(db, system_ctx, patient_id, channel) on every webhook-driven failure"
+      pattern: "record_bounce"
     - from: "backend/main.py"
       to: "backend/api/routes/webhooks.py"
       via: "app.include_router(webhooks.router)"
@@ -100,6 +105,13 @@ From backend/db/models/tenant/messaging.py:
 From backend/services/messaging/sender.py:
 - _STATUS_PRIORITY constant — share via export OR re-define here
 
+<!-- From Plan 12-05 (CRM-20 bounce fallback canonical implementation) -->
+From backend/services/messaging/bounce_tracker.py:
+- record_bounce(db, ctx, *, patient_id: UUID, channel: str) -> None
+  Increments contact_info_jsonb.{channel}_bounce_count. After 3 bounces in 30 days,
+  flips contact_info_jsonb.preferred_channel to the alternate channel and emits
+  AuditAction.CHANNEL_PREFERENCE_AUTO_FLIPPED.
+
 <!-- Existing pattern -->
 From backend/main.py (Phase 10.3 self-pinger init):
 - app.include_router(...) registration site
@@ -116,7 +128,7 @@ From backend/api/routes/system_status.py (BFF + FastAPI route pairing pattern)
 <tasks>
 
 <task type="auto" tdd="true">
-  <name>Task 1: FastAPI webhook handlers with signature verification + idempotent status update + inbound capture</name>
+  <name>Task 1: FastAPI webhook handlers with signature verification + idempotent status update + inbound capture + record_bounce on webhook-driven failures</name>
   <files>
     backend/api/routes/webhooks.py,
     backend/main.py,
@@ -126,6 +138,7 @@ From backend/api/routes/system_status.py (BFF + FastAPI route pairing pattern)
   <read_first>
     - backend/services/messaging/twilio_client.py (Plan 12-02 — validate_signature)
     - backend/services/messaging/resend_client.py (Plan 12-02 — verify_svix_signature)
+    - backend/services/messaging/bounce_tracker.py (Plan 12-05 — record_bounce signature; SOURCE OF TRUTH for CRM-20)
     - backend/db/models/tenant/messaging.py (Plan 12-01 — MessageLog + InboundMessage)
     - backend/db/models/tenant/clinical.py (AuditAction enum — INBOUND_MESSAGE_RECEIVED, OPT_OUT_RECORDED, MESSAGE_DELIVERED, MESSAGE_FAILED)
     - backend/main.py (full file — find include_router section)
@@ -142,16 +155,19 @@ From backend/api/routes/system_status.py (BFF + FastAPI route pairing pattern)
     - Test 5: Out-of-order: posting status=delivered THEN status=sent — final state remains "delivered" (priority gate prevents regression)
     - Test 6: failed > delivered priority: posting status=failed AFTER delivered → status flips to "failed" (priority 99 > 2)
     - Test 7: Inbound SMS non-STOP → InboundMessage row created with body + from_e164; classification field is NULL (background task spawned)
-    - Test 8: Inbound STOP keyword → patient.contact_info.sms_opted_out_at set; AuditAction.OPT_OUT_RECORDED logged
+    - Test 8: Inbound STOP keyword → patient.contact_info.sms_opted_out_at set; AuditAction.OPT_OUT_RECORDED logged. Test name MUST be `test_inbound_stop_records_optout` (canonical CRM-04 contract test).
     - Test 9: Webhook returns 200 within 2 seconds even when classifier mock sleeps 10s (asyncio.create_task pattern)
     - Test 10: Unknown MessageSid in status callback → returns 200 (don't break callback flow), logs warning
+    - Test 11: **CRM-20 webhook bounce path** — webhook posting status=failed for a known MessageSid calls `record_bounce(db, system_ctx, patient_id=log.patient_id, channel="sms")`. Verified by monkeypatching `record_bounce` and asserting it was awaited exactly once with the correct kwargs.
+    - Test 12: **CRM-20 channel auto-flip via webhooks** — three webhook-driven SMS failure events for the same patient (who has both phone + email + email consent) cause `patient.contact_info_jsonb.preferred_channel` to flip from "sms" to "email" (assertion against the real `record_bounce` impl, not a stub).
 
     **Resend webhook:**
-    - Test 11: POST without Svix headers → 403
-    - Test 12: POST with valid signature + email.delivered event → MessageLog.status updates to "delivered"
-    - Test 13: email.opened → MessageLog.status updates to "read", read_at set
-    - Test 14: email.bounced → MessageLog.status to "failed", failure_reason captured from event
-    - Test 15: Idempotent on duplicate event (same email_id + same event type)
+    - Test 13: POST without Svix headers → 403
+    - Test 14: POST with valid signature + email.delivered event → MessageLog.status updates to "delivered"
+    - Test 15: email.opened → MessageLog.status updates to "read", read_at set
+    - Test 16: email.bounced → MessageLog.status to "failed", failure_reason captured from event, AND `record_bounce(db, system_ctx, patient_id=log.patient_id, channel="email")` is awaited (CRM-20).
+    - Test 17: email.complained → MessageLog.status to "failed" AND `record_bounce(... channel="email")` is awaited (CRM-20).
+    - Test 18: Idempotent on duplicate event (same email_id + same event type) — record_bounce called at most once for that pair (idempotency gate).
   </behavior>
   <action>
 **Step 1.** Create `backend/api/routes/webhooks.py`:
@@ -167,21 +183,23 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Request, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.audit import log_action_minimal  # write-once with action+resource — see core/audit.py
+from backend.core.security import TenantContext
 from backend.db.models.tenant.clinical import AuditAction
 from backend.db.models.tenant.messaging import (
     MessageLog, InboundMessage, MessageStatus,
 )
 from backend.db.models.tenant.clinical import Patient
+from backend.services.messaging.bounce_tracker import record_bounce  # CRM-20 — webhook is the PRIMARY bounce signal
 from backend.services.messaging.twilio_client import validate_signature, TwilioConfigError
 from backend.services.messaging.resend_client import verify_svix_signature, SvixVerificationError
 
@@ -194,6 +212,14 @@ _STATUS_PRIORITY = {"queued": 0, "sent": 1, "delivered": 2, "read": 3, "failed":
 # STOP keywords per Twilio Advanced Opt-Out documentation
 _STOP_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT",
                   "REVOKE", "OPTOUT", "OPT-OUT", "STOP ALL"}
+
+
+def _system_ctx(tenant_id: UUID) -> TenantContext:
+    """System TenantContext for webhook-originated DB writes (no user session)."""
+    return TenantContext(
+        user_id=UUID("00000000-0000-0000-0000-000000000000"),
+        tenant_id=tenant_id, role="system", staff_id=None,
+    )
 
 
 def _check_internal_seal(request: Request) -> None:
@@ -211,7 +237,10 @@ def _reconstruct_url(request: Request, path: str) -> str:
 
 
 @router.post("/twilio", status_code=http_status.HTTP_200_OK)
-async def twilio_webhook(request: Request, db: AsyncSession = next(get_db())):
+async def twilio_webhook(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
     _check_internal_seal(request)
 
     # Twilio signs over application/x-www-form-urlencoded body
@@ -265,6 +294,12 @@ async def _handle_status_callback(db: AsyncSession, form: dict[str, str]) -> Non
         logger.info("Ignoring lower-priority %s for sid=%s (current=%s)", mapped, sid, log.status)
         return
 
+    # Detect a NEW transition into the "failed" terminal state — this is the trigger for record_bounce.
+    # If the row was already failed (priority 99) we already recorded; the priority gate above will
+    # have skipped duplicates because incoming==current. If priority gate accepted us at "failed",
+    # this is a fresh failure to record.
+    is_new_failure = mapped == "failed" and log.status != "failed"
+
     log.status = mapped
     log.status_priority = incoming_priority
     if mapped == "sent":
@@ -288,6 +323,14 @@ async def _handle_status_callback(db: AsyncSession, form: dict[str, str]) -> Non
             metadata={"provider_message_id": sid, "channel": "sms"},
         )
     await db.flush()
+
+    # CRM-20 — webhook is the PRIMARY bounce signal. Call record_bounce after persisting status.
+    if is_new_failure and log.patient_id is not None:
+        try:
+            await record_bounce(db, _system_ctx(log.tenant_id),
+                                 patient_id=log.patient_id, channel=log.channel)
+        except Exception as exc:  # never let bounce-tracker failures break the webhook ack
+            logger.warning("record_bounce failed for sid=%s: %s", sid, exc)
 
 
 async def _handle_inbound_sms(db: AsyncSession, form: dict[str, str]) -> None:
@@ -351,7 +394,10 @@ async def _handle_inbound_sms(db: AsyncSession, form: dict[str, str]) -> None:
 
 
 @router.post("/resend", status_code=http_status.HTTP_200_OK)
-async def resend_webhook(request: Request, db: AsyncSession = next(get_db())):
+async def resend_webhook(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
     _check_internal_seal(request)
 
     raw = await request.body()
@@ -392,6 +438,8 @@ async def resend_webhook(request: Request, db: AsyncSession = next(get_db())):
     if incoming < log.status_priority:
         return {"ok": True, "ignored": "stale"}
 
+    is_new_failure = mapped == "failed" and log.status != "failed"
+
     log.status = mapped
     log.status_priority = incoming
     now = datetime.now(timezone.utc)
@@ -412,6 +460,15 @@ async def resend_webhook(request: Request, db: AsyncSession = next(get_db())):
             metadata={"channel": "email", "event_type": event_type},
         )
     await db.flush()
+
+    # CRM-20 — webhook is the PRIMARY bounce signal for email too.
+    if is_new_failure and log.patient_id is not None:
+        try:
+            await record_bounce(db, _system_ctx(log.tenant_id),
+                                 patient_id=log.patient_id, channel=log.channel)
+        except Exception as exc:
+            logger.warning("record_bounce failed for email_id=%s: %s", email_id, exc)
+
     return {"ok": True}
 
 
@@ -437,7 +494,9 @@ async def _patient_from_phone(db: AsyncSession, tenant_id: UUID, phone_e164: str
     return rows[0] if rows else None
 ```
 
-NOTE: If `log_action_minimal` doesn't exist in `backend/core/audit.py`, add it as a thin variant of `log_action` that accepts `tenant_id` directly (no TenantContext) — required because webhooks are public + lack a session.
+NOTE 1: If `log_action_minimal` doesn't exist in `backend/core/audit.py`, add it as a thin variant of `log_action` that accepts `tenant_id` directly (no TenantContext) — required because webhooks are public + lack a session.
+
+NOTE 2: `record_bounce` MUST already exist in `backend/services/messaging/bounce_tracker.py` from Plan 12-05 with the documented signature `(db, ctx, *, patient_id, channel) -> None`. If Plan 12-05 deviated, fix the call sites here to match — but the contract is that bounce_tracker is the canonical CRM-20 implementation and webhooks are its primary caller.
 
 **Step 2.** Edit `backend/main.py`:
 
@@ -447,7 +506,22 @@ from backend.api.routes import webhooks  # noqa
 app.include_router(webhooks.router)
 ```
 
-**Step 3.** Create `backend/tests/messaging/test_twilio_webhook.py` and `test_resend_webhook.py` covering all 15 behavior cases. Use FastAPI TestClient OR direct call pattern (Phase 10.3 precedent: direct-handler + fake AsyncSession).
+**Step 3.** Create `backend/tests/messaging/test_twilio_webhook.py` and `test_resend_webhook.py` covering all 18 behavior cases above.
+
+The CRM-04 canonical contract test name is fixed:
+```python
+async def test_inbound_stop_records_optout(...):
+    """Canonical CRM-04 contract test (referenced from 12-VERIFICATION.md)."""
+```
+
+The CRM-20 webhook bounce tests use a real DB + real `record_bounce` (NOT a mock) so they prove end-to-end that 3 webhook-driven failures flip preferred_channel:
+```python
+async def test_three_webhook_failures_flip_preferred_channel(db, signed_twilio_webhook_factory, ...):
+    # Seed patient with phone + email + email consent + preferred_channel="sms"
+    # Seed 3 SMS MessageLogs for that patient
+    # POST 3 status=failed callbacks via the real handler
+    # Assert patient.contact_info_jsonb["preferred_channel"] == "email" after the third
+```
 
 For Test 9 (fast response), spawn a real classifier mock that sleeps:
 ```python
@@ -478,12 +552,19 @@ async def test_inbound_returns_within_2s(monkeypatch, signed_twilio_webhook_fact
     - `grep -c "_STOP_KEYWORDS" backend/api/routes/webhooks.py` returns at least 1
     - `grep -c "asyncio.create_task" backend/api/routes/webhooks.py` returns at least 1 (Pitfall 8 — non-blocking classifier)
     - `grep -c "OPT_OUT_RECORDED" backend/api/routes/webhooks.py` returns at least 1
+    - `grep -c "from backend.services.messaging.bounce_tracker import record_bounce" backend/api/routes/webhooks.py` returns 1 (CRM-20 import)
+    - `grep -c "record_bounce" backend/api/routes/webhooks.py` returns at least 2 (one Twilio failure path, one Resend failure path) — **CRM-20 BLOCKER FIX**
+    - `grep -c "from typing import Annotated" backend/api/routes/webhooks.py` returns 1 (FastAPI DI pattern)
+    - `grep -c "Depends(get_db)" backend/api/routes/webhooks.py` returns at least 2 (one per webhook handler) — **BLOCKER FIX: invalid `next(get_db())` replaced**
+    - `grep -c "next(get_db())" backend/api/routes/webhooks.py` returns 0 (the broken pattern is fully removed)
     - `grep -c "include_router(webhooks" backend/main.py` returns 1
-    - `cd backend && pytest tests/messaging/test_twilio_webhook.py -x -q` exits 0 with at least 10 tests
-    - `cd backend && pytest tests/messaging/test_resend_webhook.py -x -q` exits 0 with at least 5 tests
+    - `cd backend && pytest tests/messaging/test_twilio_webhook.py -x -q` exits 0 with at least 12 tests
+    - `cd backend && pytest tests/messaging/test_resend_webhook.py -x -q` exits 0 with at least 6 tests
     - `grep -c "_handle_status_callback\|_handle_inbound_sms" backend/api/routes/webhooks.py` returns at least 2
+    - `grep -c "def test_inbound_stop_records_optout" backend/tests/messaging/test_twilio_webhook.py` returns 1 (canonical CRM-04 contract test name)
+    - `grep -c "test_three_webhook_failures_flip_preferred_channel\|test_webhook_failure_calls_record_bounce\|test_resend_bounce_calls_record_bounce" backend/tests/messaging/test_twilio_webhook.py backend/tests/messaging/test_resend_webhook.py` returns at least 2 (CRM-20 webhook coverage)
   </acceptance_criteria>
-  <done>Both webhook handlers signature-verified, idempotent, monotonic, non-blocking on classification. ≥15 tests pass.</done>
+  <done>Both webhook handlers signature-verified, idempotent, monotonic, non-blocking on classification. record_bounce is invoked on every webhook-driven failure (CRM-20 PRIMARY path). FastAPI DI uses `Annotated[..., Depends(get_db)]`. ≥18 tests pass.</done>
 </task>
 
 <task type="auto" tdd="false">
@@ -609,25 +690,31 @@ export async function POST(request: NextRequest) {
 </tasks>
 
 <verification>
-1. `cd backend && pytest tests/messaging/test_twilio_webhook.py tests/messaging/test_resend_webhook.py -x -q` → exits 0; ≥15 tests
+1. `cd backend && pytest tests/messaging/test_twilio_webhook.py tests/messaging/test_resend_webhook.py -x -q` → exits 0; ≥18 tests
 2. `npx tsc --noEmit` → exits 0
 3. `grep -c "/api/webhooks/" lib/supabase/middleware.ts` → ≥1
 4. `grep -c "include_router(webhooks" backend/main.py` → 1
-5. Manual smoke test plan (deferred to Plan 12-10 verification): hit `https://staging-host/api/webhooks/twilio` with curl + bogus signature → expect 403; with the test-signed payload from `signed_twilio_webhook_factory` → expect 200
+5. `grep -c "record_bounce" backend/api/routes/webhooks.py` → ≥2 (CRM-20 webhook path)
+6. `grep -c "Depends(get_db)" backend/api/routes/webhooks.py` → ≥2 (FastAPI DI)
+7. Manual smoke test plan (deferred to Plan 12-10 verification): hit `https://staging-host/api/webhooks/twilio` with curl + bogus signature → expect 403; with the test-signed payload from `signed_twilio_webhook_factory` → expect 200
 </verification>
 
 <success_criteria>
 - Both webhook endpoints reject unauthenticated requests via internal seal + signature check
-- Idempotent + monotonic status updates verified by ≥15 tests
-- Inbound STOP triggers DB sync of opt-out flags
+- Idempotent + monotonic status updates verified by ≥18 tests
+- Inbound STOP triggers DB sync of opt-out flags + canonical CRM-04 contract test (test_inbound_stop_records_optout)
 - Inbound non-STOP captured in InboundMessage; classifier runs as background task
 - middleware.ts allows /api/webhooks/* through public routes
 - Both BFF passthroughs forward raw body unchanged
+- record_bounce is invoked on every webhook-driven failure (CRM-20 PRIMARY production path) — counter increments end-to-end via webhook
+- FastAPI DI uses correct `Annotated[..., Depends(get_db)]` pattern (not invalid `next(get_db())`)
 </success_criteria>
 
 <output>
 After completion, create `.planning/phases/12-crm-patient-engagement/12-04-SUMMARY.md` documenting:
 - Final list of Twilio status mappings (sending → queued, etc.) and Resend event mappings
 - Whether `log_action_minimal` was added to backend/core/audit.py or if `log_action` was extended
+- Confirmation that record_bounce wiring matches Plan 12-05's bounce_tracker contract (channel kwarg name, system ctx shape)
 - Manual staging test outcome (if pre-Plan-12-10 smoke happened)
+</output>
 </output>
