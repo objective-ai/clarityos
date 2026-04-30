@@ -47,6 +47,7 @@ class TenantContext:
     user_id: UUID
     tenant_id: UUID
     role: str  # e.g. "doctor", "technician", "receptionist", "admin", "owner"
+    plan_name: str = "Core"  # subscription plan ("Core" | "Plus" | "Premium")
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +97,7 @@ async def get_current_tenant(
     app_metadata = payload.get("app_metadata", {})
     tenant_id_str = app_metadata.get("tenant_id")
     role = app_metadata.get("role", "receptionist")
+    plan_name = app_metadata.get("plan_name", "Core")
 
     if not tenant_id_str:
         raise HTTPException(
@@ -108,6 +110,7 @@ async def get_current_tenant(
             user_id=UUID(user_id_str),
             tenant_id=UUID(tenant_id_str),
             role=role,
+            plan_name=plan_name,
         )
     except (ValueError, TypeError) as exc:
         raise HTTPException(

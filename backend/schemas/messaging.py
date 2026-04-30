@@ -180,6 +180,67 @@ class BulkSendRequest(BaseModel):
         return v
 
 
+class BulkSendError(BaseModel):
+    patient_id: UUID
+    code: str
+    message: str
+
+
+class BulkSendResponse(BaseModel):
+    batch_id: UUID
+    sent_count: int
+    failed_count: int
+    excluded_count: int
+    errors: list[BulkSendError] = Field(default_factory=list)
+
+
+class RecallSendAllRequest(BaseModel):
+    candidate_patient_ids: list[UUID] = Field(..., min_length=1)
+    template_id: UUID
+    channel: MessageChannelLit = "sms"
+
+
+class RecallSendAllResponse(BaseModel):
+    run_id: UUID
+    sent: int
+    failed: int
+    excluded: int
+
+
+class AIDraftRequest(BaseModel):
+    patient_id: UUID
+    intent: str = Field(..., min_length=3, max_length=500)
+    channel: MessageChannelLit
+    purpose: MessagePurposeLit = "manual"
+
+
+class AIDraftResponse(BaseModel):
+    body: str
+
+
+class SingleSendRequest(BaseModel):
+    patient_id: UUID
+    channel: MessageChannelLit
+    purpose: MessagePurposeLit = "manual"
+    body: Optional[str] = None
+    subject: Optional[str] = None
+    template_id: Optional[UUID] = None
+    template_kind: Optional[TemplateKindLit] = None
+    tokens: dict = Field(default_factory=dict)
+    appointment_id: Optional[UUID] = None
+    force_outside_quiet_hours: bool = False
+    language: LanguageLit = "en"
+
+    @field_validator("body")
+    @classmethod
+    def _body_when_no_template(cls, v: Optional[str], info) -> Optional[str]:
+        # body required if no template_id provided — checked at route level
+        # to give a clearer 422 when both are missing
+        if v is not None and not v.strip():
+            raise ValueError("body must be non-empty when provided")
+        return v
+
+
 # ---------- Channel preference (patient-level) ----------
 
 

@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, optical, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
+from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, messaging, optical, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
 from backend.api.routes.system import sample_health_now
 from backend.core.config import settings
 from backend.core.sentry_setup import init_sentry
@@ -166,6 +166,7 @@ app.include_router(
 )
 app.include_router(system.router)
 app.include_router(webhooks.router)
+app.include_router(messaging.router)
 
 
 # ── Self-pinger (Phase 10.3-04) ───────────────────────────────────────────
