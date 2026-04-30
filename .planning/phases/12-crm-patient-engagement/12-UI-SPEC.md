@@ -5,6 +5,7 @@ status: draft
 shadcn_initialized: false
 preset: none
 created: 2026-04-29
+revised: 2026-04-29
 ---
 
 # Phase 12 — UI Design Contract: CRM & Patient Engagement
@@ -53,16 +54,23 @@ Exceptions:
 
 Uses the established globals.css utility classes. All new components inherit these — do not override with ad-hoc font-size values.
 
-| Role | Class | Size | Weight | Line Height | Usage |
-|------|-------|------|--------|-------------|-------|
-| Display | `.text-display` | 32px | 700 | 1.2 | Wizard completion state heading only |
-| Heading | `.text-heading` | 20px | 600 | 1.3 | Page titles (Inbox, Recall Queue, Analytics, Onboarding Wizard section heads) |
-| Subhead | `.text-subhead` | 16px | 600 | 1.4 | Card titles, composer section labels, wizard step titles |
-| Body | `.text-body` | 14px | 400 | 1.6 | Message body preview, recall queue patient rows, analytics descriptions |
-| Caption | `.text-caption` | 12px | 500 | 1.5 | Timestamp labels, character count, status reason tooltips, opt-out warning |
-| Overline | `.text-overline` | 11px | 600 | — (uppercase) | Section category labels (e.g. "OPERATIONAL", "RECALL", channel type labels) |
+**Scale: 4 sizes, 2 weights.**
+
+| Role | Class | Size | Weight | Line Height | Modifiers | Usage |
+|------|-------|------|--------|-------------|-----------|-------|
+| Heading | `.text-heading` | 20px | 600 | 1.3 | — | Page titles (Inbox, Recall Queue, Analytics, Wizard section heads); wizard completion state heading uses this same size — no separate Display size |
+| Subhead | `.text-subhead` | 16px | 600 | 1.4 | — | Card titles, composer section labels, wizard step titles |
+| Body | `.text-body` | 14px | 400 | 1.6 | — | Message body preview, recall queue patient rows, analytics descriptions |
+| Caption | `.text-caption` | 12px | 400 | 1.5 | — | Timestamp labels, character count, status reason tooltips, opt-out warning |
+
+**Overline/label variant (NOT a separate size):** Use `.text-caption` (12px / 400) with `uppercase tracking-widest` Tailwind modifiers — applied to section category labels ("OPERATIONAL", "RECALL", channel type labels). No 11px size. No sixth row in the table above.
 
 **Monospace exception:** SMS character count and segment count display uses `.font-mono-data` class at 12px / weight 400 — provides the "data terminal" feel appropriate for a technical send metric.
+
+**Weight reference:**
+- Weight 400 — body text, caption, timestamps, monospace data, all secondary labels
+- Weight 600 — heading, subhead, overline/label variants (via caption + uppercase modifier)
+- Weight 500 is not used. Weight 700 is not used.
 
 ---
 
@@ -81,12 +89,12 @@ All values are CSS custom properties from globals.css. Do not hardcode hex value
 | Info | `var(--state-info)` | `#60A5FA` | Queued message state, AI classification tags, inbound message badge |
 
 **Accent (`#2DD4BF`) reserved for:**
-1. Primary CTA buttons: "Send Message", "Send All" (recall queue), "I received them" (wizard completion), "Draft with AI"
+1. Primary CTA buttons: "Send Message", "Send All Recalls", "I Received Them", "Draft with AI"
 2. Active wizard step indicator dot / progress line
 3. Unread inbox badge count on TopNav
 4. Message delivered double-checkmark icon (delivery confirmed state)
 5. Channel preference chip border-glow when both channels are active
-6. Recall queue "Send All" row — left-border accent stripe (matching nav-item.active pattern)
+6. Recall queue "Send All Recalls" row — left-border accent stripe (matching nav-item.active pattern)
 7. Focus rings on all composer inputs
 
 **Accent is NOT used for:** generic row hover states, info tags, AI classification labels, timestamps, or disabled state elements.
@@ -122,6 +130,8 @@ Reuse existing:
 
 ### `/messaging/inbox` — Global Inbound Inbox
 
+**Primary visual anchor:** The `InboxItem` unread dot (accent-colored 8px circle) paired with the patient name in weight 600 is the focal point of the left panel. In the right panel, the reply `MessageComposer` pinned to the bottom edge anchors the staff's active context — the eye lands there last.
+
 - Layout: two-column on desktop (inbox list left 380px, message thread right flex-1), single column on mobile
 - Left panel: search bar at top (glass-input), filter tabs (All / Reschedule / Cancellation / Other), scrollable `InboxItem` list
 - Right panel: per-patient thread view, chronological message bubbles (sent = right-aligned teal, received = left-aligned glass), reply `MessageComposer` pinned to bottom
@@ -151,9 +161,9 @@ Reuse existing:
 ### `/settings/messaging/onboarding` — 7-Step Wizard
 
 - Layout: centered single-column card (max-width 640px), progress dots at top (7 dots, active = accent filled, completed = accent outlined, future = muted)
-- Each step: `WizardStep` card with step number overline, title (`.text-subhead`), body instruction (`.text-body`), action area at bottom
+- Each step: `WizardStep` card with step number label (`.text-caption` + `uppercase tracking-widest`), title (`.text-subhead`), body instruction (`.text-body`), action area at bottom
 - Navigation: "Back" ghost button left + "Continue" default button right in each step footer
-- Step 7 completion: test-message send triggers a "Sending test..." loading state on button → success state ("I received them" replaces Continue) — only this confirm flips `clinic_messaging_enabled`
+- Step 7 completion: test-message send triggers a "Sending test..." loading state on button → success state ("I Received Them" replaces Continue) — only this confirm flips `clinic_messaging_enabled`
 - Error recovery in wizard: inline error below field (not toast), red border on invalid input
 
 ### `/settings/messaging` — Templates & Settings
@@ -185,23 +195,23 @@ Reuse existing:
 | Sent | `Check` | `var(--text-secondary)` | "Sent [timestamp]" |
 | Delivered | `CheckCheck` | `var(--accent)` | "Delivered [timestamp]" |
 | Read (email) | `Eye` | `var(--state-info)` | "Opened [timestamp]" |
-| Failed | `XCircle` | `var(--state-critical)` | "[Failure reason] — Resend?" |
+| Failed | `XCircle` | `var(--state-critical)` | "[Failure reason] — Resend Message?" |
 
-Failed state includes inline "Resend" text button (link variant, accent color) at the end of the icon row.
+Failed state includes inline "Resend Message" text button (link variant, accent color) at the end of the icon row.
 
 ### Wizard Step Transitions
 
 - Steps advance via "Continue" button only (no click-outside navigation).
 - Completed steps show green checkmark icon on progress dot.
 - Step 3 (number provisioning): async Twilio call during Continue press — button shows spinner, step does not advance until provisioning resolves. On failure: inline error "Number provisioning failed — try again" with retry button.
-- Step 7 (test send + confirm): "Send Test Message" triggers send to OWNER phone+email. Button state: idle → sending (spinner) → success (CheckCircle icon, button text "Resend if needed"). "I received them" button appears only after test-send success and activates `clinic_messaging_enabled=true`.
+- Step 7 (test send + confirm): "Send Test Message" triggers send to OWNER phone+email. Button state: idle → sending (spinner) → success (CheckCircle icon, button text "Resend if needed"). "I Received Them" button appears only after test-send success and activates `clinic_messaging_enabled=true`.
 
 ### Recall Queue Actions
 
 - Per-row "Send" button (outline, small): opens preview Dialog for that single patient. Confirm → sends and removes row from queue with fade-out animation.
 - Per-row "Remove" button (ghost, small, destructive color): removes from queue immediately without confirm (non-destructive — patient still exists, just removed from this run).
-- "Send All" button (default, accent): triggers mandatory preview Dialog showing: recipient count, total estimated cost vs cap, opt-out exclusion count. Confirm triggers batch send with `batch_id`.
-- After Send All: progress indicator replaces button ("Sending 23 / 31...") with cancel option. On completion: success state with summary.
+- "Send All Recalls" button (default, accent): triggers mandatory preview Dialog showing: recipient count, total estimated cost vs cap, opt-out exclusion count. Confirm triggers batch send with `batch_id`.
+- After Send All Recalls: progress indicator replaces button ("Sending 23 / 31...") with cancel option. On completion: success state with summary.
 
 ---
 
@@ -229,7 +239,7 @@ Failed state includes inline "Resend" text button (link variant, accent color) a
 | Recall send confirm dialog title | "Send recall message to [Patient Name]?" | Single patient |
 | Recall send confirm dialog body | "This recall message will be sent via [channel]. The patient last visited [date]." | |
 | Template delete confirm | "Delete this template?" | Dialog: "This cannot be undone. Active reminders using this template will fall back to the default." |
-| Failed message resend label | "Resend" | Inline link in status row |
+| Failed message resend label | "Resend Message" | Inline link in status row — verb + noun |
 | Minor routing badge | "Sending to: [Guardian Name] ([relationship])" | Shown in composer header, amber info badge |
 | Guardian 18th birthday prompt heading | "Switch messaging to patient?" | |
 | Guardian 18th birthday prompt body | "[Patient Name] turned 18. You can now message them directly instead of their guardian." | Confirm: "Switch to Patient" / "Keep Guardian" |
