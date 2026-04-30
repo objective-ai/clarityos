@@ -562,3 +562,366 @@ async def ai_draft_route(
             detail={"code": exc.code, "message": str(exc)},
         )
     return AIDraftResponse(body=body)
+
+
+# ---------------------------------------------------------------------------
+# Templates CRUD
+# ---------------------------------------------------------------------------
+
+
+@router.get("/templates", response_model=list[MessageTemplateOut])
+async def list_templates(
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[MessageTemplateOut]:
+    """All templates for the caller's tenant, ordered by kind then language."""
+    rows = (
+        await db.execute(
+            select(MessageTemplate)
+            .where(
+                MessageTemplate.tenant_id == ctx.tenant_id,
+                MessageTemplate.deleted_at.is_(None),
+            )
+            .order_by(MessageTemplate.kind, MessageTemplate.language)
+        )
+    ).scalars().all()
+    return [MessageTemplateOut.model_validate(r) for r in rows]
+
+
+@router.post("/templates", response_model=MessageTemplateOut, status_code=201)
+async def create_template(
+    payload: MessageTemplateCreate,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageTemplateOut:
+    """Create a tenant-scoped template; emits TEMPLATE_CREATED audit."""
+    template = MessageTemplate(
+        tenant_id=ctx.tenant_id,
+        kind=payload.kind,
+        channel=payload.channel,
+        language=payload.language,
+        subject=payload.subject,
+        body=payload.body,
+        is_default=False,
+    )
+    db.add(template)
+    await db.flush()
+    await log_action(
+        db,
+        ctx,
+        AuditAction.TEMPLATE_CREATED,
+        "message_template",
+        template.id,
+        metadata={
+            "kind": payload.kind,
+            "channel": payload.channel,
+            "language": payload.language,
+        },
+    )
+    await db.commit()
+    return MessageTemplateOut.model_validate(template)
+
+
+@router.patch("/templates/{template_id}", response_model=MessageTemplateOut)
+async def update_template(
+    template_id: UUID,
+    payload: MessageTemplateUpdate,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageTemplateOut:
+    """Update template body/subject; emits TEMPLATE_UPDATED audit."""
+    template = (
+        await db.execute(
+            select(MessageTemplate).where(
+                MessageTemplate.id == template_id,
+                MessageTemplate.tenant_id == ctx.tenant_id,
+                MessageTemplate.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    changed_keys: list[str] = []
+    if payload.body is not None:
+        template.body = payload.body
+        changed_keys.append("body")
+    if payload.subject is not None:
+        template.subject = payload.subject
+        changed_keys.append("subject")
+
+    await db.flush()
+    await log_action(
+        db,
+        ctx,
+        AuditAction.TEMPLATE_UPDATED,
+        "message_template",
+        template.id,
+        metadata={"changed_keys": changed_keys},
+    )
+    await db.commit()
+    return MessageTemplateOut.model_validate(template)
+
+
+@router.delete("/templates/{template_id}", status_code=204)
+async def delete_template(
+    template_id: UUID,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Soft-delete a template + emit TEMPLATE_UPDATED audit (action: soft_delete)."""
+    template = (
+        await db.execute(
+            select(MessageTemplate).where(
+                MessageTemplate.id == template_id,
+                MessageTemplate.tenant_id == ctx.tenant_id,
+                MessageTemplate.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    template.deleted_at = datetime.now(timezone.utc)
+    await log_action(
+        db,
+        ctx,
+        AuditAction.TEMPLATE_UPDATED,
+        "message_template",
+        template.id,
+        metadata={"action": "soft_delete"},
+    )
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Settings (tenant-level messaging config)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings", response_model=MessagingSettingsOut)
+async def get_settings(
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessagingSettingsOut:
+    """Read tenant.settings_jsonb.messaging."""
+    tenant = await _fetch_tenant(db, ctx)
+    return MessagingSettingsOut(
+        messaging_enabled=tenant.get("messaging_enabled", False),
+        daily_sms_cap_cents=tenant.get("daily_sms_cap_cents", 2500),
+        twilio_phone_number=tenant.get("twilio_phone_number"),
+        twilio_messaging_service_sid=tenant.get("twilio_messaging_service_sid"),
+        resend_from_email=tenant.get("resend_from_email"),
+    )
+
+
+@router.patch("/settings", response_model=MessagingSettingsOut)
+async def update_settings(
+    payload: MessagingSettingsUpdate,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessagingSettingsOut:
+    """Update messaging settings; emit MESSAGING_ENABLED/DISABLED on toggle."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    tenant = (
+        await db.execute(select(Tenant).where(Tenant.id == ctx.tenant_id))
+    ).scalar_one()
+
+    settings_dict = dict(tenant.settings_jsonb or {})
+    msg = dict(settings_dict.get("messaging") or {})
+    was_enabled = bool(msg.get("messaging_enabled", False))
+
+    if payload.messaging_enabled is not None:
+        msg["messaging_enabled"] = payload.messaging_enabled
+    if payload.daily_sms_cap_cents is not None:
+        msg["daily_sms_cap_cents"] = payload.daily_sms_cap_cents
+    if payload.twilio_phone_number is not None:
+        msg["twilio_phone_number"] = payload.twilio_phone_number
+    if payload.twilio_messaging_service_sid is not None:
+        msg["twilio_messaging_service_sid"] = payload.twilio_messaging_service_sid
+    if payload.resend_from_email is not None:
+        msg["resend_from_email"] = payload.resend_from_email
+
+    settings_dict["messaging"] = msg
+    tenant.settings_jsonb = settings_dict
+    flag_modified(tenant, "settings_jsonb")
+
+    now_enabled = bool(msg.get("messaging_enabled", False))
+    if now_enabled and not was_enabled:
+        await log_action(
+            db,
+            ctx,
+            AuditAction.MESSAGING_ENABLED,
+            "tenant",
+            ctx.tenant_id,
+            metadata={},
+        )
+    elif not now_enabled and was_enabled:
+        await log_action(
+            db,
+            ctx,
+            AuditAction.MESSAGING_DISABLED,
+            "tenant",
+            ctx.tenant_id,
+            metadata={},
+        )
+
+    await db.commit()
+    return MessagingSettingsOut(
+        messaging_enabled=now_enabled,
+        daily_sms_cap_cents=msg.get("daily_sms_cap_cents", 2500),
+        twilio_phone_number=msg.get("twilio_phone_number"),
+        twilio_messaging_service_sid=msg.get("twilio_messaging_service_sid"),
+        resend_from_email=msg.get("resend_from_email"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-patient channel preferences
+# ---------------------------------------------------------------------------
+
+
+def _build_channel_preference(patient_id: UUID, contact: dict) -> ChannelPreferenceOut:
+    """Project Patient.contact_info_jsonb into the ChannelPreferenceOut wire shape."""
+    consents = ConsentFlagsOut(
+        sms_marketing=bool(contact.get("consent_sms_marketing_at")),
+        sms_operational=bool(contact.get("consent_sms_operational_at")),
+        email_marketing=bool(contact.get("consent_email_marketing_at")),
+        email_operational=bool(contact.get("consent_email_operational_at")),
+        sms_marketing_at=contact.get("consent_sms_marketing_at"),
+        sms_operational_at=contact.get("consent_sms_operational_at"),
+        email_marketing_at=contact.get("consent_email_marketing_at"),
+        email_operational_at=contact.get("consent_email_operational_at"),
+        sms_opted_out_at=contact.get("sms_opted_out_at"),
+        paused_until=contact.get("paused_until"),
+    )
+    guardian = contact.get("guardian") or {}
+    return ChannelPreferenceOut(
+        patient_id=patient_id,
+        preferred_channel=contact.get("preferred_channel", "both"),
+        preferred_language=contact.get("preferred_language", "en"),
+        consents=consents,
+        guardian_routing=bool(guardian),
+        guardian_name=guardian.get("name"),
+        guardian_phone_e164=guardian.get("phone_e164"),
+        guardian_email=guardian.get("email"),
+        guardian_relationship=guardian.get("relationship"),
+        recall_exhausted=bool(contact.get("recall_exhausted", False)),
+    )
+
+
+@router.get("/preferences/{patient_id}", response_model=ChannelPreferenceOut)
+async def get_preferences(
+    patient_id: UUID,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ChannelPreferenceOut:
+    """Read per-patient channel + consent state."""
+    patient = await _fetch_patient(db, ctx, patient_id)
+    return _build_channel_preference(patient_id, patient["contact_info_jsonb"])
+
+
+@router.patch("/preferences/{patient_id}", response_model=ChannelPreferenceOut)
+async def update_preferences(
+    patient_id: UUID,
+    payload: ChannelPreferenceUpdate,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ChannelPreferenceOut:
+    """Update consent flags + paused_until + guardian fields.
+
+    Emits CHANNEL_PREFERENCE_UPDATED + (CONSENT_GRANTED OR CONSENT_REVOKED)
+    audits when individual consent flags change state.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    patient = (
+        await db.execute(
+            select(Patient).where(
+                Patient.id == patient_id,
+                Patient.tenant_id == ctx.tenant_id,
+                Patient.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    contact = dict(patient.contact_info_jsonb or {})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    granted: list[str] = []
+    revoked: list[str] = []
+
+    if payload.consents is not None:
+        for key in ("sms_marketing", "sms_operational", "email_marketing", "email_operational"):
+            wanted = getattr(payload.consents, key)
+            consent_key = f"consent_{key}_at"
+            prev = bool(contact.get(consent_key))
+            if wanted and not prev:
+                contact[consent_key] = now_iso
+                granted.append(key)
+            elif not wanted and prev:
+                contact[consent_key] = None
+                revoked.append(key)
+
+    if payload.preferred_channel is not None:
+        contact["preferred_channel"] = payload.preferred_channel
+    if payload.preferred_language is not None:
+        contact["preferred_language"] = payload.preferred_language
+
+    if payload.guardian_routing is True or any(
+        v is not None
+        for v in (
+            payload.guardian_name,
+            payload.guardian_phone_e164,
+            payload.guardian_email,
+            payload.guardian_relationship,
+        )
+    ):
+        guardian = dict(contact.get("guardian") or {})
+        if payload.guardian_name is not None:
+            guardian["name"] = payload.guardian_name
+        if payload.guardian_phone_e164 is not None:
+            guardian["phone_e164"] = payload.guardian_phone_e164
+        if payload.guardian_email is not None:
+            guardian["email"] = payload.guardian_email
+        if payload.guardian_relationship is not None:
+            guardian["relationship"] = payload.guardian_relationship
+        contact["guardian"] = guardian
+
+    patient.contact_info_jsonb = contact
+    flag_modified(patient, "contact_info_jsonb")
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.CHANNEL_PREFERENCE_UPDATED,
+        "patient",
+        patient.id,
+        patient_id=patient.id,
+        metadata={"granted": granted, "revoked": revoked},
+    )
+    if granted:
+        await log_action(
+            db,
+            ctx,
+            AuditAction.CONSENT_GRANTED,
+            "patient",
+            patient.id,
+            patient_id=patient.id,
+            metadata={"consents": granted},
+        )
+    if revoked:
+        await log_action(
+            db,
+            ctx,
+            AuditAction.CONSENT_REVOKED,
+            "patient",
+            patient.id,
+            patient_id=patient.id,
+            metadata={"consents": revoked},
+        )
+
+    await db.commit()
+    return _build_channel_preference(patient_id, contact)
