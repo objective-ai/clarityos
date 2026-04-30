@@ -48,9 +48,11 @@ from backend.schemas.messaging import (
     RecallSendAllResponse,
     SingleSendRequest,
 )
+from backend.services.messaging.ai_draft import draft_message
 from backend.services.messaging.bounce_tracker import record_bounce
 from backend.services.messaging.bulk_send import BulkRecipient
 from backend.services.messaging.bulk_send import bulk_send as service_bulk_send
+from backend.services.messaging.recall import candidate_query, run_recall_batch
 from backend.services.messaging.sender import (
     CostCapExceeded,
     DispatchRequest,
@@ -277,3 +279,286 @@ async def bulk_send_route(
         excluded_count=result.excluded_count,
         errors=[BulkSendError(**e) for e in result.errors],
     )
+
+
+# ---------------------------------------------------------------------------
+# Recall queue
+# ---------------------------------------------------------------------------
+
+
+@router.get("/recall-queue")
+async def get_recall_queue(
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Live recall candidates: 12mo since last finalized + no future appt + not exhausted/deceased."""
+    candidates = await candidate_query(db, ctx.tenant_id)
+    return {"candidates": candidates}
+
+
+@router.post("/recall-queue/send-all", response_model=RecallSendAllResponse)
+async def send_recall_batch(
+    payload: RecallSendAllRequest,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RecallSendAllResponse:
+    """Dispatch a recall batch and increment per-patient touch counts.
+
+    A 2nd touch flips ``recall_exhausted=true`` so the patient drops out of
+    subsequent ``GET /recall-queue`` results.
+    """
+
+    async def _patient(pid: UUID) -> dict:
+        return await _fetch_patient(db, ctx, pid)
+
+    async def _template(tid: UUID) -> dict:
+        return await _fetch_template(db, ctx, tid)
+
+    async def _tenant() -> dict:
+        return await _fetch_tenant(db, ctx)
+
+    run = await run_recall_batch(
+        db,
+        ctx,
+        candidate_patient_ids=payload.candidate_patient_ids,
+        template_id=payload.template_id,
+        channel=payload.channel,
+        fetch_patient=_patient,
+        fetch_template=_template,
+        fetch_tenant=_tenant,
+        status_callback_url=_callback_url(payload.channel),
+    )
+    await db.commit()
+    return RecallSendAllResponse(
+        run_id=run.id,
+        sent=run.sent_count,
+        failed=run.failed_count,
+        excluded=run.excluded_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+
+@router.get("/history/{patient_id}", response_model=list[MessageLogOut])
+async def history(
+    patient_id: UUID,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(default=50, le=200),
+) -> list[MessageLogOut]:
+    """Per-patient message history, newest first. Soft-deleted rows hidden."""
+    rows = (
+        await db.execute(
+            select(MessageLog)
+            .where(
+                MessageLog.tenant_id == ctx.tenant_id,
+                MessageLog.patient_id == patient_id,
+                MessageLog.deleted_at.is_(None),
+            )
+            .order_by(desc(MessageLog.created_at))
+            .limit(limit)
+        )
+    ).scalars().all()
+    return [MessageLogOut.model_validate(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Inbox
+# ---------------------------------------------------------------------------
+
+
+@router.get("/inbox")
+async def inbox(
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    filter_classification: str | None = Query(default=None),
+    limit: int = Query(default=50, le=200),
+):
+    """Inbound SMS feed — most-recent first, optional classification filter."""
+    q = (
+        select(InboundMessage)
+        .where(
+            InboundMessage.tenant_id == ctx.tenant_id,
+            InboundMessage.deleted_at.is_(None),
+        )
+        .order_by(desc(InboundMessage.received_at))
+        .limit(limit)
+    )
+    if filter_classification:
+        q = q.where(InboundMessage.classification == filter_classification)
+    rows = (await db.execute(q)).scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "patient_id": str(r.patient_id) if r.patient_id else None,
+            "from_e164": r.from_e164,
+            "body": r.body,
+            "classification": r.classification,
+            "classification_confidence": r.classification_confidence,
+            "is_read": r.is_read,
+            "received_at": r.received_at.isoformat() if r.received_at else None,
+        }
+        for r in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Analytics aggregate (Phase 8 single-endpoint precedent)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/analytics")
+async def analytics(
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    range_days: int = Query(default=30, ge=1, le=365),
+):
+    """Reminder funnel + recall conversion + opt-out trend + cost in one response.
+
+    Mirrors Phase 8's ``/api/analytics`` aggregate pattern: one endpoint
+    populates all charts + KPIs so the dashboard makes a single round-trip.
+    """
+    from sqlalchemy import text as _text
+
+    funnel = (
+        await db.execute(
+            _text(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM message_log
+                WHERE tenant_id = :t
+                      AND created_at > now() - (:days || ' days')::interval
+                      AND purpose = 'operational'
+                      AND deleted_at IS NULL
+                GROUP BY status
+                """
+            ),
+            {"t": str(ctx.tenant_id), "days": range_days},
+        )
+    ).mappings().all()
+
+    optout_trend = (
+        await db.execute(
+            _text(
+                """
+                SELECT date_trunc('week', created_at) AS week, COUNT(*) AS count
+                FROM audit_log
+                WHERE tenant_id = :t
+                      AND action = 'opt_out_recorded'
+                      AND created_at > now() - (:days || ' days')::interval
+                GROUP BY 1
+                ORDER BY 1
+                """
+            ),
+            {"t": str(ctx.tenant_id), "days": range_days},
+        )
+    ).mappings().all()
+
+    cost_volume = (
+        await db.execute(
+            _text(
+                """
+                SELECT date_trunc('day', created_at) AS day,
+                       channel,
+                       COUNT(*) AS count,
+                       COALESCE(SUM(provider_cost_cents), 0) AS cost_cents
+                FROM message_log
+                WHERE tenant_id = :t
+                      AND created_at > now() - (:days || ' days')::interval
+                      AND status IN ('sent', 'delivered', 'read')
+                      AND deleted_at IS NULL
+                GROUP BY 1, 2
+                ORDER BY 1, 2
+                """
+            ),
+            {"t": str(ctx.tenant_id), "days": range_days},
+        )
+    ).mappings().all()
+
+    recall_conversion = (
+        await db.execute(
+            _text(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM message_log
+                     WHERE tenant_id = :t
+                           AND template_kind LIKE 'recall_%%'
+                           AND status IN ('sent', 'delivered')
+                           AND created_at > now() - (:days || ' days')::interval) AS sent,
+                  (SELECT COUNT(DISTINCT a.patient_id) FROM appointments a
+                     JOIN message_log m ON m.patient_id = a.patient_id
+                                      AND m.template_kind LIKE 'recall_%%'
+                     WHERE a.tenant_id = :t
+                           AND a.start_time > m.sent_at
+                           AND a.start_time < m.sent_at + INTERVAL '90 days'
+                           AND m.created_at > now() - (:days || ' days')::interval) AS booked
+                """
+            ),
+            {"t": str(ctx.tenant_id), "days": range_days},
+        )
+    ).mappings().one()
+
+    sent_total = sum(
+        r["count"] for r in funnel if r["status"] in ("sent", "delivered", "read")
+    )
+    failed_total = sum(r["count"] for r in funnel if r["status"] == "failed")
+    optouts_total = sum(r["count"] for r in optout_trend)
+    cost_total_cents = sum(r["cost_cents"] for r in cost_volume)
+
+    return {
+        "kpis": {
+            "sent_total": sent_total,
+            "failed_total": failed_total,
+            "optouts_total": optouts_total,
+            "cost_total_cents": cost_total_cents,
+        },
+        "reminder_funnel": [dict(r) for r in funnel],
+        "recall_conversion": dict(recall_conversion),
+        "optout_trend": [
+            {"week": r["week"].isoformat() if r["week"] else None, "count": r["count"]}
+            for r in optout_trend
+        ],
+        "cost_volume": [
+            {
+                "day": r["day"].isoformat() if r["day"] else None,
+                "channel": r["channel"],
+                "count": r["count"],
+                "cost_cents": r["cost_cents"],
+            }
+            for r in cost_volume
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# AI draft assist
+# ---------------------------------------------------------------------------
+
+
+@router.post("/ai-draft", response_model=AIDraftResponse)
+async def ai_draft_route(
+    payload: AIDraftRequest,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AIDraftResponse:
+    """Return a HIPAA-safe message body drafted by Claude. 409 on opt-out."""
+    patient = await _fetch_patient(db, ctx, payload.patient_id)
+    tenant = await _fetch_tenant(db, ctx)
+    try:
+        body = await draft_message(
+            intent=payload.intent,
+            channel=payload.channel,
+            purpose=payload.purpose,
+            patient_first_name=patient["first_name"],
+            patient_contact_info=patient["contact_info_jsonb"],
+            clinic_name=tenant["name"],
+        )
+    except OptOutBlocked as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        )
+    return AIDraftResponse(body=body)
