@@ -2,7 +2,7 @@
 
 ## Overview
 
-ClarityOS is a production optometry EHR built on Next.js 14, FastAPI, and PostgreSQL with multi-tenant auth via Supabase. Phases 1-10 delivered the core clinical platform: auth, real API integration, scheduling, billing/claims, patient profiles, optical handoff, patient intake, analytics, and an encounter workflow redesign with pre-test/doctor mode split. Current focus is hardening for pilot launch with a solo optometrist, then expanding with reporting, audio AI scribe, mobile UX, and retail/optical workflows.
+ClarityOS is a production optometry EHR built on Next.js 14, FastAPI, and PostgreSQL with multi-tenant auth via Supabase. Phases 1-10 delivered the core clinical platform: auth, real API integration, scheduling, billing/claims, patient profiles, optical handoff, patient intake, analytics, and an encounter workflow redesign with pre-test/doctor mode split. Current focus is hardening for pilot launch with a solo optometrist, then expanding with the retail/optical revenue chain (CRM → Inventory → Optical Orders → POS), followed by reporting, audio AI scribe, and mobile UX.
 
 ---
 
@@ -24,7 +24,7 @@ All 7 phases complete. Full details archived in phase directories.
 
 ## V2 Milestone (In Progress)
 
-Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 → 11 → 12 → 13 → 14 → 15 → 16 → 17
+Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18
 
 ### Progress
 
@@ -40,12 +40,13 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 10.3 | 6/7 | Complete    | 2026-04-29 | — |
 | 10.4 | 7/7 | Complete   | 2026-04-21 | — |
 | 11 | 4/4 | Complete    | 2026-04-21 | — |
-| 12 | AI Scribe Audio | 0/? | Not started | — |
-| 13 | Mobile/Tablet UX | 0/? | Not started | — |
-| 14 | CRM & Patient Engagement | 0/? | Not started | — |
-| 15 | Retail Inventory | 0/? | Not started | — |
-| 16 | Optical Order Configuration | 0/? | Not started | — |
-| 17 | Point of Sale | 0/? | Not started | — |
+| 12 | CRM & Patient Engagement | 0/11 | Planned | — |
+| 13 | Retail Inventory | 0/? | Not started | — |
+| 14 | Optical Order Configuration | 0/? | Not started | — |
+| 15 | Point of Sale | 0/? | Not started | — |
+| 16 | Reporting & Exports | 0/? | Not started | — |
+| 17 | AI Scribe Audio | 0/? | Not started | — |
+| 18 | Mobile/Tablet UX | 0/? | Not started | — |
 
 ---
 
@@ -116,45 +117,32 @@ Plans:
   4. All pages use shared MarketingNav and MarketingFooter
 **Plans:** 4/4 plans complete
 
-### Phase 12: Reporting & Exports
-**Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
-**Depends on**: Phase 9 (CMS-1500 generation), Phase 8 (aggregate queries)
-**Success Criteria:**
-  1. Schedule page has "Export Day Summary" button generating PDF/CSV of daily encounters
-  2. Billing page has "Monthly Report" button generating revenue-by-payer PDF
-  3. Encounter page has "Print Summary" button generating patient-friendly encounter summary
-  4. Billing page supports batch CMS-1500 export (select multiple → ZIP download)
-
-### Phase 13: AI Scribe Audio
-**Goal**: Clinicians record audio during encounters, transcribed and structured into SOAP notes automatically
-**Depends on**: Phase 10 (sticky mic button + AI Scribe repositioning), Phase 2 (existing ai_scribe.py)
-**Success Criteria:**
-  1. Sticky mic button records audio with waveform visualization
-  2. Recorded audio transcribed via Deepgram and displayed as editable transcript
-  3. Transcript feeds into existing AI Scribe pipeline → SOAP + structured JSON
-  4. User can review and accept auto-populated encounter fields
-  5. Audio files stored in Supabase Storage linked to encounter for audit trail
-
-### Phase 14: Mobile/Tablet UX
-**Goal**: Key pages are responsive and usable on tablets and phones with touch-friendly interactions
-**Depends on**: All prior phases (responsive pass on existing pages)
-**Success Criteria:**
-  1. Schedule, Optical, Patients, Dashboard, and Encounter pages render correctly on tablet (768px) and phone (375px)
-  2. Bottom tab navigation replaces sidebar on mobile screens
-  3. All interactive elements have minimum 44px tap targets
-  4. No horizontal scrolling on mobile for primary content areas
-
-### Phase 15: CRM & Patient Engagement
-**Goal**: Appointment reminders, recall campaigns, and manual messaging from patient/schedule views
+### Phase 12: CRM & Patient Engagement
+**Goal**: Multi-channel patient communications — automated SMS+email appointment reminders (3-touch cadence at 7d/72h/24h), staff-approved 12-month recall queue, manual messaging at 4 entry points (patient header, schedule kebab, inbox reply, bulk-select), inbound triage with AI classification, HIPAA/TCPA compliance audit trail, OWNER-gated compliance PDF, and 7-step onboarding wizard.
 **Depends on**: Phase 3 (appointment data), Phase 2 (patient contact info)
+**Requirements:** [CRM-01, CRM-02, CRM-03, CRM-04, CRM-05, CRM-06, CRM-07, CRM-08, CRM-09, CRM-10, CRM-11, CRM-12, CRM-13, CRM-14, CRM-15, CRM-16, CRM-17, CRM-18, CRM-19, CRM-20]
 **Success Criteria:**
   1. Appointment reminders send automatically 24h before via SMS/email based on patient preference
   2. Staff can manually send a message from patient detail or schedule view
   3. Recall reminders triggered for patients with no appointment in last 12 months
   4. Patients can opt out of SMS; opt-out stored and respected
   5. Message history (sent, delivered, failed) viewable per patient
+**Plans:** 11 plans
 
-### Phase 16: Retail Inventory
+Plans:
+- [ ] 12-00-wave0-foundation-PLAN.md — Install Twilio/Resend/Svix/freezegun deps; create messaging test scaffold (conftest, fixtures, PHI corpus, Playwright stubs); Resend BAA HIPAA checkpoint
+- [ ] 12-01-schema-orm-PLAN.md — Alembic 0016: 4 new tables (message_log, message_template, recall_queue_run, inbound_message), AuditAction enum +18 values, appointment columns, recall query indexes; Pydantic + TS types; messaging entitlement; CRM-01..CRM-20 in REQUIREMENTS.md
+- [ ] 12-02-provider-clients-PLAN.md — Twilio + Resend SDK adapters with lazy init; signature validators (Twilio + Svix); React Email templates (Reminder/Recall/Manual); BFF render-template endpoint; PHI scrubber + segment counter
+- [ ] 12-03-sender-service-PLAN.md — Single-choke-point dispatch() service with 8-step guard chain (recipient resolver, opt-out, quiet hours DST-safe, PHI scrub, cost cap, MessageLog + audit in primary TXN); minor → guardian routing; household bundling
+- [ ] 12-04-webhooks-PLAN.md — Twilio + Resend webhook handlers with signature verification, internal HMAC seal, idempotent monotonic-status updates, STOP keyword DB sync, asyncio.create_task non-blocking classifier; middleware /api/webhooks/ allowlist
+- [ ] 12-05-routes-bff-PLAN.md — 13+ FastAPI endpoints + 10 BFF proxies (send, bulk-send, recall-queue, recall send-all, history, inbox, analytics aggregate, ai-draft, templates CRUD, settings, preferences); bulk_send service with 50-cap + 1msg/sec throttle; bounce-fallback hook
+- [ ] 12-06-scheduler-classifier-PLAN.md — Reminder cadence (7d/72h/24h) with idempotency counter; asyncio scheduler loop with pg_advisory_lock + env gate (mirrors Phase 10.3 self-pinger); Claude Haiku inbound classifier (6 labels, exception-safe)
+- [ ] 12-07-ui-primitives-PLAN.md — 9 messaging UI components (MessageComposer, ChannelPreferenceChip, MessageStatusIcon, InboxItem, RecallQueueRow, OptOutWarning, WizardStep, MessageTimeline, CostCapBar); 2 Zustand stores; 3 vitest-tested utility libs (sms-segments, phi-scan, composer-preview)
+- [ ] 12-08-patient-schedule-inbox-PLAN.md — Patient detail Messages tab; schedule kebab + bulk-select toolbar (50-cap); AppointmentCard reminder/confirmed indicators; AppointmentDetailDrawer Message button; global Inbox page; TopNav unread badge; lib/api/messaging.ts client
+- [ ] 12-09-recall-analytics-settings-PLAN.md — Recall queue page with mandatory preview-confirm Dialog; analytics page with 4 inline Recharts (mirrors Phase 8 SSR pattern); Settings/Messaging page (Templates + Preferences tabs); Sidebar messaging entitlement gate
+- [ ] 12-10-onboarding-compliance-e2e-PLAN.md — 7-step Onboarding Wizard with localStorage persistence; 4 onboarding endpoints (provision-number, seed-templates, test-send, activate); Compliance Report PDF (reportlab); 4 Playwright @messaging E2E specs; 12-VERIFICATION.md; HIPAA-critical phase closure checkpoint
+
+### Phase 13: Retail Inventory
 **Goal**: Product catalog of frames, lenses, and contacts with stock tracking, linked to optical orders
 **Depends on**: Phase 6 (Optical Handoff — Rx data and optical queue)
 **Success Criteria:**
@@ -164,9 +152,9 @@ Plans:
   4. Inventory page shows stock levels filterable by product type
   5. Patient detail page shows order history with status and delivery date
 
-### Phase 17: Optical Order Configuration
+### Phase 14: Optical Order Configuration
 **Goal**: Complete optical order workflow — frame/lens/coating selection, fitting measurements, vision plan entry, lab job ticket PDF, AI Scribe pre-populated suggestions
-**Depends on**: Phase 6 (Optical Handoff), Phase 15 (Retail Inventory)
+**Depends on**: Phase 6 (Optical Handoff), Phase 13 (Retail Inventory)
 **Success Criteria:**
   1. Optician opens order from queue with Final Rx pre-populated and PD pre-filled
   2. Habitual Rx displayed side-by-side with Final Rx for patient explanation
@@ -176,15 +164,43 @@ Plans:
   6. "Generate Job Ticket" produces PDF with both Rx columns, frame, lens, coatings, measurements, and vision plan
   7. AI Scribe optical recommendations appear as ghosted suggestions in order form
 
-### Phase 18: Point of Sale
+### Phase 15: Point of Sale
 **Goal**: Checkout flow for clinical copays and retail purchases with receipt generation and daily close report
-**Depends on**: Phase 16 (optical orders), Phase 9 (fee schedules)
+**Depends on**: Phase 13 (Retail Inventory), Phase 9 (fee schedules)
 **Success Criteria:**
   1. Front desk can open checkout adding clinical charges and retail/optical items
   2. Payment via cash or card (Stripe)
   3. PDF receipt by email or print
   4. Daily close report with totals by payment method and category
   5. Refunds supported in patient payment history
+
+### Phase 16: Reporting & Exports
+**Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
+**Depends on**: Phase 9 (CMS-1500 generation), Phase 8 (aggregate queries)
+**Success Criteria:**
+  1. Schedule page has "Export Day Summary" button generating PDF/CSV of daily encounters
+  2. Billing page has "Monthly Report" button generating revenue-by-payer PDF
+  3. Encounter page has "Print Summary" button generating patient-friendly encounter summary
+  4. Billing page supports batch CMS-1500 export (select multiple → ZIP download)
+
+### Phase 17: AI Scribe Audio
+**Goal**: Clinicians record audio during encounters, transcribed and structured into SOAP notes automatically
+**Depends on**: Phase 10 (sticky mic button + AI Scribe repositioning), Phase 2 (existing ai_scribe.py)
+**Success Criteria:**
+  1. Sticky mic button records audio with waveform visualization
+  2. Recorded audio transcribed via Deepgram and displayed as editable transcript
+  3. Transcript feeds into existing AI Scribe pipeline → SOAP + structured JSON
+  4. User can review and accept auto-populated encounter fields
+  5. Audio files stored in Supabase Storage linked to encounter for audit trail
+
+### Phase 18: Mobile/Tablet UX
+**Goal**: Key pages are responsive and usable on tablets and phones with touch-friendly interactions
+**Depends on**: All prior phases (responsive pass on existing pages)
+**Success Criteria:**
+  1. Schedule, Optical, Patients, Dashboard, and Encounter pages render correctly on tablet (768px) and phone (375px)
+  2. Bottom tab navigation replaces sidebar on mobile screens
+  3. All interactive elements have minimum 44px tap targets
+  4. No horizontal scrolling on mobile for primary content areas
 
 ---
 
