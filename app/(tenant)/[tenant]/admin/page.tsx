@@ -2499,10 +2499,21 @@ function PayersSection() {
 export default function AdminPage() {
   const { requireRole, has } = useEntitlements();
   const session = useSession();
-  const [activeSection, setActiveSection] = useState<SectionKey>("general");
+  const [activeSection, setActiveSectionState] = useState<SectionKey>("general");
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
   const isAdminOrOwner = session?.user.role === "admin" || session?.user.role === "owner";
   const canViewSystem = has("view_system_status");
+
+  // Set section + sync ?section= so refresh restores it. replaceState (not push)
+  // so the back button doesn't ping-pong between sub-sections.
+  const setActiveSection = (key: SectionKey) => {
+    setActiveSectionState(key);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("section", key);
+      window.history.replaceState(null, "", url.toString());
+    }
+  };
 
   // Deep-link support: ?section=<key> — respect entitlement when landing on /admin?section=system
   useEffect(() => {
@@ -2511,10 +2522,9 @@ export default function AdminPage() {
     const sec = url.searchParams.get("section");
     if (!sec) return;
     if (sec === "system") {
-      if (canViewSystem) setActiveSection("system");
-      // If not owner: we still set activeSection so the "not available" card renders
+      // If not owner we still set activeSection so the "not available" card renders
       // in the content slot (sidebar entry stays hidden).
-      else setActiveSection("system");
+      setActiveSectionState("system");
       return;
     }
     const known: SectionKey[] = [
@@ -2525,7 +2535,7 @@ export default function AdminPage() {
       "demo",
       "schedule",
     ];
-    if ((known as string[]).includes(sec)) setActiveSection(sec as SectionKey);
+    if ((known as string[]).includes(sec)) setActiveSectionState(sec as SectionKey);
   }, [canViewSystem]);
 
   useEffect(() => {

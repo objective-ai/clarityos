@@ -56,6 +56,7 @@ class StaffAvailabilityEntry(BaseModel):
     last_name: str
     role: str
     schedule: list[WeeklyScheduleDayResponse]
+    blocks: list[BlockedTimeResponse] = []
 
 
 class WeeklyAvailabilityResponse(BaseModel):

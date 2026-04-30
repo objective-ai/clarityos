@@ -93,7 +93,7 @@ async def get_weekly_availability(
     ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_SCHEDULE)),
     db: AsyncSession = Depends(get_db),
 ) -> WeeklyAvailabilityResponse:
-    """Return all active staff with their weekly schedule for the given week."""
+    """Return all active staff with weekly schedule + blocked times for the week."""
     staff_result = await db.execute(
         select(Staff)
         .where(Staff.tenant_id == ctx.tenant_id)
@@ -101,8 +101,35 @@ async def get_weekly_availability(
         .options(selectinload(Staff.weekly_schedules))
         .order_by(Staff.last_name, Staff.first_name)
     )
+    staff_rows = list(staff_result.scalars().all())
+    staff_ids = [s.id for s in staff_rows]
+
+    # The week boundary is in clinic-local terms but blocks are stored as
+    # TIMESTAMPTZ. Use a generous UTC window: from (week_start - 1 day) to
+    # (week_end + 1 day) at UTC midnight. Catches any timezone offset edge
+    # cases and we filter precisely on the FE via blockForDate.
+    week_end = date.fromordinal(week_start.toordinal() + 6)
+    win_start = datetime.combine(
+        date.fromordinal(week_start.toordinal() - 1), time.min, tzinfo=dt_timezone.utc
+    )
+    win_end = datetime.combine(
+        date.fromordinal(week_end.toordinal() + 1), time.max, tzinfo=dt_timezone.utc
+    )
+    blocks_by_staff: dict[UUID, list[StaffBlockedTime]] = {sid: [] for sid in staff_ids}
+    if staff_ids:
+        blocks_result = await db.execute(
+            select(StaffBlockedTime)
+            .where(StaffBlockedTime.tenant_id == ctx.tenant_id)
+            .where(StaffBlockedTime.staff_id.in_(staff_ids))
+            .where(StaffBlockedTime.start_datetime < win_end)
+            .where(StaffBlockedTime.end_datetime >= win_start)
+            .order_by(StaffBlockedTime.start_datetime)
+        )
+        for b in blocks_result.scalars().all():
+            blocks_by_staff.setdefault(b.staff_id, []).append(b)
+
     entries: list[StaffAvailabilityEntry] = []
-    for s in staff_result.scalars().all():
+    for s in staff_rows:
         active_days = [
             WeeklyScheduleDayResponse.model_validate(ws)
             for ws in s.weekly_schedules
@@ -116,6 +143,10 @@ async def get_weekly_availability(
                 last_name=s.last_name,
                 role=getattr(s, "role", ""),
                 schedule=active_days,
+                blocks=[
+                    BlockedTimeResponse.model_validate(b)
+                    for b in blocks_by_staff.get(s.id, [])
+                ],
             )
         )
     return WeeklyAvailabilityResponse(week_start=week_start.isoformat(), staff=entries)
