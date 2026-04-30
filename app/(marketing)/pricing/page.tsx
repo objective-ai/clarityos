@@ -8,11 +8,11 @@ import CTABanner from "@/app/_components/marketing/CTABanner";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Simple, transparent pricing for solo optometrists to multi-location practices. Schedule a demo for a quote — no hidden fees, no implementation charges.",
+    "Simple, transparent pricing for optometry practices. $199/mo Standard, $259/mo Premium with AI. No hidden fees, no implementation charges.",
   openGraph: {
     title: "ClarityOS Pricing — Simple, Transparent, Optometry-First",
     description:
-      "Three tiers. Book a call and we'll quote you before the end of the conversation.",
+      "Two plans. $199/mo Standard. $259/mo Premium with AI. Discounted pricing for additional practices.",
     type: "website",
   },
 };
@@ -32,7 +32,7 @@ export default function PricingPage() {
         <SectionHeader
           eyebrow="Pricing"
           title="Simple, transparent pricing"
-          subtitle="Three tiers for every practice size. Book a demo and we'll quote you before the call ends."
+          subtitle="Two plans, flat monthly pricing. Add additional practices at a discount. Cancel anytime."
         />
       </section>
 
@@ -61,11 +61,11 @@ export default function PricingPage() {
             color: COLORS.textMuted,
           }}
         >
-          Pricing finalized Q3 2026 — early adopters lock in launch pricing.
+          No setup fees. No per-provider charges. No long-term contracts.
         </p>
       </section>
 
-      {/* Why no prices? explainer */}
+      {/* What's included explainer */}
       <section
         style={{
           padding: "3rem 2rem 4.5rem",
@@ -92,7 +92,7 @@ export default function PricingPage() {
               marginBottom: "0.75rem",
             }}
           >
-            Why no prices?
+            What&apos;s included
           </h3>
           <p
             style={{
@@ -102,17 +102,17 @@ export default function PricingPage() {
               margin: 0,
             }}
           >
-            We&apos;re in pilot. Pricing locks in once we&apos;ve validated with our launch cohort.
-            Book a call and we&apos;ll quote you before the end of the conversation — no lead-magnet
-            forms, no sales gauntlet.
+            Every plan includes unlimited patients, unlimited encounters, secure HIPAA-compliant
+            hosting, and continuous updates. Run a second location? Add it for $149/mo on Standard
+            or $209/mo on Premium — same login, same data, separate schedule and billing.
           </p>
         </div>
       </section>
 
       {/* Closing CTA */}
       <CTABanner
-        title="Ready for a quote?"
-        subtitle="20 minutes. We'll show you the product, quote you a price, and answer every question."
+        title="Ready to get started?"
+        subtitle="20 minutes. We'll walk you through the product and answer every question."
       />
     </>
   );
