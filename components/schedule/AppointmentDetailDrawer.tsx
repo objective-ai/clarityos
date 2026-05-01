@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatClinicTime, formatDateLong } from "@/lib/timezone";
 import { getWaitMinutes, getWaitColor } from "@/lib/scheduleUtils";
-import { X, Send, SendHorizonal, CheckCircle } from "lucide-react";
+import { X, Send, SendHorizonal, CheckCircle, MessageSquare } from "lucide-react";
+import { useMessagingStore } from "@/store/messagingStore";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -60,6 +61,7 @@ export function AppointmentDetailDrawer({
   onIntake,
   timezone,
 }: AppointmentDetailDrawerProps) {
+  const openComposer = useMessagingStore((s) => s.openComposer);
   // ESC key closes drawer
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -284,6 +286,19 @@ export function AppointmentDetailDrawer({
                   View Encounter
                 </Button>
               )}
+
+              {/* Message Patient — entry-point per schedule_kebab */}
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => {
+                  openComposer(appt.patientId, "schedule_kebab");
+                  onClose();
+                }}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" aria-hidden />
+                Message Patient
+              </Button>
 
               {/* Secondary actions */}
               {canCancelOrReschedule && (

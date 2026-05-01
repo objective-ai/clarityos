@@ -245,6 +245,11 @@ class AppointmentResponse(AppBaseModel):
     cancellation_reason: str | None = None
     reminder_sent_at: datetime | None = None
 
+    # Patient engagement (Phase 12)
+    patient_confirmed_at: datetime | None = None
+    last_reminder_sent_at: datetime | None = None
+    reminders_sent_count: int = 0
+
     # Joined display fields
     patient_name: str | None = None
     patient_chart_number: int | None = None

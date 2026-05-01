@@ -42,6 +42,10 @@ export interface Appointment {
   internalNotes: string | null;
   cancellationReason: string | null;
   reminderSentAt: string | null;
+  // Patient engagement (Phase 12)
+  patientConfirmedAt: string | null;
+  lastReminderSentAt: string | null;
+  remindersSentCount: number;
   patientName: string | null;
   patientChartNumber: number | null;
   providerName: string | null;

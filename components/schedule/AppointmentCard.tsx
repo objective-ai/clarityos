@@ -12,7 +12,8 @@ import { OverflowMenu } from "@/components/schedule/OverflowMenu";
 import type { OverflowMenuItem } from "@/components/schedule/OverflowMenu";
 import { formatClinicTime } from "@/lib/timezone";
 import { getWaitMinutes, getWaitColor } from "@/lib/scheduleUtils";
-import { Send, SendHorizonal, CheckCircle } from "lucide-react";
+import { Send, SendHorizonal, CheckCircle, Bell, CheckCircle2 } from "lucide-react";
+import { useMessagingStore } from "@/store/messagingStore";
 
 // ---------------------------------------------------------------------------
 // Eligibility dot color map
@@ -126,6 +127,7 @@ export function AppointmentCard({
   onCardClick?: (appointment: Appointment) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const openComposer = useMessagingStore((s) => s.openComposer);
 
   const canCheckIn =
     appointment.status === "scheduled" || appointment.status === "confirmed";
@@ -204,6 +206,14 @@ export function AppointmentCard({
     });
   }
 
+  // "Message Patient" available regardless of status — entry-point per
+  // schedule_kebab. Reads patient_confirmed_at + last_reminder_sent_at on
+  // appointment for the confirmed / reminder-sent indicators below.
+  overflowItems.unshift({
+    label: "Message Patient",
+    onClick: () => openComposer(appointment.patientId, "schedule_kebab"),
+  });
+
   return (
     <div
       className="glass-card glass-card-hover border-l-4 p-4 transition-all cursor-pointer"
@@ -254,6 +264,23 @@ export function AppointmentCard({
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Intake status icon */}
           <IntakeIcon status={appointment.intakeStatus} />
+
+          {/* Patient confirmed (replied YES to a reminder) */}
+          {appointment.patientConfirmedAt && (
+            <span aria-label="Confirmed" title="Patient confirmed" className="shrink-0 inline-flex">
+              <CheckCircle2 className="w-4 h-4 text-[var(--state-normal,#22c55e)]" />
+            </span>
+          )}
+          {/* Reminder sent (and not yet confirmed) */}
+          {!appointment.patientConfirmedAt && appointment.lastReminderSentAt && (
+            <span
+              aria-label={`Reminder sent ${appointment.remindersSentCount}`}
+              title={`Reminder sent ${appointment.remindersSentCount}× — last ${appointment.lastReminderSentAt}`}
+              className="shrink-0 inline-flex"
+            >
+              <Bell className="w-4 h-4 text-[var(--text-muted)]" />
+            </span>
+          )}
 
           {/* Wait time badge */}
           {waitColor !== null && waitMinutes !== null && (

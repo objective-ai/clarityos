@@ -21,6 +21,8 @@ import { AppointmentDetailDrawer } from "@/components/schedule/AppointmentDetail
 import { WeekStrip } from "@/components/schedule/WeekStrip";
 import { BookingDrawer } from "@/components/schedule/BookingDrawer";
 import { CancelModal, RescheduleModal } from "@/components/schedule/ScheduleModals";
+import { BulkSelectToolbar } from "@/components/schedule/BulkSelectToolbar";
+import type { BulkRecipientStub } from "@/store/messagingStore";
 
 const IntakeLinkModal = dynamic(
   () => import("@/components/schedule/IntakeLinkModal"),
@@ -146,6 +148,29 @@ function SchedulePageInner() {
   // Cancel / reschedule modals
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+
+  // Bulk-select messaging (Phase 12 — receptionist + owner only)
+  const canBulkSend = role === "receptionist" || role === "owner";
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(new Set());
+  const selectedBulkRecipientData: BulkRecipientStub[] = useMemo(() => {
+    return appointments
+      .filter((a) => selectedBulkIds.has(a.id))
+      .map((a) => {
+        const [first, ...rest] = (a.patientName ?? "").split(" ");
+        return {
+          patientId: a.patientId,
+          appointmentId: a.id,
+          firstName: first || "",
+          lastName: rest.join(" ") || undefined,
+          preferredChannel: "sms" as const,
+        };
+      });
+  }, [appointments, selectedBulkIds]);
+  const clearBulkSelection = () => {
+    setSelectedBulkIds(new Set());
+    setBulkMode(false);
+  };
 
   // Counts by date for WeekStrip — includes week data when loaded
   const countsByDate = useMemo(() => {
@@ -301,8 +326,39 @@ function SchedulePageInner() {
           >
             + Book
           </Button>
+          {canBulkSend && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkMode((v) => !v)}
+              aria-pressed={bulkMode}
+            >
+              {bulkMode ? "Done" : "Bulk Message"}
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Bulk-select toolbar — receptionist/owner only */}
+      {canBulkSend && bulkMode && (
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const allIds = new Set(appointments.map((a) => a.id));
+              setSelectedBulkIds(allIds);
+            }}
+          >
+            Select all visible ({appointments.length})
+          </Button>
+          <BulkSelectToolbar
+            selectedAppointmentIds={[...selectedBulkIds]}
+            selectedPatientData={selectedBulkRecipientData}
+            onClearSelection={clearBulkSelection}
+          />
+        </div>
+      )}
 
       {/* Action error banner */}
       {actionError && (
