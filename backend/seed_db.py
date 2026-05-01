@@ -101,6 +101,7 @@ from backend.db.models.tenant.clinical import (
     InsurancePayer,
     FeeScheduleItem,
     PatientInsurance,
+    Product,
 )
 
 from backend.core.entitlements import Entitlement
@@ -353,6 +354,7 @@ def seed_tenant_schema(session: Session) -> None:
     _seed_appointments(session)
     _seed_encounters(session)
     _seed_insurance_payers(session)
+    _seed_retail_inventory(session)
     _seed_patient_insurance(session)
     _seed_superbills(session)
     _seed_intake_tokens(session)
@@ -1814,6 +1816,112 @@ def _seed_insurance_payers(session: Session) -> None:
         ))
     session.flush()
     ok(f"Created {len(CPT_CATALOG_SEED)} base fee catalog entries")
+
+
+# ── Phase 13 — Retail Inventory ───────────────────────────────────────────
+
+def _seed_retail_inventory(session: Session) -> None:
+    """Phase 13 — seed 10 frames + 5 contact-lens products. Idempotent.
+
+    Idempotency guard matches the partial unique index from migration 0017
+    on (tenant_id, sku) WHERE is_active=true — re-running this seeder against
+    an already-seeded tenant produces zero new rows.
+    """
+    step("Seeding Retail Inventory (frames + contacts)")
+
+    from sqlalchemy import select as _select
+
+    FRAMES: list[tuple] = [
+        # (sku, brand, model, color, eye_size, bridge, temple, gender, material, retail, cost, stock)
+        ("FR-RAYBAN-WAYFARER-BLK-52",  "Ray-Ban",      "Wayfarer",      "Black",       52, 18, 145, "unisex", "acetate",  195.00,  75.00,  8),
+        ("FR-RAYBAN-AVIATOR-GOLD-58",  "Ray-Ban",      "Aviator",       "Gold",        58, 14, 135, "unisex", "metal",    175.00,  65.00,  6),
+        ("FR-OAKLEY-HOLBROOK-BLK-55",  "Oakley",       "Holbrook",      "Matte Black", 55, 18, 137, "men",    "acetate",  165.00,  60.00,  4),
+        ("FR-OAKLEY-FROGSKINS-BLU-54", "Oakley",       "Frogskins",     "Blue",        54, 18, 139, "men",    "acetate",  155.00,  58.00,  3),
+        ("FR-WP-DURAND-CRYSTAL-50",    "Warby Parker", "Durand",        "Crystal",     50, 19, 145, "women",  "acetate",  145.00,  45.00, 10),
+        ("FR-WP-FELIX-TORTOISE-49",    "Warby Parker", "Felix",         "Tortoise",    49, 18, 140, "women",  "acetate",  145.00,  45.00,  7),
+        ("FR-PERSOL-649-HAVANA-54",    "Persol",       "PO0649",        "Havana",      54, 20, 140, "men",    "acetate",  329.00, 130.00,  2),
+        ("FR-LINDBERG-AIR-TIT-52",     "Lindberg",     "Air Titanium",  "Silver",      52, 17, 145, "unisex", "titanium", 549.00, 220.00,  2),
+        ("FR-MIKLI-STARCK-BLK-51",     "Mikli",        "Starck PL1031", "Black",       51, 19, 140, "unisex", "metal",    285.00, 110.00,  3),
+        ("FR-DISNEY-KIDS-PINK-44",     "Disney",       "Princess",      "Pink",        44, 16, 130, "kids",   "other",     89.00,  28.00, 12),
+    ]
+    frames_added = 0
+    for (sku, brand, model, color, eye, bridge, temple, gender, material, retail, cost, stock) in FRAMES:
+        existing = session.execute(_select(Product).where(
+            Product.tenant_id == TENANT_ID,
+            Product.sku == sku,
+            Product.is_active.is_(True),
+        )).first()
+        if existing:
+            continue
+        session.add(Product(
+            id=uuid.uuid4(),
+            tenant_id=TENANT_ID,
+            product_type="frame",
+            brand=brand,
+            model=model,
+            sku=sku,
+            attributes={
+                "brand": brand,
+                "model": model,
+                "color": color,
+                "eye_size": eye,
+                "bridge_size": bridge,
+                "temple_size": temple,
+                "gender": gender,
+                "material": material,
+            },
+            retail_price=Decimal(str(retail)),
+            cost_price=Decimal(str(cost)),
+            stock_qty=stock,
+            reorder_threshold=3,
+            is_active=True,
+        ))
+        frames_added += 1
+
+    CONTACTS: list[tuple] = [
+        # (sku, brand, model, modality, base_curve, diameter, power, box_size, retail, cost, stock)
+        ("CL-ACUVUE-OASYS-DAILY-OD-200",  "Acuvue",       "Oasys 1-Day",      "daily",   8.5, 14.3, -2.00, 90, 65.00, 28.00, 25),
+        ("CL-ACUVUE-OASYS-DAILY-OS-225",  "Acuvue",       "Oasys 1-Day",      "daily",   8.5, 14.3, -2.25, 90, 65.00, 28.00, 18),
+        ("CL-BL-BIOTRUE-DAILY-OD-100",    "Bausch+Lomb",  "Biotrue ONEday",   "daily",   8.6, 14.2, -1.00, 90, 55.00, 22.00, 30),
+        ("CL-COOPER-BIOMEDICS-MO-OD-300", "CooperVision", "Biomedics 55",     "monthly", 8.6, 14.2, -3.00,  6, 35.00, 13.00, 12),
+        ("CL-AIRO-NIGHT-DAY-MO-OS-150",   "Air Optix",    "Night & Day Aqua", "monthly", 8.4, 13.8, -1.50,  6, 72.00, 30.00,  8),
+    ]
+    contacts_added = 0
+    for (sku, brand, model, modality, bc, diam, power, box, retail, cost, stock) in CONTACTS:
+        existing = session.execute(_select(Product).where(
+            Product.tenant_id == TENANT_ID,
+            Product.sku == sku,
+            Product.is_active.is_(True),
+        )).first()
+        if existing:
+            continue
+        session.add(Product(
+            id=uuid.uuid4(),
+            tenant_id=TENANT_ID,
+            product_type="contact_lens",
+            brand=brand,
+            model=model,
+            sku=sku,
+            attributes={
+                "brand": brand,
+                "modality": modality,
+                "base_curve": bc,
+                "diameter": diam,
+                "power": power,
+                "box_size": box,
+            },
+            retail_price=Decimal(str(retail)),
+            cost_price=Decimal(str(cost)),
+            stock_qty=stock,
+            reorder_threshold=5,
+            is_active=True,
+        ))
+        contacts_added += 1
+    session.flush()
+    if frames_added or contacts_added:
+        ok(f"Retail inventory: {frames_added} new frames, {contacts_added} new contacts (10 frames + 5 contacts total).")
+    else:
+        warn("Retail inventory already seeded — skipping (10 frames + 5 contacts already present).")
 
 
 # ══════════════════════════════════════════════════════════════════════════
