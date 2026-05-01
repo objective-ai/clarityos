@@ -65,11 +65,20 @@ export const useOpticalOrderStore = create<OpticalOrderStore>()(
       },
 
       loadOrder: async (orderId) => {
-        const order = await apiFetch<OpticalOrder>(
-          `/api/optical-orders/${orderId}/`,
-        );
-        set({ currentOrder: order });
-        return order;
+        set({ loading: true, error: null });
+        try {
+          const order = await apiFetch<OpticalOrder>(
+            `/api/optical-orders/${orderId}/`,
+          );
+          set({ currentOrder: order, loading: false });
+          return order;
+        } catch (e) {
+          set({
+            error: e instanceof Error ? e.message : String(e),
+            loading: false,
+          });
+          throw e;
+        }
       },
 
       clearCurrentOrder: () => set({ currentOrder: null }),
