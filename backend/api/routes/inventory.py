@@ -320,3 +320,142 @@ async def deactivate_product(
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# POST /{product_id}/receive/ — receive stock (atomic primary TXN)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{product_id}/receive/", response_model=ProductResponse)
+async def receive_stock(
+    product_id: uuid.UUID,
+    payload: ReceiveStockRequest,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_INVENTORY)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive stock for a product. Increments stock_qty + writes
+    InventoryTransaction(reason='receive_stock') + emits STOCK_RECEIVE audit
+    in a SINGLE primary transaction (.claude/rules/clinical-safety.md)."""
+    staff = await resolve_staff(ctx, db)
+    p = (
+        await db.execute(
+            select(Product).where(
+                Product.id == product_id,
+                Product.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not p:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
+    if not p.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot receive stock for inactive product",
+        )
+
+    # Atomic — primary TXN
+    old_qty = p.stock_qty
+    p.stock_qty = old_qty + payload.qty_received
+    db.add(
+        InventoryTransaction(
+            id=uuid.uuid4(),
+            tenant_id=ctx.tenant_id,
+            product_id=p.id,
+            delta=payload.qty_received,
+            reason="receive_stock",
+            staff_id=staff.id if staff else None,
+            po_reference=payload.po_reference,
+            note=payload.note,
+        )
+    )
+    await db.flush()
+
+    await log_action(
+        db, ctx, AuditAction.STOCK_RECEIVE, "product", p.id,
+        staff_id=staff.id if staff else None,
+        changes={"stock_qty": {"old": old_qty, "new": p.stock_qty}},
+        detail=(
+            f"Received {payload.qty_received} of {p.sku}"
+            + (f" (PO {payload.po_reference})" if payload.po_reference else "")
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+
+    p = (
+        await db.execute(select(Product).where(Product.id == p.id))
+    ).scalar_one()
+    return _product_response(p)
+
+
+# ---------------------------------------------------------------------------
+# POST /{product_id}/adjust/ — manual stock adjust (atomic primary TXN)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{product_id}/adjust/", response_model=ProductResponse)
+async def adjust_stock(
+    product_id: uuid.UUID,
+    payload: AdjustStockRequest,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.MANAGE_INVENTORY)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually adjust stock_qty by a signed delta. Writes
+    InventoryTransaction(reason='manual_adjust') + emits STOCK_ADJUST audit
+    in a SINGLE primary transaction. ``qty_delta`` must be non-zero."""
+    if payload.qty_delta == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="qty_delta must be non-zero",
+        )
+    staff = await resolve_staff(ctx, db)
+    p = (
+        await db.execute(
+            select(Product).where(
+                Product.id == product_id,
+                Product.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not p:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
+        )
+
+    # Atomic — primary TXN
+    old_qty = p.stock_qty
+    p.stock_qty = old_qty + payload.qty_delta
+    db.add(
+        InventoryTransaction(
+            id=uuid.uuid4(),
+            tenant_id=ctx.tenant_id,
+            product_id=p.id,
+            delta=payload.qty_delta,
+            reason="manual_adjust",
+            staff_id=staff.id if staff else None,
+            note=payload.note,
+        )
+    )
+    await db.flush()
+
+    await log_action(
+        db, ctx, AuditAction.STOCK_ADJUST, "product", p.id,
+        staff_id=staff.id if staff else None,
+        changes={"stock_qty": {"old": old_qty, "new": p.stock_qty}},
+        detail=(
+            f"Manual adjust {payload.qty_delta:+d} on {p.sku}"
+            + (f" — {payload.note}" if payload.note else "")
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+
+    p = (
+        await db.execute(select(Product).where(Product.id == p.id))
+    ).scalar_one()
+    return _product_response(p)
