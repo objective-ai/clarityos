@@ -30,6 +30,10 @@ from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import AuditAction, Encounter
 from backend.db.session import get_db
+from backend.services.ai_scribe import (
+    resolve_assessment_and_plan,
+    split_soap_and_json,
+)
 
 router = APIRouter()
 
@@ -357,8 +361,7 @@ async def generate_ai_scribe(
             yield f"data: {json.dumps({'done': True})}\n\n"
 
             # ── Save SOAP portion (before delimiter) to DB ─────────
-            parts = full_text.split("___JSON_START___")
-            soap_text = parts[0].strip()
+            soap_text, _json_part = split_soap_and_json(full_text)
             enc.ai_summary_text = soap_text
             enc.ai_summary_generated_at = datetime.now(timezone.utc)
 
@@ -421,11 +424,9 @@ async def accept_ai_scribe(
     staff = await resolve_staff(ctx, db)
 
     # Persist assessment_and_plan if included in the accepted changes
-    ap_change = payload.changes.get("assessment_and_plan")
-    if ap_change and isinstance(ap_change, dict):
-        ap_value = ap_change.get("new")
-        if ap_value and isinstance(ap_value, str):
-            enc.assessment_and_plan = ap_value
+    ap_value = resolve_assessment_and_plan(payload.changes)
+    if ap_value is not None:
+        enc.assessment_and_plan = ap_value
 
     from backend.core.ai_models import get_tenant_ai_model
 
