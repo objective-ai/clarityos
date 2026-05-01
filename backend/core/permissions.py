@@ -80,6 +80,13 @@ class ClinicalAction(StrEnum):
     MANAGE_STAFF = "manage_staff"
     VIEW_SYSTEM_STATUS = "view_system_status"  # OWNER-only: system health, errors, uptime
 
+    # Phase 13 — Retail Inventory & Optical Orders
+    VIEW_INVENTORY = "view_inventory"
+    MANAGE_INVENTORY = "manage_inventory"
+    CREATE_OPTICAL_ORDER = "create_optical_order"
+    VIEW_OPTICAL_ORDER = "view_optical_order"
+    CANCEL_OPTICAL_ORDER = "cancel_optical_order"
+
 
 # ---------------------------------------------------------------------------
 # Permission matrix  (action → allowed roles)
@@ -148,6 +155,13 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     ClinicalAction.VIEW_AUDIT_LOG:      {_A, _O},
     ClinicalAction.MANAGE_STAFF:        {_A, _O},
     ClinicalAction.VIEW_SYSTEM_STATUS:  {_O},
+
+    # Phase 13 — Retail Inventory & Optical Orders
+    ClinicalAction.VIEW_INVENTORY:        {_D, _T, _R, _A, _O},
+    ClinicalAction.MANAGE_INVENTORY:      {_A, _O},
+    ClinicalAction.CREATE_OPTICAL_ORDER:  {_T, _R, _A, _O},
+    ClinicalAction.VIEW_OPTICAL_ORDER:    {_D, _T, _R, _A, _O},
+    ClinicalAction.CANCEL_OPTICAL_ORDER:  {_A, _O},
 }
 
 
