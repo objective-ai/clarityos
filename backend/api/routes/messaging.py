@@ -1111,3 +1111,49 @@ async def onboarding_activate(
         )
     await db.commit()
     return {"messaging_enabled": True}
+
+
+# ---------------------------------------------------------------------------
+# Compliance Report PDF (Plan 12-10, CRM-16)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/compliance-report")
+async def compliance_report(
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    from_date: str = Query(..., description="ISO date YYYY-MM-DD"),
+    to_date: str = Query(..., description="ISO date YYYY-MM-DD"),
+):
+    """OWNER-only PDF download summarizing volume + opt-outs + consent events."""
+    from datetime import date as _date
+
+    from fastapi.responses import Response
+
+    from backend.services.messaging.compliance_report import (
+        generate_compliance_report_pdf,
+    )
+
+    if (ctx.role or "").lower() != "owner":
+        raise HTTPException(status_code=403, detail="OWNER role required")
+
+    try:
+        f = _date.fromisoformat(from_date)
+        t = _date.fromisoformat(to_date)
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="from_date and to_date must be YYYY-MM-DD"
+        )
+
+    pdf_bytes = await generate_compliance_report_pdf(
+        db, ctx.tenant_id, from_date=f, to_date=t
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="compliance-{from_date}-to-{to_date}.pdf"'
+            ),
+        },
+    )
