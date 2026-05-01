@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Check, ChevronLeft } from "lucide-react";
+import { Check, ChevronLeft, Inbox, Users, BarChart3, Settings as SettingsIcon, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -153,6 +153,16 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
     { label: "Billing", href: `${base}/billing`, icon: Icon.Billing, requiredRoles: ["doctor", "admin", "owner"] },
   ];
 
+  // Messaging group (Phase 12) — gated by useEntitlements().has('messaging')
+  const messagingNavItems: NavItem[] = has(Entitlement.MESSAGING)
+    ? [
+        { label: "Inbox", href: `${base}/messaging/inbox`, icon: () => <Inbox className="w-4 h-4" /> },
+        { label: "Recall Queue", href: `${base}/messaging/recall-queue`, icon: () => <Users className="w-4 h-4" /> },
+        { label: "Messaging Analytics", href: `${base}/messaging/analytics`, icon: () => <BarChart3 className="w-4 h-4" /> },
+        { label: "Messaging Settings", href: `${base}/settings/messaging`, icon: () => <SettingsIcon className="w-4 h-4" /> },
+      ]
+    : [];
+
   const bottomItems: NavItem[] = [
     { label: "Admin", href: `${base}/admin`, icon: Icon.Settings, requiredRoles: ["admin", "owner"] },
   ];
@@ -283,6 +293,19 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
       {/* Main Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {navItems.map(renderNavItem)}
+        {messagingNavItems.length > 0 && (
+          <>
+            {!isCollapsed && (
+              <div className="pt-3 pb-1 px-3 text-overline text-[var(--text-muted)] flex items-center gap-2">
+                <MessageSquare className="w-3 h-3" aria-hidden />
+                Messaging
+              </div>
+            )}
+            {messagingNavItems.map((item, i) =>
+              renderNavItem(item, navItems.length + 100 + i),
+            )}
+          </>
+        )}
       </nav>
 
       {/* Divider */}
