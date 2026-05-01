@@ -15,10 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
+import { ProductFormModal } from "@/components/inventory/ProductFormModal";
+import { ReceiveStockModal } from "@/components/inventory/ReceiveStockModal";
+import { AdjustStockModal } from "@/components/inventory/AdjustStockModal";
 
-// Modal placeholders — actual modal bodies land in 13-10. We expose the
-// state hook here so 13-10 can wire ProductFormModal etc. without rewriting
-// page-level state.
 type ModalState =
   | { kind: "closed" }
   | { kind: "create"; productType: ProductType }
@@ -186,13 +186,25 @@ export default function InventoryPage() {
         onAdjust={(p) => setModal({ kind: "adjust", product: p })}
       />
 
-      {/*
-        Modal containers — bodies land in 13-10.
-        13-10 will render <ProductFormModal />, <ReceiveStockModal />,
-        <AdjustStockModal /> here, gated on `modal.kind`.
-      */}
-      {modal.kind !== "closed" && (
-        <div data-testid="modal-state-marker" data-kind={modal.kind} className="hidden" />
+      <ProductFormModal
+        open={modal.kind === "create" || modal.kind === "edit"}
+        onClose={() => setModal({ kind: "closed" })}
+        product={modal.kind === "edit" ? modal.product : undefined}
+        productType={modal.kind === "create" ? modal.productType : undefined}
+      />
+      {modal.kind === "receive" && (
+        <ReceiveStockModal
+          open
+          onClose={() => setModal({ kind: "closed" })}
+          product={modal.product}
+        />
+      )}
+      {modal.kind === "adjust" && (
+        <AdjustStockModal
+          open
+          onClose={() => setModal({ kind: "closed" })}
+          product={modal.product}
+        />
       )}
     </div>
   );
