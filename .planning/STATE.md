@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 13-00-PLAN.md (Wave 0 test foundation)
-last_updated: "2026-05-01T19:31:28.207Z"
+stopped_at: Completed 13-01-PLAN.md (ORM + migration 0017)
+last_updated: "2026-05-01T19:32:54.929Z"
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 55
-  completed_plans: 43
+  completed_plans: 44
 ---
 
 ---
@@ -52,7 +52,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 13 (retail-inventory) — EXECUTING
-Plan: 4 of 15
+Plan: 2 of 15
 
 ## Performance Metrics
 
@@ -105,6 +105,7 @@ Plan: 4 of 15
 | Phase 13-retail-inventory P02 | 2min | 2 tasks | 4 files |
 | Phase 13 P03 | 3min | 2 tasks | 4 files |
 | Phase 13-retail-inventory P00 | 5min | 2 tasks | 10 files |
+| Phase 13 P01 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -233,6 +234,9 @@ Recent decisions affecting current work:
 - [Phase 13]: [Phase 13-03]: Decimal fields typed as string in TS interfaces (retailPrice, costPrice, unitPrice, lineTotal, totalPrice) — matches Pydantic JSON serialization convention
 - [Phase 13-retail-inventory]: [Phase 13-00]: Used try/except → pytest.skip(allow_module_level=True) instead of pytest.importorskip for backend modules whose import triggers Settings() instantiation (importorskip only catches ImportError, not pydantic.ValidationError)
 - [Phase 13-retail-inventory]: [Phase 13-00]: db_session and tenant_context fixtures defined as Wave-0 skip-stubs in conftest.py so tests skip cleanly during fixture resolution; Wave 1 replaces with real async-session + TenantContext fixtures
+- [Phase 13-01]: JSONB server_default uses sa.text() to bypass SQLAlchemy double-quoting under asyncpg driver
+- [Phase 13-01]: Partial unique index on (tenant_id, sku) WHERE is_active=true mirrors PatientInsurance pattern from Phase 10.1 — preserves historical SKUs
+- [Phase 13-01]: OpticalOrder.created_by uses explicit foreign_keys=[created_by_id] to avoid Staff multi-FK ambiguity
 
 ### Pending Todos
 
@@ -244,8 +248,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-01T19:31:28.203Z
-Stopped at: Completed 13-00-PLAN.md (Wave 0 test foundation)
+Last session: 2026-05-01T19:32:54.925Z
+Stopped at: Completed 13-01-PLAN.md (ORM + migration 0017)
 Resume file: None
 
 **Phase 9 Overview:**

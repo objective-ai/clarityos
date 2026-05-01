@@ -144,10 +144,10 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **INV-03**: Placing an OpticalOrder atomically decrements Product.stock_qty in the same DB transaction as the line-item insert and the InventoryTransaction audit row; low-stock items (`stock_qty <= reorder_threshold`) display a warning badge in the Inventory page (ROADMAP success criterion #3)
 - [ ] **INV-04**: Inventory page shows stock levels filterable by product_type (Frames | Contacts tabs) plus brand/model search, stock-status filter (in stock / low / out), active/inactive toggle, and type-specific filter (frames: gender; contacts: modality) (ROADMAP success criterion #4)
 - [ ] **INV-05**: Patient detail Orders tab shows chronological order history (newest first) with order date, status badge, line-item count, and total — clickable to open OrderDetailDrawer (ROADMAP success criterion #5)
-- [ ] **INV-06**: Single `Product` table with `product_type` enum {`frame`,`contact_lens`} stored as VARCHAR(20) plus JSONB `attributes` column carrying type-specific keys (frame: `brand,model,color,eye_size,bridge_size,temple_size,gender,material`; contact_lens: `brand,modality,base_curve,diameter,power,cylinder?,axis?,box_size`) — mirrors `Patient.medical_history_jsonb` precedent
-- [ ] **INV-07**: Partial unique index `CREATE UNIQUE INDEX uq_products_active_sku ON products (tenant_id, sku) WHERE is_active = true` — soft-deleted rows preserve their SKU; mirrors Phase 10.1 PatientInsurance pattern
+- [x] **INV-06**: Single `Product` table with `product_type` enum {`frame`,`contact_lens`} stored as VARCHAR(20) plus JSONB `attributes` column carrying type-specific keys (frame: `brand,model,color,eye_size,bridge_size,temple_size,gender,material`; contact_lens: `brand,modality,base_curve,diameter,power,cylinder?,axis?,box_size`) — mirrors `Patient.medical_history_jsonb` precedent
+- [x] **INV-07**: Partial unique index `CREATE UNIQUE INDEX uq_products_active_sku ON products (tenant_id, sku) WHERE is_active = true` — soft-deleted rows preserve their SKU; mirrors Phase 10.1 PatientInsurance pattern
 - [ ] **INV-08**: Restock workflow ("Receive Stock" action) writes an `InventoryTransaction` audit row with `reason='receive_stock'`, signed positive `delta`, optional `po_reference` and `staff_id`, in the same primary TXN as the `Product.stock_qty` update; manual qty edits write `reason='manual_adjust'` audit rows
-- [ ] **INV-09**: `OpticalOrder` (patient_id, encounter_id?, status, total_price, created_by_id, timestamps) + `OpticalOrderLineItem` (order_id, product_id, qty, unit_price, line_total) tables created with status lifecycle `draft → placed → dispensed` and `* → cancelled`; status stored as VARCHAR(20) — designed Phase-14-extensible (ADD COLUMN only)
+- [x] **INV-09**: `OpticalOrder` (patient_id, encounter_id?, status, total_price, created_by_id, timestamps) + `OpticalOrderLineItem` (order_id, product_id, qty, unit_price, line_total) tables created with status lifecycle `draft → placed → dispensed` and `* → cancelled`; status stored as VARCHAR(20) — designed Phase-14-extensible (ADD COLUMN only)
 - [ ] **INV-10**: Cancelling a `placed` order atomically restocks Product.stock_qty for each line item AND writes one `InventoryTransaction` per line with `reason='order_cancelled'` AND writes audit `OPTICAL_ORDER_CANCEL` — all in the same primary TXN
 - [ ] **INV-11**: Concurrent `POST /optical-orders/{id}/place` calls against orders sharing a Product cannot over-decrement stock — enforced via `SELECT ... FOR UPDATE` (`with_for_update()`) on the Product row inside the place handler before mutating `stock_qty`
 - [ ] **INV-12**: Zero-stock soft-block — placing an order with `stock_qty <= 0` returns 200 with a warning marker (toast on FE), does NOT 4xx; allows the order to be created/placed (mirrors Phase 10.2 overbooking pattern)
@@ -156,7 +156,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **INV-15**: `OrderDetailDrawer` component — 480px right-slide drawer with ESC + backdrop close, hydration safety (`if (!open && !order) return null`), rendering line items, status timeline, and Cancel CTA gated on `CANCEL_OPTICAL_ORDER` permission; mirrors `AppointmentDetailDrawer.tsx`
 - [ ] **INV-16**: Encounter optical-queue card status rollup — any related `OpticalOrder.status == 'placed'` for that encounter → display `in_progress`; orders exist AND all are `dispensed` → display `dispensed`; otherwise fall back to `Encounter.optical_status` (Phase 6 column unchanged); cancelled-only orders treated as "no live orders" → fall back
 - [ ] **INV-17**: Dev seed file `backend/seed_db.py` extended with `_seed_retail_inventory(session)` adding 10 synthetic frames + 5 contact-lens products (idempotent — guards on `tenant_id + sku + is_active`) and wired into `seed_tenant_schema()` orchestrator
-- [ ] **INV-18**: 9 new `AuditAction` VARCHAR enum values added — `PRODUCT_CREATE`, `PRODUCT_UPDATE`, `PRODUCT_DEACTIVATE`, `STOCK_RECEIVE`, `STOCK_ADJUST`, `OPTICAL_ORDER_CREATE`, `OPTICAL_ORDER_PLACE`, `OPTICAL_ORDER_CANCEL`, `OPTICAL_ORDER_DISPENSE` — all logged via `log_action()` in primary TXN of the corresponding route
+- [x] **INV-18**: 9 new `AuditAction` VARCHAR enum values added — `PRODUCT_CREATE`, `PRODUCT_UPDATE`, `PRODUCT_DEACTIVATE`, `STOCK_RECEIVE`, `STOCK_ADJUST`, `OPTICAL_ORDER_CREATE`, `OPTICAL_ORDER_PLACE`, `OPTICAL_ORDER_CANCEL`, `OPTICAL_ORDER_DISPENSE` — all logged via `log_action()` in primary TXN of the corresponding route
 - [x] **INV-19**: 5 new `ClinicalAction` enum values added with PERMISSION_MATRIX rows: `VIEW_INVENTORY` {D,T,R,A,O}, `MANAGE_INVENTORY` {A,O}, `CREATE_OPTICAL_ORDER` {T,R,A,O}, `VIEW_OPTICAL_ORDER` {D,T,R,A,O}, `CANCEL_OPTICAL_ORDER` {A,O}
 - [ ] **INV-20**: Inventory admin page at `app/(tenant)/[tenant]/inventory/page.tsx` with per-type tabs (Frames | Contacts), filter row, product table with stock badge column, and modal-driven CRUD + Receive Stock + Adjust Stock actions; sidebar Inventory link gated on `Entitlement.RETAIL_POS`
 
@@ -320,10 +320,10 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INV-03 | Phase 13 | Pending |
 | INV-04 | Phase 13 | Pending |
 | INV-05 | Phase 13 | Pending |
-| INV-06 | Phase 13 | Pending |
-| INV-07 | Phase 13 | Pending |
+| INV-06 | Phase 13 | Complete |
+| INV-07 | Phase 13 | Complete |
 | INV-08 | Phase 13 | Pending |
-| INV-09 | Phase 13 | Pending |
+| INV-09 | Phase 13 | Complete |
 | INV-10 | Phase 13 | Pending |
 | INV-11 | Phase 13 | Pending |
 | INV-12 | Phase 13 | Pending |
@@ -332,7 +332,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INV-15 | Phase 13 | Pending |
 | INV-16 | Phase 13 | Pending |
 | INV-17 | Phase 13 | Pending |
-| INV-18 | Phase 13 | Pending |
+| INV-18 | Phase 13 | Complete |
 | INV-19 | Phase 13 | Complete |
 | INV-20 | Phase 13 | Pending |
 
