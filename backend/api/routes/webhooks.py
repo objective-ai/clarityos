@@ -24,6 +24,7 @@ counter increments end-to-end on the PRIMARY production path.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 from datetime import datetime, timezone
@@ -76,7 +77,10 @@ def _system_ctx(tenant_id: UUID) -> TenantContext:
 def _check_internal_seal(request: Request) -> None:
     if not settings.WEBHOOK_INTERNAL_SECRET:
         raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Internal seal not configured")
-    if request.headers.get("X-Webhook-Internal") != settings.WEBHOOK_INTERNAL_SECRET:
+    if not hmac.compare_digest(
+        request.headers.get("X-Webhook-Internal", ""),
+        settings.WEBHOOK_INTERNAL_SECRET,
+    ):
         raise HTTPException(http_status.HTTP_403_FORBIDDEN, "Internal seal failed")
 
 
@@ -199,7 +203,7 @@ async def _handle_inbound_sms(db: AsyncSession, form: dict[str, str]) -> None:
 
     tenant_id = await _tenant_from_phone(db, to_e164)
     if not tenant_id:
-        logger.warning("Inbound SMS to unknown number %s — sid=%s", to_e164, sid)
+        logger.warning("Inbound SMS to unknown number — sid=%s", sid)
         return
 
     patient = await _patient_from_phone(db, tenant_id, from_e164)
