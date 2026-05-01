@@ -46,6 +46,10 @@ export const Entitlement = {
 
   // ---- CRM (Phase 12) ----
   MESSAGING: "messaging" as const,
+
+  // ---- Retail & POS (Phase 13 + Phase 15) — $150/mo bundled add-on ----
+  // NOT included in Core/Plus/Premium PLAN_FEATURES; purchased separately.
+  RETAIL_POS: "retail_pos" as const,
 } satisfies Record<string, EntitlementKey>;
 
 // ---------------------------------------------------------------------------
@@ -151,5 +155,10 @@ export const ENTITLEMENT_META: Record<
     label: "Patient Messaging",
     description: "Automated reminders, recall campaigns, manual SMS/email, and inbound triage.",
     plan: "Plus",
+  },
+  retail_pos: {
+    label: "Retail & POS",
+    description: "Inventory catalog, optical orders, and point-of-sale checkout.",
+    plan: "Add-on",
   },
 };

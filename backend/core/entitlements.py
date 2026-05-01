@@ -35,6 +35,10 @@ class Entitlement(StrEnum):
     # inbound triage). Lowercase wire key 'messaging' is what the JWT hook /
     # PLAN_FEATURES (lib/entitlements.ts) references; included in Plus + Premium.
     MESSAGING = "messaging"
+    # Retail & POS (Phase 13 + Phase 15) — bundled add-on ($150/mo). Purchased
+    # separately; NOT included in Core / Plus / Premium PLAN_FEATURES below.
+    # Billing-layer concern lives in subscription_plans (out of scope here).
+    RETAIL_POS = "retail_pos"
 
 
 # Mirrors lib/entitlements.ts PLAN_FEATURES — keep in sync.

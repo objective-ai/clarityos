@@ -37,7 +37,9 @@ export type EntitlementKey =
   // System / admin (role-derived; OWNER-only)
   | "view_system_status"
   // CRM (Phase 12)
-  | "messaging";
+  | "messaging"
+  // Retail & POS (Phase 13 + Phase 15) — bundled add-on
+  | "retail_pos";
 
 // ---------------------------------------------------------------------------
 // Staff role — mirrors Python StaffRole enum
