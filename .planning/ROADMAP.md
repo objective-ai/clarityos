@@ -41,7 +41,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 10.4 | 7/7 | Complete   | 2026-04-21 | — |
 | 11 | 4/4 | Complete    | 2026-04-21 | — |
 | 12 | 7/11 | In Progress|  | — |
-| 13 | 10/15 | In Progress|  | — |
+| 13 | 11/15 | In Progress|  | — |
 | 14 | Optical Order Configuration | 0/? | Not started | — |
 | 15 | Point of Sale | 0/? | Not started | — |
 | 16 | Reporting & Exports | 0/? | Not started | — |
@@ -151,7 +151,7 @@ Plans:
   3. Placing an order decrements stock; low-stock items show warning badge
   4. Inventory page shows stock levels filterable by product type
   5. Patient detail page shows order history with status and delivery date
-**Plans:** 10/15 plans executed
+**Plans:** 11/15 plans executed
 
 Plans:
 - [ ] 13-00-PLAN.md — Wave 0 test foundation: pytest stubs (atomicity, lifecycle, rollup, permissions, contract, seed) + conftest factories + vitest stubs + Playwright spec skeleton (covers INV-13)
