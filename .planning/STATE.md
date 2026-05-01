@@ -261,6 +261,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 - [api] Port enum validators from `PatientInsuranceCreate` to `PatientInsuranceUpdate` (PATCH currently accepts garbage enum values; surfaced 2026-05-01 audit gap #3)
+- [api] Enforce `VIEW_SYSTEM_STATUS` on `/api/system/health/` + `/api/uptime/` — currently unauthenticated; FE entitlement is security theater (surfaced 2026-05-01 audit gap #2/#4)
 
 ### Blockers/Concerns
 
