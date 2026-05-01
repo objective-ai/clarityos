@@ -42,12 +42,16 @@ const PatientBillingTab = dynamic(
   () => import("@/components/patient/PatientBillingTab").then((m) => ({ default: m.PatientBillingTab })),
   { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
 );
+const MessagesTab = dynamic(
+  () => import("@/components/patients/MessagesTab").then((m) => ({ default: m.MessagesTab })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
 
 // ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing";
+type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing" | "messages";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "demographics", label: "Patient Info" },
@@ -56,6 +60,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "rx-history", label: "Rx History" },
   { key: "insurance", label: "Insurance" },
   { key: "billing", label: "Billing" },
+  { key: "messages", label: "Messages" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -546,6 +551,9 @@ export default function PatientDetailPage() {
         )}
         {activeTab === "insurance" && <InsuranceTab patientId={patientId} />}
         {activeTab === "billing" && <PatientBillingTab patientId={patientId} />}
+        {activeTab === "messages" && (
+          <MessagesTab patientId={patientId} patientFirstName={patient.firstName} />
+        )}
       </div>
     </div>
   );
