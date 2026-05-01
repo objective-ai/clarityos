@@ -260,7 +260,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None.
+- [api] Port enum validators from `PatientInsuranceCreate` to `PatientInsuranceUpdate` (PATCH currently accepts garbage enum values; surfaced 2026-05-01 audit gap #3)
 
 ### Blockers/Concerns
 
