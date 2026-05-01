@@ -925,3 +925,189 @@ async def update_preferences(
 
     await db.commit()
     return _build_channel_preference(patient_id, contact)
+
+
+# ---------------------------------------------------------------------------
+# Onboarding wizard (Plan 12-10)
+# ---------------------------------------------------------------------------
+
+
+def _require_owner(ctx: TenantContext) -> None:
+    if (ctx.role or "").lower() != "owner":
+        raise HTTPException(status_code=403, detail="OWNER role required")
+
+
+@router.post("/onboarding/provision-number")
+async def onboarding_provision_number(
+    payload: dict,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Provision a real Twilio local number in the requested area code and
+    persist it on tenant.settings_jsonb.messaging.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from backend.services.messaging.twilio_client import (
+        NoNumberAvailable,
+        provision_local_number,
+    )
+
+    _require_owner(ctx)
+    area_code = (payload or {}).get("area_code")
+    if not area_code or not str(area_code).isdigit() or len(str(area_code)) != 3:
+        raise HTTPException(status_code=422, detail="area_code must be a 3-digit string")
+
+    tenant = (
+        await db.execute(select(Tenant).where(Tenant.id == ctx.tenant_id))
+    ).scalar_one()
+    settings_dict = dict(tenant.settings_jsonb or {})
+    msg = dict(settings_dict.get("messaging") or {})
+    msid = msg.get("twilio_messaging_service_sid") or settings.TWILIO_MESSAGING_SERVICE_SID
+    if not msid:
+        raise HTTPException(
+            status_code=400,
+            detail="TWILIO_MESSAGING_SERVICE_SID not configured for this tenant",
+        )
+
+    try:
+        result = await provision_local_number(
+            area_code=str(area_code),
+            friendly_name=f"{tenant.name} - ClarityOS",
+            messaging_service_sid=msid,
+        )
+    except NoNumberAvailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    msg["twilio_messaging_service_sid"] = msid
+    msg["twilio_phone_number"] = result["phone_number"]
+    msg["twilio_phone_sid"] = result["sid"]
+    settings_dict["messaging"] = msg
+    tenant.settings_jsonb = settings_dict
+    flag_modified(tenant, "settings_jsonb")
+    await db.commit()
+    return {"phone_number": result["phone_number"], "sid": result["sid"]}
+
+
+@router.post("/onboarding/seed-templates")
+async def onboarding_seed_templates(
+    payload: dict,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Seed industry-pack templates for the tenant. Idempotent."""
+    from backend.services.messaging.seeds import seed_default_templates
+
+    _require_owner(ctx)
+    practice_type = (payload or {}).get("practice_type", "optometry")
+    if practice_type not in ("optometry", "ophthalmology", "general"):
+        raise HTTPException(status_code=422, detail="invalid practice_type")
+    count = await seed_default_templates(db, ctx.tenant_id, practice_type)
+    await db.commit()
+    return {"seeded": count, "practice_type": practice_type}
+
+
+@router.post("/onboarding/test-send")
+async def onboarding_test_send(
+    payload: dict,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Send a real test SMS + email to OWNER's contact via the provider clients
+    directly. Bypasses the patient-bound dispatch path. Records audit but does
+    NOT flip messaging_enabled.
+    """
+    from backend.services.messaging.email_client import send_email
+    from backend.services.messaging.twilio_client import send_sms
+
+    _require_owner(ctx)
+    owner_phone = (payload or {}).get("owner_phone")
+    owner_email = (payload or {}).get("owner_email")
+    if not owner_phone or not owner_email:
+        raise HTTPException(
+            status_code=422,
+            detail="owner_phone and owner_email required",
+        )
+
+    tenant = await _fetch_tenant(db, ctx)
+    msid = tenant.get("twilio_messaging_service_sid")
+    if not msid:
+        raise HTTPException(
+            status_code=400,
+            detail="Twilio Messaging Service not provisioned (run step 3 first)",
+        )
+
+    sms_body = (
+        "ClarityOS test: messaging is configured. "
+        "Reply STOP to opt out at any time."
+    )
+    email_subject = "ClarityOS messaging test"
+    email_html = (
+        "<p>ClarityOS test: messaging is configured.</p>"
+        "<p>You can unsubscribe at any time.</p>"
+    )
+
+    sms_sid = await send_sms(
+        body=sms_body,
+        to=owner_phone,
+        status_callback_url=_callback_url("sms"),
+        messaging_service_sid=msid,
+    )
+    email_id = await send_email(
+        subject=email_subject,
+        html=email_html,
+        to=owner_email,
+        idempotency_key=f"onboarding-test-{ctx.tenant_id}",
+    )
+
+    await log_action(
+        db,
+        ctx,
+        AuditAction.MESSAGE_SENT,
+        "tenant",
+        ctx.tenant_id,
+        metadata={
+            "trigger": "onboarding_test_send",
+            "sms_sid": sms_sid,
+            "email_id": email_id,
+        },
+    )
+    await db.commit()
+    return {"sms_sid": sms_sid, "email_id": email_id}
+
+
+@router.post("/onboarding/activate")
+async def onboarding_activate(
+    payload: dict,
+    ctx: Annotated[TenantContext, Depends(get_current_tenant)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Flip tenant.settings_jsonb.messaging.messaging_enabled = true. OWNER only.
+
+    Triggered by the wizard's "I Received Them" confirmation in step 7.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    _require_owner(ctx)
+    tenant = (
+        await db.execute(select(Tenant).where(Tenant.id == ctx.tenant_id))
+    ).scalar_one()
+    settings_dict = dict(tenant.settings_jsonb or {})
+    msg = dict(settings_dict.get("messaging") or {})
+    was_enabled = bool(msg.get("messaging_enabled", False))
+    msg["messaging_enabled"] = True
+    settings_dict["messaging"] = msg
+    tenant.settings_jsonb = settings_dict
+    flag_modified(tenant, "settings_jsonb")
+
+    if not was_enabled:
+        await log_action(
+            db,
+            ctx,
+            AuditAction.MESSAGING_ENABLED,
+            "tenant",
+            ctx.tenant_id,
+            metadata={"trigger": "onboarding_wizard"},
+        )
+    await db.commit()
+    return {"messaging_enabled": True}

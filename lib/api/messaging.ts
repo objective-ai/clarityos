@@ -91,4 +91,27 @@ export const messagingApi = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  provisionNumber: (areaCode: string) =>
+    apiFetch<{ phone_number: string; sid: string }>(
+      `/api/messaging/onboarding/provision-number`,
+      { method: "POST", body: JSON.stringify({ area_code: areaCode }) },
+    ),
+  seedTemplates: (practiceType: "optometry" | "ophthalmology" | "general") =>
+    apiFetch<{ seeded: number; practice_type: string }>(
+      `/api/messaging/onboarding/seed-templates`,
+      { method: "POST", body: JSON.stringify({ practice_type: practiceType }) },
+    ),
+  onboardingTestSend: (ownerPhone: string, ownerEmail: string) =>
+    apiFetch<{ sms_sid: string; email_id: string }>(
+      `/api/messaging/onboarding/test-send`,
+      {
+        method: "POST",
+        body: JSON.stringify({ owner_phone: ownerPhone, owner_email: ownerEmail }),
+      },
+    ),
+  activateMessaging: () =>
+    apiFetch<{ messaging_enabled: boolean }>(
+      `/api/messaging/onboarding/activate`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
 };
