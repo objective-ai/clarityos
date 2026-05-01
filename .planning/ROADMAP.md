@@ -40,7 +40,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 10.3 | 6/7 | Complete    | 2026-04-29 | — |
 | 10.4 | 7/7 | Complete   | 2026-04-21 | — |
 | 11 | 4/4 | Complete    | 2026-04-21 | — |
-| 12 | 4/11 | In Progress|  | — |
+| 12 | 7/11 | In Progress|  | — |
 | 13 | Retail Inventory | 0/? | Not started | — |
 | 14 | Optical Order Configuration | 0/? | Not started | — |
 | 15 | Point of Sale | 0/? | Not started | — |
@@ -127,7 +127,7 @@ Plans:
   3. Recall reminders triggered for patients with no appointment in last 12 months
   4. Patients can opt out of SMS; opt-out stored and respected
   5. Message history (sent, delivered, failed) viewable per patient
-**Plans:** 4/11 plans executed
+**Plans:** 7/11 plans executed
 
 Plans:
 - [ ] 12-00-wave0-foundation-PLAN.md — Install Twilio/Resend/Svix/freezegun deps; create messaging test scaffold (conftest, fixtures, PHI corpus, Playwright stubs); Resend BAA HIPAA checkpoint
