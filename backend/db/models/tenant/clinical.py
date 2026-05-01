@@ -378,6 +378,20 @@ class Appointment(TimestampMixin, TenantBase):
         DateTime(timezone=True), nullable=True
     )
 
+    # Phase 12 CRM reminder cadence (alembic 0016) — tracked per-appointment to keep
+    # the 5-min scheduler tick idempotent. patient_confirmed_at = patient replied YES
+    # to a reminder; reminders_sent_count is the touch index (0=none, 1=after 7d, etc).
+    patient_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reminder_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    last_reminder_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reminders_sent_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
+
     # Intake (Phase 7) — null = no intake sent, "pending" = link sent, "submitted" = form received
     intake_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # AI triage results: {urgency: "routine"|"moderate"|"urgent", flags: str[], reasoning: str}

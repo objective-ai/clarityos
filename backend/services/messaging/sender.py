@@ -83,6 +83,7 @@ class DispatchRequest:
     admin_override_cost_cap: bool = False
     language: Literal["en", "es"] = "en"
     rendered_html: str | None = None  # email pre-rendered via BFF
+    bundled_appointment_ids: list[UUID] | None = None  # CRM-19: household-bundled reminder fan-out
 
 
 async def dispatch(
@@ -198,6 +199,11 @@ async def dispatch(
             "purpose": req.purpose,
             "batch_id": str(req.batch_id) if req.batch_id else None,
             "recipient_kind": recipient.kind,
+            "bundled_appointment_ids": (
+                [str(a) for a in req.bundled_appointment_ids]
+                if req.bundled_appointment_ids
+                else None
+            ),
         },
     )
 
