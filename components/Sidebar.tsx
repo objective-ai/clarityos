@@ -150,6 +150,7 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
     { label: "Patients", href: `${base}/patients`, icon: Icon.Patients, requiredEntitlement: Entitlement.PATIENT_DEMOGRAPHICS },
     { label: "Analytics", href: `${base}/analytics`, icon: Icon.Analytics, requiredEntitlement: Entitlement.ADVANCED_ANALYTICS },
     { label: "Optical", href: `${base}/optical`, icon: Icon.Optical },
+    { label: "Inventory", href: `${base}/inventory`, icon: Icon.Optical, requiredEntitlement: Entitlement.RETAIL_POS },
     { label: "Billing", href: `${base}/billing`, icon: Icon.Billing, requiredRoles: ["doctor", "admin", "owner"] },
   ];
 
