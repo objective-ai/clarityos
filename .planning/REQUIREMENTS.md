@@ -151,7 +151,7 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **INV-10**: Cancelling a `placed` order atomically restocks Product.stock_qty for each line item AND writes one `InventoryTransaction` per line with `reason='order_cancelled'` AND writes audit `OPTICAL_ORDER_CANCEL` — all in the same primary TXN
 - [ ] **INV-11**: Concurrent `POST /optical-orders/{id}/place` calls against orders sharing a Product cannot over-decrement stock — enforced via `SELECT ... FOR UPDATE` (`with_for_update()`) on the Product row inside the place handler before mutating `stock_qty`
 - [ ] **INV-12**: Zero-stock soft-block — placing an order with `stock_qty <= 0` returns 200 with a warning marker (toast on FE), does NOT 4xx; allows the order to be created/placed (mirrors Phase 10.2 overbooking pattern)
-- [ ] **INV-13**: Pydantic `by_alias=True` snake↔camel contract test for `ProductResponse` and `OpticalOrderResponse` — backend pytest snapshot of `model_dump(by_alias=True)` matches a TS literal-keys assertion in vitest (per `feedback_contract_tests.md`)
+- [x] **INV-13**: Pydantic `by_alias=True` snake↔camel contract test for `ProductResponse` and `OpticalOrderResponse` — backend pytest snapshot of `model_dump(by_alias=True)` matches a TS literal-keys assertion in vitest (per `feedback_contract_tests.md`)
 - [x] **INV-14**: `retail_pos` entitlement key added to BOTH `backend/core/entitlements.py` `Entitlement` enum AND `lib/entitlements.ts` `Entitlement` const + `ENTITLEMENT_META` (label "Retail & POS", plan "Add-on") — and explicitly NOT added to `PLAN_FEATURES["Core"]`, `["Plus"]`, or `["Premium"]` arrays
 - [ ] **INV-15**: `OrderDetailDrawer` component — 480px right-slide drawer with ESC + backdrop close, hydration safety (`if (!open && !order) return null`), rendering line items, status timeline, and Cancel CTA gated on `CANCEL_OPTICAL_ORDER` permission; mirrors `AppointmentDetailDrawer.tsx`
 - [ ] **INV-16**: Encounter optical-queue card status rollup — any related `OpticalOrder.status == 'placed'` for that encounter → display `in_progress`; orders exist AND all are `dispensed` → display `dispensed`; otherwise fall back to `Encounter.optical_status` (Phase 6 column unchanged); cancelled-only orders treated as "no live orders" → fall back
@@ -327,7 +327,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INV-10 | Phase 13 | Pending |
 | INV-11 | Phase 13 | Pending |
 | INV-12 | Phase 13 | Pending |
-| INV-13 | Phase 13 | Pending |
+| INV-13 | Phase 13 | Complete |
 | INV-14 | Phase 13 | Complete |
 | INV-15 | Phase 13 | Pending |
 | INV-16 | Phase 13 | Pending |
