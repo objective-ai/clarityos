@@ -192,6 +192,42 @@ class AuditAction(str, enum.Enum):
     RECALL_QUEUE_RUN_COMPLETED = "recall_queue_run_completed"
     MESSAGING_ENABLED = "messaging_enabled"
     MESSAGING_DISABLED = "messaging_disabled"
+    # Phase 13 — Retail Inventory & Optical Orders (migration 0017)
+    # Stored as VARCHAR(50); no ALTER TYPE needed (see 0008_claims_basics.py:78).
+    PRODUCT_CREATE = "product_create"
+    PRODUCT_UPDATE = "product_update"
+    PRODUCT_DEACTIVATE = "product_deactivate"
+    STOCK_RECEIVE = "stock_receive"
+    STOCK_ADJUST = "stock_adjust"
+    OPTICAL_ORDER_CREATE = "optical_order_create"
+    OPTICAL_ORDER_PLACE = "optical_order_place"
+    OPTICAL_ORDER_CANCEL = "optical_order_cancel"
+    OPTICAL_ORDER_DISPENSE = "optical_order_dispense"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13 — Retail Inventory & Optical Orders enums
+# Stored as VARCHAR with CHECK constraints in DB (per backend-python.md).
+# ---------------------------------------------------------------------------
+
+
+class ProductType(str, enum.Enum):
+    FRAME = "frame"
+    CONTACT_LENS = "contact_lens"
+
+
+class OrderStatus(str, enum.Enum):
+    DRAFT = "draft"
+    PLACED = "placed"
+    DISPENSED = "dispensed"
+    CANCELLED = "cancelled"
+
+
+class InventoryReason(str, enum.Enum):
+    ORDER_PLACED = "order_placed"
+    ORDER_CANCELLED = "order_cancelled"
+    RECEIVE_STOCK = "receive_stock"
+    MANUAL_ADJUST = "manual_adjust"
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +563,13 @@ class Encounter(TimestampMixin, SoftDeleteMixin, TenantBase):
     addenda: Mapped[list["EncounterAddendum"]] = relationship(
         "EncounterAddendum", back_populates="encounter",
         cascade="all, delete-orphan", order_by="EncounterAddendum.created_at"
+    )
+    # Phase 13 — Retail Inventory & Optical Orders (migration 0017).
+    # Optical-queue rollup (INV-16) reads OpticalOrder.status to compute
+    # encounter optical status; nullable encounter_id supports walk-in orders.
+    optical_orders: Mapped[list["OpticalOrder"]] = relationship(
+        "OpticalOrder", back_populates="encounter",
+        order_by="OpticalOrder.created_at",
     )
 
     def __repr__(self) -> str:
@@ -1425,3 +1468,256 @@ class StaffAttendance(TenantBase):
 
     def __repr__(self) -> str:
         return f"<StaffAttendance staff_id={self.staff_id} date={self.date}>"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13 — Retail Inventory & Optical Orders
+# Tables created in migration 0017_retail_inventory.
+# Enum-like columns stored as VARCHAR (per backend-python.md).
+# ---------------------------------------------------------------------------
+
+
+class Product(TimestampMixin, SoftDeleteMixin, TenantBase):
+    """Retail catalog item — frame or contact lens.
+
+    Variants (color/size for frames, base curve/power for contacts) are each
+    their own row sharing brand+model. JSONB ``attributes`` carries
+    type-specific fields (frame: color/eye_size/material; contact: modality/
+    base_curve/diameter/power). Soft delete via ``is_active=false`` preserves
+    historical SKUs for past order references.
+    """
+
+    __tablename__ = "products"
+    __table_args__ = (
+        Index(
+            "ix_products_tenant_type_active",
+            "tenant_id", "product_type", "is_active",
+        ),
+        CheckConstraint(
+            "product_type IN ('frame', 'contact_lens')",
+            name="ck_product_type",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    product_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    brand: Mapped[str] = mapped_column(String(100), nullable=False)
+    model: Mapped[str] = mapped_column(String(200), nullable=False)
+    sku: Mapped[str] = mapped_column(String(100), nullable=False)
+    upc: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    attributes: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    retail_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    cost_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    stock_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reorder_threshold: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # --- Relationships ---
+    transactions: Mapped[list["InventoryTransaction"]] = relationship(
+        "InventoryTransaction", back_populates="product",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Product {self.brand} {self.model} sku={self.sku}>"
+
+
+class OpticalOrder(TimestampMixin, TenantBase):
+    """Patient-bound retail order — frames + contacts (Phase 13 thin primitive).
+
+    Status lifecycle: ``draft`` -> ``placed`` -> ``dispensed``; cancellation
+    permitted from ``draft`` or ``placed``. Stock decrements on ``placed``
+    and restocks on ``cancelled`` (both via ``InventoryTransaction`` rows in
+    the same primary TXN). Encounter linkage is optional to support walk-in
+    contact-lens refills. Phase 14 will ``ADD COLUMN`` for lens config.
+    """
+
+    __tablename__ = "optical_orders"
+    __table_args__ = (
+        Index(
+            "ix_optical_orders_tenant_patient",
+            "tenant_id", "patient_id",
+        ),
+        CheckConstraint(
+            "status IN ('draft','placed','dispensed','cancelled')",
+            name="ck_optical_order_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("patients.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    encounter_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("encounters.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="draft", server_default="draft"
+    )
+    total_price: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00"),
+        server_default="0.00",
+    )
+    created_by_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    placed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    dispensed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # --- Relationships ---
+    line_items: Mapped[list["OpticalOrderLineItem"]] = relationship(
+        "OpticalOrderLineItem", back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OpticalOrderLineItem.created_at",
+        lazy="selectin",
+    )
+    encounter: Mapped["Encounter | None"] = relationship(
+        "Encounter", back_populates="optical_orders"
+    )
+    created_by: Mapped["Staff"] = relationship(
+        "Staff", foreign_keys=[created_by_id]
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<OpticalOrder patient_id={self.patient_id} "
+            f"status={self.status} total={self.total_price}>"
+        )
+
+
+class OpticalOrderLineItem(TenantBase):
+    """A single product line on an OpticalOrder.
+
+    Locked once parent order transitions to ``placed`` — cancel-and-recreate
+    is the only edit path in Phase 13. Phase 14 will ``ADD COLUMN`` for
+    lens type, coatings, fitting measurements, vision plan.
+    """
+
+    __tablename__ = "optical_order_line_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("optical_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    qty: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # --- Relationships ---
+    order: Mapped["OpticalOrder"] = relationship(
+        "OpticalOrder", back_populates="line_items"
+    )
+    product: Mapped["Product"] = relationship("Product")
+
+    def __repr__(self) -> str:
+        return (
+            f"<OpticalOrderLineItem order_id={self.order_id} "
+            f"product_id={self.product_id} qty={self.qty}>"
+        )
+
+
+class InventoryTransaction(TenantBase):
+    """Append-only audit log for stock movements.
+
+    ``delta`` is signed: negative on ``order_placed`` / ``manual_adjust``
+    decrements; positive on ``order_cancelled`` / ``receive_stock`` /
+    ``manual_adjust`` increments. Always written in the primary TXN
+    alongside the ``Product.stock_qty`` mutation
+    (per .claude/rules/clinical-safety.md).
+    """
+
+    __tablename__ = "inventory_transactions"
+    __table_args__ = (
+        Index(
+            "ix_inventory_transactions_product",
+            "product_id", "created_at",
+        ),
+        CheckConstraint(
+            "reason IN ('order_placed','order_cancelled','receive_stock','manual_adjust')",
+            name="ck_inventory_reason",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(30), nullable=False)
+    optical_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("optical_orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    staff_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    po_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # --- Relationships ---
+    product: Mapped["Product"] = relationship(
+        "Product", back_populates="transactions"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<InventoryTransaction product_id={self.product_id} "
+            f"delta={self.delta} reason={self.reason}>"
+        )
