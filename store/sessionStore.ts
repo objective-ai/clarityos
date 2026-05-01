@@ -89,3 +89,10 @@ export const useCurrentUser = () => useSessionStore((s) => s.session?.user ?? nu
 
 /** Returns the tenant context or null */
 export const useCurrentTenant = () => useSessionStore((s) => s.session?.tenant ?? null);
+
+// Dev/test only — expose on window so Playwright specs can read/mutate the
+// live store (e.g., strip an entitlement to assert UI gating). Stripped from
+// production builds via the isDev guard.
+if (isDev && typeof window !== "undefined") {
+  (window as unknown as { __SESSION_STORE__?: typeof useSessionStore }).__SESSION_STORE__ = useSessionStore;
+}
