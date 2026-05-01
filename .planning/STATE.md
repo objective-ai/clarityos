@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 13-01-PLAN.md (ORM + migration 0017)
-last_updated: "2026-05-01T19:33:39.207Z"
+stopped_at: Completed 13-08-PLAN.md (retail inventory seed)
+last_updated: "2026-05-01T19:38:22.730Z"
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 55
-  completed_plans: 44
+  completed_plans: 46
 ---
 
 ---
@@ -106,6 +106,8 @@ Plan: 2 of 15
 | Phase 13 P03 | 3min | 2 tasks | 4 files |
 | Phase 13-retail-inventory P00 | 5min | 2 tasks | 10 files |
 | Phase 13 P01 | 25min | 2 tasks | 2 files |
+| Phase 13-retail-inventory P08 | 2min | 1 tasks | 1 files |
+| Phase 13-retail-inventory P06 | 2min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -237,6 +239,10 @@ Recent decisions affecting current work:
 - [Phase 13-01]: JSONB server_default uses sa.text() to bypass SQLAlchemy double-quoting under asyncpg driver
 - [Phase 13-01]: Partial unique index on (tenant_id, sku) WHERE is_active=true mirrors PatientInsurance pattern from Phase 10.1 — preserves historical SKUs
 - [Phase 13-01]: OpticalOrder.created_by uses explicit foreign_keys=[created_by_id] to avoid Staff multi-FK ambiguity
+- [Phase 13-retail-inventory]: 13-08: Idempotent seed pre-checks (tenant_id, sku, is_active=true) — matches partial unique index from migration 0017; re-runs of python backend/seed_db.py add zero rows
+- [Phase 13-retail-inventory]: 13-08: snake_case JSONB attribute keys (eye_size, base_curve, box_size, etc.) preserved end-to-end per Pitfall 1 — frame attrs has 8 keys, contact attrs has 6 keys
+- [Phase 13-retail-inventory]: 13-06: All 9 BFF routes use Promise<{ ... }> async params shape (matches dominant Next.js 14 convention; 46 of 54 existing dynamic-segment BFF routes use it)
+- [Phase 13-retail-inventory]: 13-06: Trailing slash on every upstream URL including action endpoints (place/cancel/dispense/receive/adjust) per .claude/rules/bff-api.md — without it FastAPI returns 307 that drops auth headers
 
 ### Pending Todos
 
@@ -248,8 +254,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-01T19:32:54.925Z
-Stopped at: Completed 13-01-PLAN.md (ORM + migration 0017)
+Last session: 2026-05-01T19:38:16.239Z
+Stopped at: Completed 13-08-PLAN.md (retail inventory seed)
 Resume file: None
 
 **Phase 9 Overview:**
