@@ -41,29 +41,32 @@ created: 2026-04-30
 
 ## Per-Task Verification Map
 
+<!-- m7 reconciliation 2026-05-01: filenames updated to match 13-00 actual files. nyquist_compliant remains false until execution. -->
+
 > Final task IDs assigned by gsd-planner. The map below is the requirement-to-test seed; planner extends with `{plan}-{task}` IDs.
 
-| Plan (anticipated) | Wave | Requirement | Test Type | Automated Command | File Status |
+| Plan | Wave | Requirement | Test Type | Automated Command | File Status |
 |---|---|---|---|---|---|
-| 00-test-foundation | 0 | INV-VALID | infrastructure | `cd backend && pytest tests/test_inventory.py --collect-only` | ❌ W0 — create stubs |
-| 01-product-model | 1 | INV-06 (Product schema) | unit/orm | `cd backend && pytest tests/test_inventory.py::test_product_create_with_attrs -x` | ❌ W0 |
-| 01-product-model | 1 | INV-07 (partial unique SKU index) | migration/integration | `cd backend && pytest tests/test_inventory.py::test_sku_unique_only_when_active -x` | ❌ W0 |
-| 02-inventory-routes | 1 | INV-01 (admin CRUD) | api integration | `cd backend && pytest tests/test_inventory_routes.py::test_product_crud -x` | ❌ W0 |
-| 02-inventory-routes | 1 | INV-08 (restock writes audit) | api integration | `cd backend && pytest tests/test_inventory_routes.py::test_receive_stock_writes_audit -x` | ❌ W0 |
-| 03-optical-order-model | 1 | INV-09 (OpticalOrder + LineItem schema) | unit/orm | `cd backend && pytest tests/test_optical_orders.py::test_order_create_draft -x` | ❌ W0 |
-| 04-order-routes | 2 | INV-02 (create order from Rx) | api integration | `cd backend && pytest tests/test_optical_order_routes.py::test_create_order_with_rx -x` | ❌ W0 |
-| 04-order-routes | 2 | INV-03 (place decrements stock — atomicity) | transaction | `cd backend && pytest tests/test_optical_order_routes.py::test_place_decrements_stock_atomically -x` | ❌ W0 — **CRITICAL** |
-| 04-order-routes | 2 | INV-10 (cancel restocks) | transaction | `cd backend && pytest tests/test_optical_order_routes.py::test_cancel_restocks_atomically -x` | ❌ W0 — **CRITICAL** |
-| 04-order-routes | 2 | INV-11 (concurrent place — FOR UPDATE) | transaction | `cd backend && pytest tests/test_optical_order_routes.py::test_concurrent_place_no_oversell -x` | ❌ W0 |
-| 04-order-routes | 2 | INV-12 (zero-stock soft-block warning) | api integration | `cd backend && pytest tests/test_optical_order_routes.py::test_zero_stock_returns_warning -x` | ❌ W0 |
-| 05-bff-routes | 2 | INV-13 (BFF proxy contract) | contract | `cd backend && pytest tests/test_inventory_contracts.py -x` + `npx vitest run lib/__tests__/inventoryContract.test.ts` | ❌ W0 |
-| 06-entitlement-gate | 2 | INV-14 (retail_pos entitlement) | unit BE+FE | `cd backend && pytest tests/test_entitlements.py::test_retail_pos -x` + `npx vitest run lib/__tests__/entitlements.test.ts -t retail_pos` | ❌ W0 |
-| 07-inventory-page | 3 | INV-04 (per-type tabs + filters) | component + E2E | `npx vitest run app/__tests__/inventoryPage.test.tsx` + `npx playwright test inventory.spec.ts -g "filter"` | ❌ W0 |
-| 08-patient-orders-tab | 3 | INV-05 (patient order history) | E2E | `npx playwright test inventory.spec.ts -g "order history"` | ❌ W0 |
-| 09-order-drawer | 3 | INV-15 (order detail drawer) | component | `npx vitest run components/__tests__/OrderDetailDrawer.test.tsx` | ❌ W0 |
-| 10-optical-queue-wire | 3 | INV-16 (encounter rollup) | unit + E2E | `cd backend && pytest tests/test_optical.py::test_encounter_optical_status_rollup -x` + Playwright | ❌ W0 |
-| 11-seed-data | 1 | INV-17 (10 frames + 5 contacts) | smoke | `cd backend && python -m pytest tests/test_seed.py::test_inventory_seed -x` | ❌ W0 |
-| 12-e2e-spec | 4 | INV-01..05 (5 ROADMAP criteria E2E) | E2E | `bash scripts/dev.sh pre-test && npx playwright test inventory.spec.ts` | ❌ W0 |
+| 13-00 | 0 | INV-13 (test foundation) | infrastructure | `cd backend && pytest tests/test_inventory_atomicity.py tests/test_optical_order_lifecycle.py tests/test_optical_queue_rollup.py tests/test_inventory_permissions.py tests/test_optical_order_contract.py tests/test_seed_inventory.py --collect-only` | ✅ W0 stubs |
+| 13-01 | 1 | INV-06 (Product schema) | unit/orm | `cd backend && pytest tests/test_inventory_atomicity.py::test_product_create_with_attrs -x` | ⬜ stub created |
+| 13-01 | 1 | INV-07 (partial unique SKU index) | migration/integration | `cd backend && pytest tests/test_inventory_atomicity.py::test_sku_unique_only_when_active -x` | ⬜ stub created |
+| 13-01 | 1 | INV-09 (OpticalOrder + LineItem schema) | unit/orm | `cd backend && pytest tests/test_optical_order_lifecycle.py::test_order_create_draft -x` | ⬜ stub created |
+| 13-02 | 1 | INV-19 (permission matrix) | unit | `cd backend && pytest tests/test_inventory_permissions.py::test_view_inventory_in_matrix_for_all_roles tests/test_inventory_permissions.py::test_manage_inventory_owner_admin_only tests/test_inventory_permissions.py::test_cancel_optical_order_owner_admin_only -x` | ⬜ stub created |
+| 13-02 | 1 | INV-14 (retail_pos entitlement) | unit BE+FE | `cd backend && pytest tests/test_inventory_permissions.py::test_retail_pos_entitlement_key -x` + `npx vitest run tests/unit/inventoryStore.test.ts -t retail_pos` | ⬜ stub created |
+| 13-03 | 1 | INV-13 (Pydantic by_alias contract) | contract | `cd backend && pytest tests/test_optical_order_contract.py::test_product_response_camel_keys tests/test_optical_order_contract.py::test_optical_order_response_camel_keys -x` | ⬜ stub created |
+| 13-04 | 2 | INV-01 (admin CRUD) | api integration | `cd backend && pytest tests/test_inventory_permissions.py::test_product_create_writes_audit_row -x` | ⬜ stub created |
+| 13-04 | 2 | INV-08 (restock writes audit) | api integration | `cd backend && pytest tests/test_inventory_permissions.py::test_receive_stock_writes_audit -x` | ⬜ stub created |
+| 13-05 | 2 | INV-02 (create order with optional encounter) | api integration | `cd backend && pytest tests/test_optical_order_lifecycle.py::test_walkin_no_encounter -x` | ⬜ stub created |
+| 13-05 | 2 | INV-03 (place decrements stock — atomicity) | transaction | `cd backend && pytest tests/test_inventory_atomicity.py::test_place_decrements_stock_atomically -x` | ⬜ stub created — **CRITICAL** |
+| 13-05 | 2 | INV-10 (cancel restocks) | transaction | `cd backend && pytest tests/test_inventory_atomicity.py::test_cancel_restocks_stock_atomically -x` | ⬜ stub created — **CRITICAL** |
+| 13-05 | 2 | INV-11 (concurrent place — FOR UPDATE) | transaction | `cd backend && pytest tests/test_inventory_atomicity.py::test_concurrent_place_no_negative_stock tests/test_inventory_atomicity.py::test_concurrent_place_no_oversell -x` | ⬜ stub created |
+| 13-05 | 2 | INV-12 (zero-stock soft-block warning) | api integration | `cd backend && pytest tests/test_inventory_atomicity.py::test_zero_stock_returns_warning -x` | ⬜ stub created |
+| 13-05 | 2 | INV-09 (status lifecycle) | unit/orm | `cd backend && pytest tests/test_optical_order_lifecycle.py::test_status_lifecycle_draft_placed_dispensed -x` | ⬜ stub created |
+| 13-07 | 3 | INV-16 (encounter rollup) | unit + E2E | `cd backend && pytest tests/test_optical_queue_rollup.py::test_encounter_optical_status_rollup tests/test_optical_queue_rollup.py::test_rollup_falls_back_when_only_cancelled_orders -x` | ⬜ stub created |
+| 13-08 | 1 | INV-17 (10 frames + 5 contacts seed) | smoke | `cd backend && pytest tests/test_seed_inventory.py::test_inventory_seed -x` | ⬜ stub created |
+| 13-09 | 3 | INV-04 (per-type tabs + filters) + INV-13 round-trip | component + contract | `npx vitest run tests/unit/inventoryStore.test.ts tests/unit/productAttributesRoundTrip.test.ts` | ⬜ stub created |
+| 13-12 | 3 | INV-05 (patient order history) | E2E | `npx playwright test tests/e2e/retail-inventory.spec.ts -g "patient Orders tab"` | ⬜ stub created |
+| 13-14 | 4 | INV-01..05 + INV-12 + INV-14 (5 ROADMAP criteria + soft-block + entitlement gate) | E2E | `bash scripts/dev.sh pre-test && npx playwright test tests/e2e/retail-inventory.spec.ts` | ⬜ stub created |
 
 *Status legend: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky · W0 = created in Wave 0*
 
@@ -73,25 +76,23 @@ created: 2026-04-30
 
 Wave 0 plan (`00-test-foundation` or equivalent) MUST create:
 
-**Backend pytest files:**
-- [ ] `backend/tests/test_inventory.py` — Product ORM stubs, partial-unique-SKU index test, JSONB attribute roundtrip
-- [ ] `backend/tests/test_inventory_routes.py` — list/create/patch/delete/receive/adjust route stubs (httpx AsyncClient)
-- [ ] `backend/tests/test_optical_orders.py` — OpticalOrder + LineItem ORM stubs
-- [ ] `backend/tests/test_optical_order_routes.py` — place/cancel/dispense atomicity stubs (place + cancel happen in **single TXN**, concurrent-place uses `with_for_update()`)
-- [ ] `backend/tests/test_inventory_contracts.py` — Pydantic `by_alias=True` snake↔camel snapshot
-- [ ] `backend/tests/test_entitlements.py::test_retail_pos` — entitlement key wired
-- [ ] `backend/tests/test_seed.py::test_inventory_seed` — 10 frames + 5 contacts present
-- [ ] `backend/conftest.py` — extend with `product_factory`, `optical_order_factory`, `inventory_transaction_factory` fixtures
+<!-- m7 reconciliation 2026-05-01: file list aligned with 13-00 PLAN. -->
 
-**Frontend vitest files:**
-- [ ] `lib/__tests__/inventoryContract.test.ts` — FE/BE contract test consuming OpenAPI snapshot
-- [ ] `lib/__tests__/entitlements.test.ts` — extend with `retail_pos` case
-- [ ] `app/__tests__/inventoryPage.test.tsx` — page renders tabs/filters
-- [ ] `components/__tests__/OrderDetailDrawer.test.tsx` — drawer renders, ESC closes, cancel CTA gated
+**Backend pytest files (created by 13-00):**
+- [x] `backend/tests/test_inventory_atomicity.py` — Product ORM, partial-unique-SKU, place/cancel atomicity, concurrent place, zero-stock soft-block stubs
+- [x] `backend/tests/test_optical_order_lifecycle.py` — OpticalOrder draft/walkin/status-lifecycle stubs
+- [x] `backend/tests/test_optical_queue_rollup.py` — encounter rollup stubs (INV-16)
+- [x] `backend/tests/test_inventory_permissions.py` — permission matrix + retail_pos + audit-row stubs (INV-08, INV-14, INV-18, INV-19)
+- [x] `backend/tests/test_optical_order_contract.py` — Pydantic `by_alias=True` snake↔camel snapshot (INV-13)
+- [x] `backend/tests/test_seed_inventory.py` — INV-17 stub
+- [x] `backend/tests/conftest.py` — extended with `product_factory`, `optical_order_factory`, `inventory_transaction_factory` fixtures
 
-**Playwright E2E files:**
-- [ ] `tests/e2e/inventory.spec.ts` — 5 ROADMAP criteria + zero-stock soft-block + entitlement-hidden state + low-stock badge
-- [ ] `tests/e2e/optical-orders.spec.ts` — create-from-Rx via optical queue + walk-in flow + cancel restock
+**Frontend vitest files (created by 13-00):**
+- [x] `tests/unit/productAttributesRoundTrip.test.ts` — JSONB snake_case round-trip stub (INV-06, INV-13, Pitfall 1)
+- [x] `tests/unit/inventoryStore.test.ts` — store happy-path stubs
+
+**Playwright E2E files (created by 13-00):**
+- [x] `tests/e2e/retail-inventory.spec.ts` — 6-scenario stub (5 ROADMAP criteria + zero-stock soft-block + entitlement-hidden state)
 
 **No new framework installs.** pytest, pytest-asyncio, httpx, vitest, @testing-library/react, @playwright/test all in `requirements.txt` / `package.json`.
 
