@@ -11,6 +11,7 @@ All transitions log via log_action() in primary TXN per .claude/rules/clinical-s
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -25,13 +26,16 @@ from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import (
     AuditAction,
+    InventoryTransaction,
     OpticalOrder,
     OpticalOrderLineItem,
     Product,
 )
 from backend.db.session import get_db
 from backend.schemas.optical_order import (
+    OpticalOrderActionWarning,
     OpticalOrderCreate,
+    OpticalOrderPlaceResponse,
     OpticalOrderResponse,
 )
 
@@ -208,4 +212,306 @@ async def get_order(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    return _order_response(order)
+
+
+# ---------------------------------------------------------------------------
+# POST /{order_id}/place/ — atomic draft -> placed (CROWN JEWEL)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{order_id}/place/",
+    response_model=OpticalOrderPlaceResponse,
+)
+async def place_order(
+    order_id: uuid.UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition draft -> placed atomically with stock decrement.
+
+    Per .claude/rules/clinical-safety.md, this handler MUST execute the
+    following in a single ``db.commit()``:
+      1. ``SELECT ... FOR UPDATE`` on each line's Product row
+         (``with_for_update()``) so concurrent /place calls cannot drive
+         stock below 0 (Pitfall 5 in 13-RESEARCH.md).
+      2. Decrement ``Product.stock_qty`` by ``line.qty``.
+      3. Insert one ``InventoryTransaction(reason='order_placed', delta=-qty)``
+         per line.
+      4. Flip ``order.status`` to 'placed' and stamp ``placed_at``.
+      5. Emit ``AuditAction.OPTICAL_ORDER_PLACE`` via ``log_action``.
+
+    Zero-stock soft-block (CONTEXT §B): if any line's product has
+    ``stock_qty <= 0`` BEFORE decrement, return 200 with
+    ``warnings=[{code:'zero_stock', ...}]`` and let the order place anyway.
+    Mirrors the Phase 10.2 overbooking pattern.
+    """
+    staff = await resolve_staff(ctx, db)
+
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Order is {order.status}; only draft orders can be placed",
+        )
+
+    warnings: list[OpticalOrderActionWarning] = []
+
+    # CRITICAL: row-lock each Product BEFORE mutating to prevent over-decrement
+    # under concurrency. Pitfall 5 (13-RESEARCH.md) — without with_for_update,
+    # two parallel /place calls can both read stock_qty=1 and both decrement
+    # to 0 (then to -1 with no enforcement).
+    for line in order.line_items:
+        product = (
+            await db.execute(
+                select(Product)
+                .where(
+                    Product.id == line.product_id,
+                    Product.tenant_id == ctx.tenant_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one()
+        # Soft-block: warn but allow the transition (CONTEXT §B).
+        if product.stock_qty <= 0:
+            warnings.append(
+                OpticalOrderActionWarning(
+                    code="zero_stock",
+                    product_id=product.id,
+                    message=(
+                        f"{product.sku} is out of stock; order placed anyway "
+                        f"(stock will go negative)."
+                    ),
+                )
+            )
+        elif product.stock_qty <= product.reorder_threshold:
+            warnings.append(
+                OpticalOrderActionWarning(
+                    code="low_stock",
+                    product_id=product.id,
+                    message=(
+                        f"{product.sku} stock is low ({product.stock_qty} remaining)."
+                    ),
+                )
+            )
+        product.stock_qty = product.stock_qty - line.qty
+        db.add(
+            InventoryTransaction(
+                id=uuid.uuid4(),
+                tenant_id=ctx.tenant_id,
+                product_id=product.id,
+                delta=-line.qty,
+                reason="order_placed",
+                optical_order_id=order.id,
+                staff_id=staff.id if staff else None,
+            )
+        )
+
+    order.status = "placed"
+    order.placed_at = datetime.now(timezone.utc)
+
+    await log_action(
+        db, ctx, AuditAction.OPTICAL_ORDER_PLACE, "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        changes={"status": {"old": "draft", "new": "placed"}},
+        detail=(
+            f"Placed optical order {order.id} "
+            f"({len(order.line_items)} line items, total {order.total_price})"
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.flush()
+
+    # Re-fetch with selectinload before commit so the response carries line
+    # items eagerly loaded (per backend-python rules — never db.refresh).
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(OpticalOrder.id == order.id)
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one()
+    await db.commit()
+
+    return OpticalOrderPlaceResponse(order=_order_response(order), warnings=warnings)
+
+
+# ---------------------------------------------------------------------------
+# POST /{order_id}/cancel/ — atomic * -> cancelled (restocks if was placed)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{order_id}/cancel/",
+    response_model=OpticalOrderResponse,
+)
+async def cancel_order(
+    order_id: uuid.UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CANCEL_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel an order atomically; restock if it was 'placed'.
+
+    Cancelling a 'draft' order is a no-stock-movement transition (no
+    InventoryTransaction is written) — only the status flip + audit row.
+    Cancelling a 'placed' order restocks each line (positive delta) and
+    writes one ``InventoryTransaction(reason='order_cancelled')`` per line.
+    All in a single ``db.commit()``.
+    """
+    staff = await resolve_staff(ctx, db)
+
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status == "cancelled":
+        raise HTTPException(status_code=409, detail="Order already cancelled")
+    if order.status == "dispensed":
+        raise HTTPException(status_code=409, detail="Cannot cancel a dispensed order")
+
+    was_placed = order.status == "placed"
+    if was_placed:
+        # Row-lock each Product before restocking — needed to serialise vs any
+        # concurrent /place that might be racing on the same product (Pitfall 5).
+        for line in order.line_items:
+            product = (
+                await db.execute(
+                    select(Product)
+                    .where(
+                        Product.id == line.product_id,
+                        Product.tenant_id == ctx.tenant_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one()
+            product.stock_qty = product.stock_qty + line.qty
+            db.add(
+                InventoryTransaction(
+                    id=uuid.uuid4(),
+                    tenant_id=ctx.tenant_id,
+                    product_id=product.id,
+                    delta=line.qty,
+                    reason="order_cancelled",
+                    optical_order_id=order.id,
+                    staff_id=staff.id if staff else None,
+                )
+            )
+
+    old_status = order.status
+    order.status = "cancelled"
+    order.cancelled_at = datetime.now(timezone.utc)
+
+    await log_action(
+        db, ctx, AuditAction.OPTICAL_ORDER_CANCEL, "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        changes={"status": {"old": old_status, "new": "cancelled"}},
+        detail=(
+            f"Cancelled optical order {order.id}"
+            + (
+                f" (restocked {len(order.line_items)} lines)"
+                if was_placed
+                else ""
+            )
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.flush()
+
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(OpticalOrder.id == order.id)
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one()
+    await db.commit()
+
+    return _order_response(order)
+
+
+# ---------------------------------------------------------------------------
+# POST /{order_id}/dispense/ — placed -> dispensed (no stock movement)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{order_id}/dispense/",
+    response_model=OpticalOrderResponse,
+)
+async def dispense_order(
+    order_id: uuid.UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Transition placed -> dispensed; status + audit row only (no stock movement)."""
+    staff = await resolve_staff(ctx, db)
+
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "placed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Order is {order.status}; only placed orders can be dispensed",
+        )
+
+    order.status = "dispensed"
+    order.dispensed_at = datetime.now(timezone.utc)
+
+    await log_action(
+        db, ctx, AuditAction.OPTICAL_ORDER_DISPENSE, "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        changes={"status": {"old": "placed", "new": "dispensed"}},
+        detail=f"Dispensed optical order {order.id}",
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.flush()
+
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(OpticalOrder.id == order.id)
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one()
+    await db.commit()
+
     return _order_response(order)
