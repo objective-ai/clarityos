@@ -17,8 +17,55 @@ will start to run for real.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
+
+
+# ---------------------------------------------------------------------------
+# ASGI test client with synthetic auth — used by route-level RBAC tests.
+#
+# The override replaces `get_current_tenant` entirely, so no JWT verification,
+# bearer header, or Supabase round-trip happens. Tests can call
+# `set_role("technician")` to change which TenantContext the override returns.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def authed_client():
+    """Yield (TestClient, set_role) for synthetic-auth route tests.
+
+    The fixture is module-scoped so we instantiate the FastAPI app + override
+    once per file, then mutate the role between tests via the closure.
+    """
+    from fastapi.testclient import TestClient
+
+    from backend.core.security import TenantContext, get_current_tenant
+    from backend.main import app
+
+    state = {"role": "doctor", "tenant_id": uuid4()}
+
+    def _override() -> TenantContext:
+        return TenantContext(
+            user_id=uuid4(),
+            tenant_id=state["tenant_id"],
+            role=state["role"],
+            plan_name="Premium",
+        )
+
+    app.dependency_overrides[get_current_tenant] = _override
+
+    def set_role(role: str) -> None:
+        state["role"] = role
+
+    # Don't use `with TestClient(...)` — that fires startup events
+    # (messaging scheduler, etc.) which need a real DB.
+    client = TestClient(app, raise_server_exceptions=False)
+
+    yield client, set_role
+
+    app.dependency_overrides.pop(get_current_tenant, None)
 
 
 @pytest.fixture

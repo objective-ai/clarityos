@@ -273,37 +273,89 @@ async def test_checker_matches_matrix_for_every_role_action_pair(
 
 
 # ---------------------------------------------------------------------------
-# 5. Route-level integration — Wave 0 skip stubs.
+# 5. Route-level integration — TestClient + get_current_tenant override.
 #
-# These need an ASGI TestClient + dependency override for get_current_tenant
-# to inject a synthetic TenantContext per test. Promote when that fixture
-# lands. Each test verifies the actual route (not just the matrix) returns
-# 403 for a denied role — guards against a future route accidentally
-# omitting the require_permission() dependency.
+# Verifies the ACTUAL endpoints (not just the matrix) reject denied roles.
+# Guards against a future route accidentally omitting the
+# require_permission() dependency. Uses `authed_client` from conftest.py
+# which overrides get_current_tenant entirely — no JWT, no DB, the 403
+# fires inside the require_permission() checker before the route body runs.
+#
+# A dummy UUID is used for {encounter_id} / {product_id} / {order_id} —
+# the request never reaches the resolver because authz fails first.
 # ---------------------------------------------------------------------------
 
 
+DUMMY_ID = "00000000-0000-0000-0000-000000000001"
+
+
 class TestRouteLevelEnforcement:
-    def test_technician_cannot_post_ai_scribe_generate(self):
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_technician_cannot_post_ai_scribe_generate(self, authed_client):
+        client, set_role = authed_client
+        set_role("technician")
+        r = client.post(
+            f"/api/encounters/{DUMMY_ID}/ai-scribe",
+            json={"transcript": "x" * 20},
+        )
+        assert r.status_code == 403
+        assert "generate_ai_scribe" in r.json()["detail"]
 
-    def test_technician_cannot_post_ai_scribe_accept(self):
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_technician_cannot_post_ai_scribe_accept(self, authed_client):
+        client, set_role = authed_client
+        set_role("technician")
+        r = client.post(
+            f"/api/encounters/{DUMMY_ID}/ai-scribe/accept",
+            json={"changes": {}},
+        )
+        assert r.status_code == 403
 
-    def test_receptionist_cannot_finalize_encounter(self):
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_receptionist_cannot_finalize_encounter(self, authed_client):
+        client, set_role = authed_client
+        set_role("receptionist")
+        r = client.post(f"/api/encounters/{DUMMY_ID}/finalize", json={})
+        assert r.status_code == 403
+        assert "finalize_encounter" in r.json()["detail"]
 
-    def test_admin_cannot_view_system_status(self):
-        # Owner-only — admin must see 403 even though they outrank doctors.
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_doctor_cannot_manage_inventory(self, authed_client):
+        # Doctor sees inventory levels but cannot create/adjust stock.
+        # Phase 13 retail-inventory routes are double-gated: a `retail_pos`
+        # ENTITLEMENT check fires first, then the role check. Either gate
+        # blocks access; we only assert the 403 here.
+        client, set_role = authed_client
+        set_role("doctor")
+        r = client.post(
+            "/api/inventory/products/",
+            json={
+                "productType": "frame",
+                "brand": "Test",
+                "model": "X",
+                "sku": "FR-X-001",
+                "retailPrice": 100,
+                "costPrice": 40,
+                "stockQty": 0,
+            },
+        )
+        assert r.status_code == 403
 
-    def test_doctor_cannot_manage_inventory(self):
-        # Doctor sees inventory levels but cannot adjust stock.
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_receptionist_cannot_cancel_optical_order(self, authed_client):
+        # See note above — retail_pos entitlement gate fires first.
+        client, set_role = authed_client
+        set_role("receptionist")
+        r = client.post(f"/api/optical-orders/{DUMMY_ID}/cancel/", json={})
+        assert r.status_code == 403
 
-    def test_receptionist_cannot_cancel_optical_order(self):
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_doctor_cannot_view_audit_log(self, authed_client):
+        # Audit log is admin/owner-only.
+        client, set_role = authed_client
+        set_role("doctor")
+        r = client.get("/api/audit-logs")
+        assert r.status_code == 403
+        assert "view_audit_log" in r.json()["detail"]
 
-    def test_unknown_role_in_jwt_returns_403_not_500(self):
-        # Defends against a JWT carrying a stale role string.
-        pytest.skip("needs ASGI client + get_current_tenant override")
+    def test_unknown_role_in_jwt_returns_403_not_500(self, authed_client):
+        # Defends against a JWT carrying a stale or fabricated role string.
+        client, set_role = authed_client
+        set_role("super_admin")
+        r = client.post(f"/api/encounters/{DUMMY_ID}/finalize", json={})
+        assert r.status_code == 403
+        assert "super_admin" in r.json()["detail"]
