@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 13-08-PLAN.md (retail inventory seed)
-last_updated: "2026-05-01T19:38:22.730Z"
+stopped_at: Completed 13-07-PLAN.md (optical-queue status rollup, INV-16)
+last_updated: "2026-05-01T19:40:10.612Z"
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 55
-  completed_plans: 46
+  completed_plans: 48
 ---
 
 ---
@@ -52,7 +52,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 13 (retail-inventory) — EXECUTING
-Plan: 2 of 15
+Plan: 5 of 15
 
 ## Performance Metrics
 
@@ -108,6 +108,8 @@ Plan: 2 of 15
 | Phase 13 P01 | 25min | 2 tasks | 2 files |
 | Phase 13-retail-inventory P08 | 2min | 1 tasks | 1 files |
 | Phase 13-retail-inventory P06 | 2min | 2 tasks | 9 files |
+| Phase 13-retail-inventory P04 | 8min | 2 tasks | 2 files |
+| Phase 13 P07 | 2min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -243,6 +245,13 @@ Recent decisions affecting current work:
 - [Phase 13-retail-inventory]: 13-08: snake_case JSONB attribute keys (eye_size, base_curve, box_size, etc.) preserved end-to-end per Pitfall 1 — frame attrs has 8 keys, contact attrs has 6 keys
 - [Phase 13-retail-inventory]: 13-06: All 9 BFF routes use Promise<{ ... }> async params shape (matches dominant Next.js 14 convention; 46 of 54 existing dynamic-segment BFF routes use it)
 - [Phase 13-retail-inventory]: 13-06: Trailing slash on every upstream URL including action endpoints (place/cancel/dispense/receive/adjust) per .claude/rules/bff-api.md — without it FastAPI returns 307 that drops auth headers
+- [Phase 13-retail-inventory]: 13-04: Used backend.core.security (TenantContext, resolve_staff) — plan reference to backend.core.tenant_context corrected (module does not exist; canonical path matches donor file payer.py)
+- [Phase 13-retail-inventory]: 13-04: Inventory router uses APIRouter(dependencies=[Depends(require_entitlement(Entitlement.RETAIL_POS))]) — typed enum form prevents typo silent-403 traps
+- [Phase 13-07]: [Phase 13-07]: _compute_optical_status extracted as pure module-level helper (no DB) — enables 10 fast SimpleNamespace-mock unit tests bypassing the Wave-0 db_session skip-stub
+- [Phase 13-retail-inventory]: 13-04: Stock-mutation atomicity pattern — Product.stock_qty mutation + db.add(InventoryTransaction(...)) + log_action(STOCK_*) all before single db.commit(); receive blocks inactive (409), adjust permits inactive for count corrections, adjust rejects qty_delta=0 (400)
+- [Phase 13-07]: Cancelled OpticalOrders are filtered OUT of live_orders set — they neither promote nor suppress queue card status; only placed/dispensed enter the rollup decision tree (CONTEXT §C Open Question 3)
+- [Phase 13-07]: Draft OpticalOrders fall through to fallback (do NOT promote to IN_PROGRESS) — only an actual placed (stock-decremented, financial commitment) qualifies for queue-card promotion
+- [Phase 13-07]: Encounter.optical_status column NEVER mutated by rollup — read-side only; Phase 6 PATCH /status semantics + Phase 14 lens-config flow both unaffected
 
 ### Pending Todos
 
@@ -254,8 +263,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-01T19:38:16.239Z
-Stopped at: Completed 13-08-PLAN.md (retail inventory seed)
+Last session: 2026-05-01T19:40:10.609Z
+Stopped at: Completed 13-07-PLAN.md (optical-queue status rollup, INV-16)
 Resume file: None
 
 **Phase 9 Overview:**
