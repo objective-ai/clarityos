@@ -213,6 +213,26 @@ async def _stop_health_pinger() -> None:
         _pinger_task = None
 
 
+# ── Messaging scheduler (Phase 12-06) ─────────────────────────────────────
+# 5-minute tick that fires appointment reminders + cancels expired deferred manuals.
+# Gated by MESSAGING_SCHEDULER_ENABLED env (Pitfall 7) and pg_advisory_lock.
+
+from backend.services.messaging.scheduler import (  # noqa: E402
+    start_scheduler as start_messaging_scheduler,
+    stop_scheduler as stop_messaging_scheduler,
+)
+
+
+@app.on_event("startup")
+async def _start_messaging_scheduler() -> None:
+    start_messaging_scheduler()
+
+
+@app.on_event("shutdown")
+async def _stop_messaging_scheduler() -> None:
+    stop_messaging_scheduler()
+
+
 @app.get("/")
 async def root():
     return {"status": "ClarityOS API is online", "version": "0.1.0"}
