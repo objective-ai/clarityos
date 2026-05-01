@@ -68,6 +68,31 @@ def _safe_optical_status(raw: str | None) -> OpticalStatus:
         return OpticalStatus.WAITING
 
 
+def _compute_optical_status(enc: Encounter) -> OpticalStatus:
+    """Phase 13 — INV-16: roll up optical-queue status from related OpticalOrder rows.
+
+    Per 13-CONTEXT.md §C:
+      - any live order in ``placed``     → IN_PROGRESS
+      - all live orders in ``dispensed`` → DISPENSED
+      - else (no orders, only cancelled, or draft-only) → fall back to
+        ``_safe_optical_status(enc.optical_status)`` so the Phase 6 column
+        keeps controlling the card when Phase 13 has no authoritative state.
+
+    Cancelled orders are filtered out of the live set; they never promote nor
+    suppress the queue status. The Phase 6 ``Encounter.optical_status`` column
+    is NEVER mutated here — this helper only computes the queue API's response.
+
+    Caller MUST eager-load ``Encounter.optical_orders`` via
+    ``selectinload(Encounter.optical_orders)`` to avoid N+1 / MissingGreenlet.
+    """
+    live_orders = [o for o in enc.optical_orders if o.status != "cancelled"]
+    if any(o.status == "placed" for o in live_orders):
+        return OpticalStatus.IN_PROGRESS
+    if live_orders and all(o.status == "dispensed" for o in live_orders):
+        return OpticalStatus.DISPENSED
+    return _safe_optical_status(enc.optical_status)
+
+
 def _compute_se(sphere: Decimal | None, cylinder: Decimal | None) -> Decimal | None:
     """Compute spherical equivalent: SE = sphere + (cylinder / 2)."""
     if sphere is None:
@@ -189,6 +214,9 @@ async def get_optical_queue(
             selectinload(Encounter.refractions),
             selectinload(Encounter.provider),
             selectinload(Encounter.signed_by),
+            # Phase 13 INV-16 — eager-load OpticalOrder rows so the per-encounter
+            # rollup (_compute_optical_status) does not trigger N+1 / MissingGreenlet.
+            selectinload(Encounter.optical_orders),
         )
         .order_by(Encounter.finalized_at.desc())
     )
@@ -217,6 +245,10 @@ async def get_optical_queue(
         provider = enc.signed_by or enc.provider
         patient = enc.patient
 
+        # Phase 13 INV-16 — roll up status from related OpticalOrder rows;
+        # falls back to enc.optical_status when no live orders exist.
+        computed_status = _compute_optical_status(enc)
+
         items.append(
             OpticalQueueItem(
                 encounter_id=enc.id,
@@ -236,7 +268,7 @@ async def get_optical_queue(
                 pd_od=final_rx.pd_od,
                 pd_os=final_rx.pd_os,
                 rx_change_alert=rx_change_alert,
-                status=_safe_optical_status(enc.optical_status),
+                status=computed_status,
             )
         )
 
