@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,10 @@ import {
 import { useOpticalStore } from "@/store/opticalStore";
 import type { OpticalQueueItem, OpticalStatus } from "@/types/optical";
 import { formatClinicTime, formatClinicDate, useClinicTimezone } from "@/lib/timezone";
+import { CreateWalkInOrderModal } from "@/components/orders/CreateWalkInOrderModal";
+import { Entitlement } from "@/lib/entitlements";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import { useCurrentUser } from "@/store/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,6 +95,16 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
   const tz = useClinicTimezone();
   const updateItemStatus = useOpticalStore((s) => s.updateItemStatus);
   const openPrintPreview = useOpticalStore((s) => s.openPrintPreview);
+  const fetchQueue = useOpticalStore((s) => s.fetchQueue);
+
+  const { has } = useEntitlements();
+  const currentUser = useCurrentUser();
+  const role = (currentUser?.role ?? "").toLowerCase();
+  const canCreateOrder =
+    has(Entitlement.RETAIL_POS) &&
+    ["owner", "admin", "technician", "receptionist"].includes(role);
+
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   const statusConfig = STATUS_CONFIG[item.status];
   const nextStatus = STATUS_TRANSITIONS[item.status];
@@ -101,7 +116,7 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
   };
 
   return (
-    <Card className="glass-card glass-card-hover">
+    <Card data-testid="optical-queue-card" className="glass-card glass-card-hover">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -252,8 +267,29 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
                 : "Mark Dispensed"}
             </Button>
           )}
+
+          {canCreateOrder && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setOrderModalOpen(true)}
+              className="bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
+            >
+              + Create Order
+            </Button>
+          )}
         </div>
       </CardContent>
+
+      <CreateWalkInOrderModal
+        open={orderModalOpen}
+        patientId={item.patientId}
+        encounterId={item.encounterId}
+        onClose={() => {
+          setOrderModalOpen(false);
+          void fetchQueue();
+        }}
+      />
     </Card>
   );
 }
