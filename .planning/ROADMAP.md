@@ -151,6 +151,24 @@ Plans:
   3. Placing an order decrements stock; low-stock items show warning badge
   4. Inventory page shows stock levels filterable by product type
   5. Patient detail page shows order history with status and delivery date
+**Plans:** 15 plans
+
+Plans:
+- [ ] 13-00-PLAN.md — Wave 0 test foundation: pytest stubs (atomicity, lifecycle, rollup, permissions, contract, seed) + conftest factories + vitest stubs + Playwright spec skeleton (covers INV-13)
+- [ ] 13-01-PLAN.md — Alembic 0017 + 4 ORM classes (Product, OpticalOrder, OpticalOrderLineItem, InventoryTransaction) + 9 AuditAction values + Encounter.optical_orders back-rel (INV-06, INV-07, INV-09, INV-18)
+- [ ] 13-02-PLAN.md — 5 ClinicalAction values + PERMISSION_MATRIX rows + retail_pos entitlement (BE+FE) explicitly NOT in PLAN_FEATURES (INV-14, INV-19)
+- [ ] 13-03-PLAN.md — Pydantic schemas (ProductCreate/Update/Response, ReceiveStockRequest, AdjustStockRequest, OpticalOrderCreate/Response/PlaceResponse) + TS types (Product, OpticalOrder + payloads); 15-key + 13-key by_alias contract (INV-13)
+- [ ] 13-04-PLAN.md — BE inventory routes: list+CRUD+receive+adjust with primary-TXN audit + InventoryTransaction in same db.commit() (INV-01, INV-08, INV-18)
+- [ ] 13-05-PLAN.md — BE optical-order routes: create/list/detail/place/cancel/dispense; with_for_update() row-lock on Product; zero-stock soft-block returns 200+warnings; primary-TXN atomicity (INV-02, INV-03, INV-10, INV-11, INV-12, INV-18)
+- [ ] 13-06-PLAN.md — 9 BFF proxy routes (4 inventory, 5 optical-orders) via proxyToFastAPI with trailing-slash upstream URLs (INV-01, INV-02, INV-08, INV-10)
+- [ ] 13-07-PLAN.md — Encounter optical-queue rollup: extend optical.py queue loop with selectinload(Encounter.optical_orders) + computed_status (any-placed → in_progress, all-dispensed → dispensed, else fallback) (INV-16)
+- [ ] 13-08-PLAN.md — backend/seed_db.py extended with _seed_retail_inventory: 10 frames + 5 contacts, idempotent guard on (tenant_id, sku, is_active=true) (INV-17)
+- [ ] 13-09-PLAN.md — inventoryStore (raw fetch + getAuthHeaders to opt out of camelizeKeys for Product.attributes JSONB per Pitfall 1) + Inventory admin page (Frames|Contacts tabs, filter row, low-stock badge) + Sidebar nav gated on RETAIL_POS (INV-04, INV-20)
+- [ ] 13-10-PLAN.md — ProductFormModal (create+edit, type-aware attribute fields with snake_case JSONB keys) + ReceiveStockModal + AdjustStockModal + page wire-in (INV-01, INV-08)
+- [ ] 13-11-PLAN.md — opticalOrderStore (apiFetch — top-level fields camelize-clean; placeOrder returns warnings) + OrderDetailDrawer 480px slide (mirrors AppointmentDetailDrawer: ESC + backdrop + hydration-safe; cancel CTA gated on owner/admin AND non-terminal status) (INV-15)
+- [ ] 13-12-PLAN.md — OrdersTab + CreateWalkInOrderModal (auto-place option surfaces zero-stock warnings) + register Orders tab on patient detail page gated on RETAIL_POS (INV-05)
+- [ ] 13-13-PLAN.md — Wire OpticalQueueCard with Create Order CTA gated on RETAIL_POS + role; opens CreateWalkInOrderModal with encounterId pre-filled; queue refresh on close picks up 13-07 rollup (INV-02)
+- [ ] 13-14-PLAN.md — Implement 6 Playwright scenarios (admin CRUD, place flow, filters, patient orders+drawer+cancel, entitlement gate, zero-stock soft-block) covering 5 ROADMAP success criteria + INV-12 + INV-14
 
 ### Phase 14: Optical Order Configuration
 **Goal**: Complete optical order workflow — frame/lens/coating selection, fitting measurements, vision plan entry, lab job ticket PDF, AI Scribe pre-populated suggestions
