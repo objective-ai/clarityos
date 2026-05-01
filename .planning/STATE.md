@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 13-07-PLAN.md (optical-queue status rollup, INV-16)
-last_updated: "2026-05-01T19:40:10.612Z"
+stopped_at: Completed 13-05-PLAN.md (optical-order routes with atomic stock control)
+last_updated: "2026-05-01T19:41:53.594Z"
 progress:
   total_phases: 12
   completed_phases: 6
   total_plans: 55
-  completed_plans: 48
+  completed_plans: 49
 ---
 
 ---
@@ -110,6 +110,7 @@ Plan: 5 of 15
 | Phase 13-retail-inventory P06 | 2min | 2 tasks | 9 files |
 | Phase 13-retail-inventory P04 | 8min | 2 tasks | 2 files |
 | Phase 13 P07 | 2min | 1 tasks | 2 files |
+| Phase 13 P05 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -252,6 +253,10 @@ Recent decisions affecting current work:
 - [Phase 13-07]: Cancelled OpticalOrders are filtered OUT of live_orders set — they neither promote nor suppress queue card status; only placed/dispensed enter the rollup decision tree (CONTEXT §C Open Question 3)
 - [Phase 13-07]: Draft OpticalOrders fall through to fallback (do NOT promote to IN_PROGRESS) — only an actual placed (stock-decremented, financial commitment) qualifies for queue-card promotion
 - [Phase 13-07]: Encounter.optical_status column NEVER mutated by rollup — read-side only; Phase 6 PATCH /status semantics + Phase 14 lens-config flow both unaffected
+- [Phase 13]: 13-05: Imported TenantContext + resolve_staff from backend.core.security (plan referenced non-existent backend.core.tenant_context); matches all other routes
+- [Phase 13]: 13-05: with_for_update() applied in cancel handler ONLY when was_placed; cancelling a draft writes NO InventoryTransaction since nothing was decremented
+- [Phase 13]: 13-05: Zero-stock soft-block returns HTTP 200 + warnings=[{code:'zero_stock'}] (NOT 4xx); order still places and stock_qty goes negative — mirrors Phase 10.2 overbooking
+- [Phase 13]: 13-05: datetime.now(timezone.utc) for placed_at/cancelled_at/dispensed_at — explicit Python tz-aware timestamps over func.now() for deterministic test assertions
 
 ### Pending Todos
 
@@ -263,8 +268,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-01T19:40:10.609Z
-Stopped at: Completed 13-07-PLAN.md (optical-queue status rollup, INV-16)
+Last session: 2026-05-01T19:41:35.940Z
+Stopped at: Completed 13-05-PLAN.md (optical-order routes with atomic stock control)
 Resume file: None
 
 **Phase 9 Overview:**
