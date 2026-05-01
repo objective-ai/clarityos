@@ -46,7 +46,7 @@ async function withRetry<T>(
  * Returns Authorization and Content-Type headers using the SSR-safe
  * createClient() factory (not the legacy singleton).
  */
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const supabase = createClient();
   const {
     data: { session },
