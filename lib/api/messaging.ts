@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/api-client";
 import type {
   MessageLog,
   MessageTemplate,
@@ -8,41 +9,24 @@ import type {
   MessagingSettings,
 } from "@/types/messaging";
 
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(
-      typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail),
-    );
-  }
-  return res.json() as Promise<T>;
-}
-
 export const messagingApi = {
   getHistory: (patientId: string) =>
-    jsonFetch<MessageLog[]>(`/api/messaging/history/${patientId}`),
+    apiFetch<MessageLog[]>(`/api/messaging/history/${patientId}`),
   getInbox: (filter?: string) =>
-    jsonFetch<InboundMessage[]>(
+    apiFetch<InboundMessage[]>(
       `/api/messaging/inbox${filter ? `?filter_classification=${filter}` : ""}`,
     ),
   getPreferences: (patientId: string) =>
-    jsonFetch<ChannelPreference>(`/api/messaging/preferences/${patientId}`),
+    apiFetch<ChannelPreference>(`/api/messaging/preferences/${patientId}`),
   updatePreferences: (patientId: string, body: Partial<ChannelPreference>) =>
-    jsonFetch<ChannelPreference>(`/api/messaging/preferences/${patientId}`, {
+    apiFetch<ChannelPreference>(`/api/messaging/preferences/${patientId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   getTemplates: () =>
-    jsonFetch<MessageTemplate[]>(`/api/messaging/templates`),
+    apiFetch<MessageTemplate[]>(`/api/messaging/templates`),
   updateTemplate: (id: string, body: Partial<MessageTemplate>) =>
-    jsonFetch<MessageTemplate>(`/api/messaging/templates/${id}`, {
+    apiFetch<MessageTemplate>(`/api/messaging/templates/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
@@ -57,12 +41,12 @@ export const messagingApi = {
     force_outside_quiet_hours?: boolean;
     language?: string;
   }) =>
-    jsonFetch<MessageLog>(`/api/messaging/send`, {
+    apiFetch<MessageLog>(`/api/messaging/send`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   bulkSend: (body: BulkSendRequest) =>
-    jsonFetch<{
+    apiFetch<{
       batchId: string;
       sentCount: number;
       failedCount: number;
@@ -78,18 +62,18 @@ export const messagingApi = {
     channel: string;
     purpose?: string;
   }) =>
-    jsonFetch<{ body: string }>(`/api/messaging/ai-draft`, {
+    apiFetch<{ body: string }>(`/api/messaging/ai-draft`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   getRecallQueue: () =>
-    jsonFetch<{ candidates: RecallCandidate[] }>(`/api/messaging/recall-queue`),
+    apiFetch<{ candidates: RecallCandidate[] }>(`/api/messaging/recall-queue`),
   sendRecallBatch: (body: {
     candidate_patient_ids: string[];
     template_id: string;
     channel: string;
   }) =>
-    jsonFetch<{
+    apiFetch<{
       runId: string;
       sent: number;
       failed: number;
@@ -99,11 +83,11 @@ export const messagingApi = {
       body: JSON.stringify(body),
     }),
   getAnalytics: (rangeDays = 30) =>
-    jsonFetch<unknown>(`/api/messaging/analytics?range_days=${rangeDays}`),
+    apiFetch<unknown>(`/api/messaging/analytics?range_days=${rangeDays}`),
   getSettings: () =>
-    jsonFetch<MessagingSettings>(`/api/messaging/settings`),
+    apiFetch<MessagingSettings>(`/api/messaging/settings`),
   updateSettings: (body: Partial<MessagingSettings>) =>
-    jsonFetch<MessagingSettings>(`/api/messaging/settings`, {
+    apiFetch<MessagingSettings>(`/api/messaging/settings`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),

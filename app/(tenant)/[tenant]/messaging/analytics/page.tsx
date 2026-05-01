@@ -47,13 +47,19 @@ export default function MessagingAnalyticsPage() {
   const [range, setRange] = useState<number>(30);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setLoadError(null);
     messagingApi
       .getAnalytics(range)
       .then((d) => setData(d as AnalyticsResponse))
-      .catch(console.error)
+      .catch((err: unknown) =>
+        setLoadError(
+          err instanceof Error ? err.message : "Failed to load analytics",
+        ),
+      )
       .finally(() => setLoading(false));
   }, [range]);
 
@@ -73,6 +79,16 @@ export default function MessagingAnalyticsPage() {
     a.download = `messaging-${label}-${range}d.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6" role="alert">
+        <p className="text-body text-[var(--state-critical)]">
+          Couldn't load analytics: {loadError}
+        </p>
+      </div>
+    );
   }
 
   if (loading || !data) return <div className="p-6">Loading…</div>;

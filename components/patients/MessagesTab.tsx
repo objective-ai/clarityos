@@ -25,6 +25,7 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
   const [prefs, setPrefs] = useState<ChannelPreference | null>(null);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const isComposerOpen = useMessagingStore((s) => s.isComposerOpen);
   const composerPatientId = useMessagingStore((s) => s.composerPatientId);
   const openComposer = useMessagingStore((s) => s.openComposer);
@@ -33,6 +34,7 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setLoadError(null);
     Promise.all([
       messagingApi.getHistory(patientId),
       messagingApi.getPreferences(patientId),
@@ -44,7 +46,12 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
         setPrefs(p);
         setTemplates(t);
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setLoadError(
+          err instanceof Error ? err.message : "Failed to load messages",
+        );
+      })
       .finally(() => {
         if (alive) setLoading(false);
       });
@@ -76,6 +83,18 @@ export function MessagesTab({ patientId, patientFirstName }: Props) {
     return (
       <Card className="glass-card">
         <CardContent className="p-6">Loading messages…</CardContent>
+      </Card>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Card className="glass-card">
+        <CardContent className="p-6" role="alert">
+          <p className="text-body text-[var(--state-critical)]">
+            Couldn't load messages: {loadError}
+          </p>
+        </CardContent>
       </Card>
     );
   }

@@ -32,6 +32,7 @@ export default function InboxPage() {
   const [prefs, setPrefs] = useState<ChannelPreference | null>(null);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const isComposerOpen = useMessagingStore((s) => s.isComposerOpen);
   const composerPatientId = useMessagingStore((s) => s.composerPatientId);
   const openComposer = useMessagingStore((s) => s.openComposer);
@@ -41,6 +42,7 @@ export default function InboxPage() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setLoadError(null);
     const f = filter === "all" ? undefined : filter;
     Promise.all([messagingApi.getInbox(f), messagingApi.getTemplates()])
       .then(([m, t]) => {
@@ -49,7 +51,12 @@ export default function InboxPage() {
         setTemplates(t);
         setInboxUnreadCount(m.filter((x) => !x.isRead).length);
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setLoadError(
+          err instanceof Error ? err.message : "Failed to load inbox",
+        );
+      })
       .finally(() => {
         if (alive) setLoading(false);
       });
@@ -120,6 +127,12 @@ export default function InboxPage() {
         <CardContent className="flex-1 overflow-y-auto p-0">
           {loading ? (
             <div className="p-4">Loading…</div>
+          ) : loadError ? (
+            <div className="p-4" role="alert">
+              <p className="text-body text-[var(--state-critical)]">
+                Couldn't load inbox: {loadError}
+              </p>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-subhead mb-2">No messages yet</p>
