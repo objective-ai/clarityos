@@ -41,6 +41,11 @@ export const messagingApi = {
     }),
   getTemplates: () =>
     jsonFetch<MessageTemplate[]>(`/api/messaging/templates`),
+  updateTemplate: (id: string, body: Partial<MessageTemplate>) =>
+    jsonFetch<MessageTemplate>(`/api/messaging/templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   sendMessage: (body: {
     patient_id: string;
     channel: string;
