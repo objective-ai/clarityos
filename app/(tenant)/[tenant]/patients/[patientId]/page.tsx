@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Lock, Pencil, X, Check } from "lucide-react";
@@ -11,6 +11,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement, ENTITLEMENT_META } from "@/lib/entitlements";
 import dynamic from "next/dynamic";
 import { usePatientStore } from "@/store/patientStore";
+import { useCurrentUser } from "@/store/sessionStore";
 import type { PatientDetail, PatientUpdatePayload } from "@/types/patient";
 import { formatClinicDate } from "@/lib/timezone";
 
@@ -46,14 +47,18 @@ const MessagesTab = dynamic(
   () => import("@/components/patients/MessagesTab").then((m) => ({ default: m.MessagesTab })),
   { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
 );
+const OrdersTab = dynamic(
+  () => import("@/components/orders/OrdersTab").then((m) => ({ default: m.OrdersTab })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
 
 // ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing" | "messages";
+type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing" | "messages" | "orders";
 
-const TABS: { key: TabKey; label: string }[] = [
+const BASE_TABS: { key: TabKey; label: string }[] = [
   { key: "demographics", label: "Patient Info" },
   { key: "encounters", label: "Encounters" },
   { key: "flowsheets", label: "Flowsheets" },
@@ -434,7 +439,16 @@ export default function PatientDetailPage() {
     patientId: string;
   }>();
   const { has } = useEntitlements();
+  const currentUser = useCurrentUser();
   const [activeTab, setActiveTab] = useState<TabKey>("demographics");
+
+  const tabs = useMemo<{ key: TabKey; label: string }[]>(() => {
+    const next = [...BASE_TABS];
+    if (has(Entitlement.RETAIL_POS)) {
+      next.push({ key: "orders", label: "Orders" });
+    }
+    return next;
+  }, [has]);
 
   const patient = usePatientStore((s) => s.activePatient);
   const loading = usePatientStore((s) => s.detailLoading);
@@ -522,7 +536,7 @@ export default function PatientDetailPage() {
 
       {/* Tab navigation */}
       <div className="flex items-center gap-1 border-b border-[var(--border-subtle)]">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -553,6 +567,9 @@ export default function PatientDetailPage() {
         {activeTab === "billing" && <PatientBillingTab patientId={patientId} />}
         {activeTab === "messages" && (
           <MessagesTab patientId={patientId} patientFirstName={patient.firstName} />
+        )}
+        {activeTab === "orders" && has(Entitlement.RETAIL_POS) && (
+          <OrdersTab patientId={patientId} userRole={currentUser?.role ?? null} />
         )}
       </div>
     </div>
