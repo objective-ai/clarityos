@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 13 context gathered
-last_updated: "2026-05-01T05:48:09.175Z"
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-05-01T19:28:33.217Z"
 progress:
   total_phases: 12
   completed_phases: 6
-  total_plans: 40
-  completed_plans: 40
+  total_plans: 55
+  completed_plans: 41
 ---
 
 ---
@@ -47,12 +47,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Clinicians can complete a full eye exam encounter in a workflow that feels faster than paper, with every action audited and every record tamper-proof.
-**Current focus:** Phase 10.3 — error-monitoring-system-status
+**Current focus:** Phase 13 — retail-inventory
 
 ## Current Position
 
-Phase: 10.3 (error-monitoring-system-status) — EXECUTING
-Plan: 1 of 7
+Phase: 13 (retail-inventory) — EXECUTING
+Plan: 1 of 15
 
 ## Performance Metrics
 
@@ -102,6 +102,7 @@ Plan: 1 of 7
 | Phase 10.3 P02 | 8 | 3 tasks | 7 files |
 | Phase 10.3 P01 | 4 min | 3 tasks | 5 files |
 | Phase 10.3 P04 | 25min | 3 tasks | 10 files |
+| Phase 13-retail-inventory P02 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -222,6 +223,8 @@ Recent decisions affecting current work:
 - [Phase 10.3]: [Phase 10.3-04]: Endpoint tests use direct-handler + fake AsyncSession pattern (not ASGITransport/httpx full-app) because config requires env vars and backend/tests has no conftest
 - [Phase 10.3]: [Phase 10.3-04]: Self-pinger guarded on SENTRY_ENVIRONMENT=='production'; dev/test silent
 - [Phase 10.3]: [Phase 10.3-04]: Self-pinger loop swallows per-iteration exceptions (WARN log) — Sentry captures the real issue; failing probes must not kill the 60s loop
+- [Phase 13-retail-inventory]: 13-02: retail_pos is the first true add-on entitlement — exists in BE Entitlement enum + FE Entitlement const + EntitlementKey union BUT deliberately absent from every PLAN_FEATURES tier (Core/Plus/Premium). Add-ons are billing-layer concerns.
+- [Phase 13-retail-inventory]: 13-02: MANAGE_INVENTORY and CANCEL_OPTICAL_ORDER restricted to OWNER/ADMIN only; CREATE_OPTICAL_ORDER excludes DOCTOR (tech/recep/admin/owner only) per CONTEXT §F
 
 ### Pending Todos
 
@@ -233,9 +236,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-01T05:48:09.170Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-retail-inventory/13-CONTEXT.md
+Last session: 2026-05-01T19:28:33.213Z
+Stopped at: Completed 13-02-PLAN.md
+Resume file: None
 
 **Phase 9 Overview:**
 
