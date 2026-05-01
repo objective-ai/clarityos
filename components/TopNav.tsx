@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sun, Moon, Shield } from "lucide-react";
+import { Sun, Moon, Shield, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { useThemeStore, nextTheme } from "@/store/themeStore";
 import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useDiagnosisStore } from "@/store/diagnosisStore";
+import { useMessagingStore } from "@/store/messagingStore";
 import type { PatientHeaderData } from "@/types/session";
 import type { PatientInsurance } from "@/types/billing";
 import { formatClinicDate } from "@/lib/timezone";
@@ -52,12 +54,13 @@ function getPageTitle(pathname: string): string {
 }
 
 
-export function TopNav({ patient }: TopNavProps) {
+export function TopNav({ tenant, patient }: TopNavProps) {
   const pathname = usePathname();
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const subtitle = usePageHeaderStore((s) => s.subtitle);
   const pageTitle = getPageTitle(pathname);
+  const inboxUnreadCount = useMessagingStore((s) => s.inboxUnreadCount);
 
   // Fetch insurance for header display
   const [insurance, setInsurance] = useState<PatientInsurance[]>([]);
@@ -232,6 +235,21 @@ export function TopNav({ patient }: TopNavProps) {
 
       <div className="flex items-center gap-2">
         <HealthDot />
+        <Link
+          href={`/${tenant}/messaging/inbox`}
+          className="relative inline-flex items-center justify-center w-10 h-10 rounded hover:bg-[var(--bg-overlay)]"
+          aria-label={`Messaging inbox, ${inboxUnreadCount} unread`}
+        >
+          <MessageSquare className="w-5 h-5" aria-hidden />
+          {inboxUnreadCount > 0 && (
+            <span
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-[var(--accent)] text-[var(--bg-base)] text-[10px] font-semibold flex items-center justify-center px-1"
+              aria-hidden
+            >
+              {inboxUnreadCount > 99 ? "99+" : inboxUnreadCount}
+            </span>
+          )}
+        </Link>
         <ClockInButton />
         <Button
           variant="ghost"
