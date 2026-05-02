@@ -154,5 +154,20 @@ GRANT SELECT ON public.tenant_members TO supabase_auth_admin;
 GRANT SELECT ON public.tenants TO supabase_auth_admin;
 GRANT SELECT ON public.subscription_plans TO supabase_auth_admin;
 GRANT SELECT ON public.tenant_addons TO supabase_auth_admin;
-GRANT USAGE ON SCHEMA clinic_sunview TO supabase_auth_admin;
-GRANT SELECT ON clinic_sunview.staff TO supabase_auth_admin;
+
+-- Tenant-schema grants are conditional: the staff lookup inside the hook is
+-- already wrapped in EXCEPTION WHEN OTHERS, so missing schemas don't break
+-- token minting. We still grant ahead of time on schemas that exist so the
+-- happy path never hits the exception handler.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'clinic_sunview') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA clinic_sunview TO supabase_auth_admin';
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'clinic_sunview' AND table_name = 'staff'
+    ) THEN
+      EXECUTE 'GRANT SELECT ON clinic_sunview.staff TO supabase_auth_admin';
+    END IF;
+  END IF;
+END $$;
