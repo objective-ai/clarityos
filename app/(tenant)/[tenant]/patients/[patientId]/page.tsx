@@ -569,7 +569,7 @@ export default function PatientDetailPage() {
           <MessagesTab patientId={patientId} patientFirstName={patient.firstName} />
         )}
         {activeTab === "orders" && has(Entitlement.RETAIL_POS) && (
-          <OrdersTab patientId={patientId} userRole={currentUser?.role ?? null} />
+          <OrdersTab patientId={patient.id} userRole={currentUser?.role ?? null} />
         )}
       </div>
     </div>
