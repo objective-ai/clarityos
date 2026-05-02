@@ -197,8 +197,11 @@ PAYER_HUMANA_ID     = uuid.UUID("b0000000-0010-0000-0000-000000000010")
 # Intake Tokens (2)
 IT_IDS = [uuid.UUID(f"10000000-0009-0000-0000-{str(i).zfill(12)}") for i in range(1, 3)]
 
-# Addon
-ADDON_ID = uuid.UUID("00000000-0007-0007-0007-000000000001")
+# Tenant Add-ons (one UUID per add-on; idempotency gated solely by
+# (tenant_id, feature_key) — id rename is safe because the gate is the
+# feature_key existence check, not row PK lookup).
+ADDON_AI_SCRIBE_ID  = uuid.UUID("00000000-0007-0007-0007-000000000001")
+ADDON_RETAIL_POS_ID = uuid.UUID("00000000-0007-0007-0007-000000000002")
 
 # Use today's actual date so schedule appointments always land on the current day
 TODAY = datetime.date.today()
@@ -254,6 +257,7 @@ def seed_public_schema(session: Session) -> None:
                 Entitlement.ICD10_DIAGNOSES,
                 Entitlement.BILLING_EXPORT,
                 Entitlement.MULTI_PROVIDER,
+                Entitlement.MESSAGING,
             ],
         ),
         dict(
@@ -271,13 +275,21 @@ def seed_public_schema(session: Session) -> None:
                 Entitlement.MULTI_PROVIDER,
                 Entitlement.AI_SCRIBE,
                 Entitlement.ADVANCED_ANALYTICS,
+                Entitlement.EQUIPMENT_IMPORT,
+                Entitlement.MESSAGING,
             ],
         ),
     ]
 
     for pd in plans_data:
-        if session.get(SubscriptionPlan, pd["id"]):
-            warn(f"Plan '{pd['slug']}' already exists — skipping")
+        existing = session.get(SubscriptionPlan, pd["id"])
+        if existing:
+            # Reconcile base_features_jsonb to current PLAN_FEATURES (Phase
+            # 13-15 gap closure). Other fields (price, slug) are NOT
+            # overwritten on rerun — only the entitlement list, which is the
+            # source of drift the JWT hook now reads from.
+            existing.base_features_jsonb = pd["base_features_jsonb"]
+            ok(f"Updated base_features_jsonb for plan: {pd['name']}")
             continue
         session.add(SubscriptionPlan(**pd))
         ok(f"Created plan: {pd['name']} (${pd['price_cents'] / 100:.0f}/mo)")
@@ -324,21 +336,56 @@ def seed_public_schema(session: Session) -> None:
 
     session.flush()
 
-    # ── TenantAddon ──────────────────────────────────────────────────────
+    # ── TenantAddons ─────────────────────────────────────────────────────
     step("Seeding TenantAddons")
-
-    if session.get(TenantAddon, ADDON_ID):
-        warn("TenantAddon ai_scribe already exists — skipping")
-    else:
-        session.add(TenantAddon(
-            id=ADDON_ID,
-            tenant_id=TENANT_ID,
-            feature_key=Entitlement.AI_SCRIBE,
-        ))
-        ok("Created TenantAddon: AI_SCRIBE")
+    _seed_tenant_addons(session)
 
     session.commit()
     ok("Public schema committed.")
+
+
+def _seed_tenant_addons(session: Session) -> None:
+    """Seed per-tenant feature add-ons (Phase 13 — retail_pos; Phase 2 — ai_scribe).
+
+    Idempotency is gated SOLELY by (tenant_id, lower(feature_key)) — never by
+    the row PK. Renaming an ADDON_*_ID constant cannot produce duplicate rows
+    because the existence check matches on feature_key, not id.
+
+    Case-insensitive match is intentional: legacy dev DBs may carry uppercase
+    'AI_SCRIBE' rows from pre-StrEnum seeds. When found, we normalize to the
+    canonical lowercase wire value (Entitlement.*.value) in place rather than
+    inserting a duplicate.
+    """
+    from sqlalchemy import func, select as _select
+
+    ADDONS: list[tuple[uuid.UUID, str, str]] = [
+        # (id, feature_key, log label)
+        (ADDON_AI_SCRIBE_ID,  Entitlement.AI_SCRIBE.value,  "AI_SCRIBE"),
+        (ADDON_RETAIL_POS_ID, Entitlement.RETAIL_POS.value, "RETAIL_POS"),
+    ]
+    added = 0
+    for addon_id, feature_key, label in ADDONS:
+        existing = session.execute(_select(TenantAddon).where(
+            TenantAddon.tenant_id == TENANT_ID,
+            func.lower(TenantAddon.feature_key) == feature_key.lower(),
+        )).scalar_one_or_none()
+        if existing:
+            if existing.feature_key != feature_key:
+                # Legacy uppercase variant — normalize to canonical lowercase.
+                existing.feature_key = feature_key
+                ok(f"Normalized {label} feature_key to '{feature_key}'")
+            else:
+                warn(f"TenantAddon {label} already enabled for dev tenant — skipping")
+            continue
+        session.add(TenantAddon(
+            id=addon_id,
+            tenant_id=TENANT_ID,
+            feature_key=feature_key,
+        ))
+        ok(f"{label} add-on enabled for dev tenant")
+        added += 1
+    if added:
+        session.flush()
 
 
 # ══════════════════════════════════════════════════════════════════════════

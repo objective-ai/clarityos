@@ -38,6 +38,8 @@ DECLARE
   v_plan_name text;
   v_staff_id uuid;
   v_full_name text;
+  v_entitlements jsonb;
+  v_base_features jsonb;
 BEGIN
   claims := event -> 'claims';
 
@@ -81,8 +83,46 @@ BEGIN
       v_full_name := NULL;
     END;
 
-    -- Inject tenant context into app_metadata
-    -- Note: entitlements are derived client-side from plan_name via PLAN_FEATURES map
+    -- Resolve entitlements: union of subscription_plans.base_features_jsonb
+    -- and tenant_addons.feature_key for this tenant. Phase 13 introduced
+    -- retail_pos as the first true add-on (not bundled into any plan tier).
+    v_base_features := '[]'::jsonb;
+    BEGIN
+      SELECT COALESCE(sp.base_features_jsonb, '[]'::jsonb)
+      INTO v_base_features
+      FROM public.subscription_plans sp
+      JOIN public.tenants t ON t.plan_id = sp.id
+      WHERE t.id = v_tenant_id;
+    EXCEPTION WHEN OTHERS THEN
+      v_base_features := '[]'::jsonb;
+    END;
+
+    -- Union add-on feature_keys (one row per active add-on for this tenant).
+    SELECT COALESCE(
+      jsonb_agg(DISTINCT feat),
+      '[]'::jsonb
+    )
+    INTO v_entitlements
+    FROM (
+      SELECT jsonb_array_elements_text(v_base_features) AS feat
+      UNION
+      SELECT ta.feature_key AS feat
+      FROM public.tenant_addons ta
+      WHERE ta.tenant_id = v_tenant_id
+    ) AS combined;
+
+    -- Inject tenant context into app_metadata.
+    -- entitlements is the server-authoritative union of:
+    --   subscription_plans.base_features_jsonb (PLAN_FEATURES tier)
+    -- ∪ public.tenant_addons.feature_key (per-tenant add-ons, e.g. retail_pos)
+    -- FE session-hydrator (lib/auth/session-hydrator.ts) prefers this array
+    -- over the PLAN_FEATURES fallback when present.
+    --
+    -- IMPORTANT: subscription_plans.base_features_jsonb in seed_db.py MUST
+    -- mirror backend/core/entitlements.py:PLAN_FEATURES exactly. Otherwise the
+    -- moment this hook lands, Plus/Premium tenants regress on messaging access
+    -- (the FE flips from PLAN_FEATURES fallback to rawEntitlements). Phase
+    -- 13-15 reconciles this in the same commit set.
     claims := jsonb_set(
       claims,
       '{app_metadata}',
@@ -95,7 +135,8 @@ BEGIN
         'clinic_name', COALESCE(v_clinic_name, 'ClarityOS Clinic'),
         'plan_name', COALESCE(v_plan_name, 'Core'),
         'staff_id', COALESCE(v_staff_id::text, ''),
-        'full_name', COALESCE(v_full_name, '')
+        'full_name', COALESCE(v_full_name, ''),
+        'entitlements', COALESCE(v_entitlements, '[]'::jsonb)
       )
     );
   END IF;
@@ -112,5 +153,6 @@ REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM authenticated, a
 GRANT SELECT ON public.tenant_members TO supabase_auth_admin;
 GRANT SELECT ON public.tenants TO supabase_auth_admin;
 GRANT SELECT ON public.subscription_plans TO supabase_auth_admin;
+GRANT SELECT ON public.tenant_addons TO supabase_auth_admin;
 GRANT USAGE ON SCHEMA clinic_sunview TO supabase_auth_admin;
 GRANT SELECT ON clinic_sunview.staff TO supabase_auth_admin;
