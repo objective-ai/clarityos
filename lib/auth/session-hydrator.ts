@@ -16,6 +16,39 @@ import type {
 import { PLAN_FEATURES } from "@/lib/entitlements";
 
 /**
+ * Decode the JWT payload (middle segment) without verifying the signature.
+ * The session-hydrator runs only after Supabase JS has already validated the
+ * token, so this is safe — we only need to read the claims.
+ *
+ * Why parse the JWT instead of trusting `session.user.app_metadata`?
+ *   The Supabase auth-token cookie carries TWO copies of app_metadata:
+ *   (1) the JWT's `app_metadata` claim (set by custom_access_token_hook at
+ *       mint time — this is where `entitlements` lives), and
+ *   (2) the envelope's `user.app_metadata` (a snapshot of
+ *       `auth.users.raw_app_meta_data` at sign-in, which only contains the
+ *       fields seeded by bootstrap_user.py and never gets `entitlements`).
+ *   `supabase.auth.getSession()` returns (2), not (1). So we decode the JWT
+ *   ourselves to get the hook-computed entitlements.
+ */
+function decodeJwtAppMetadata(accessToken: string | undefined): Record<string, unknown> | null {
+  if (!accessToken) return null;
+  const parts = accessToken.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
+    const json =
+      typeof atob === "function"
+        ? atob(padded)
+        : Buffer.from(padded, "base64").toString("utf-8");
+    const payload = JSON.parse(json) as { app_metadata?: Record<string, unknown> };
+    return payload.app_metadata ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Build avatar initials from a name or email.
  * Takes first letter of each word (max 2 chars), uppercased.
  * Falls back to first letter of email if no name.
@@ -49,7 +82,12 @@ function buildInitials(fullName: string | undefined, email: string): string {
  */
 export function hydrateFromSupabaseSession(session: Session): AppSession {
   const { user } = session;
-  const meta = user.app_metadata ?? {};
+  const jwtMeta = decodeJwtAppMetadata(session.access_token);
+  // Prefer JWT app_metadata (server-authoritative, includes hook-computed
+  // entitlements) over user.app_metadata (database snapshot of
+  // auth.users.raw_app_meta_data, which never carries entitlements).
+  // Merge so any field present only in user.app_metadata still resolves.
+  const meta = { ...(user.app_metadata ?? {}), ...(jwtMeta ?? {}) };
   const userMeta = user.user_metadata ?? {};
 
   const fullName: string =
