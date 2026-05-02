@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
-  draft: "bg-white/10 text-white/80",
+  draft: "bg-[var(--bg-glass)] text-[var(--text-secondary)]",
   placed: "bg-blue-500/20 text-blue-200",
   dispensed: "bg-emerald-500/20 text-emerald-200",
   cancelled: "bg-red-500/20 text-red-200",
@@ -101,7 +101,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
           <div className="p-6 pt-12 flex-1 overflow-y-auto space-y-6">
             {/* Header */}
             <div>
-              <div className="text-xs uppercase tracking-wider text-white/50 mb-1">
+              <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-1">
                 Optical order
               </div>
               <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
                 >
                   {STATUS_LABELS[order.status]}
                 </span>
-                <span className="font-mono text-xs text-white/60">
+                <span className="font-mono text-xs text-[var(--text-secondary)]">
                   {order.id.slice(0, 8)}
                 </span>
               </div>
@@ -121,7 +121,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
 
             {/* Line items */}
             <section>
-              <h3 className="text-sm font-medium text-white/70 mb-2">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
                 Line items ({order.lineItems.length})
               </h3>
               <ul className="space-y-2">
@@ -131,7 +131,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
                     className="glass-card p-3 flex justify-between items-start text-sm"
                   >
                     <div>
-                      <div className="font-mono text-xs text-white/50">
+                      <div className="font-mono text-xs text-[var(--text-muted)]">
                         {li.productId.slice(0, 8)}
                       </div>
                       <div>
@@ -146,27 +146,27 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
 
             {/* Status timeline */}
             <section>
-              <h3 className="text-sm font-medium text-white/70 mb-2">Timeline</h3>
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Timeline</h3>
               <ol className="text-sm space-y-1">
                 <li>
-                  <span className="text-white/50">Created:</span>{" "}
+                  <span className="text-[var(--text-muted)]">Created:</span>{" "}
                   {new Date(order.createdAt).toLocaleString()}
                 </li>
                 {order.placedAt && (
                   <li>
-                    <span className="text-white/50">Placed:</span>{" "}
+                    <span className="text-[var(--text-muted)]">Placed:</span>{" "}
                     {new Date(order.placedAt).toLocaleString()}
                   </li>
                 )}
                 {order.dispensedAt && (
                   <li>
-                    <span className="text-white/50">Dispensed:</span>{" "}
+                    <span className="text-[var(--text-muted)]">Dispensed:</span>{" "}
                     {new Date(order.dispensedAt).toLocaleString()}
                   </li>
                 )}
                 {order.cancelledAt && (
                   <li>
-                    <span className="text-white/50">Cancelled:</span>{" "}
+                    <span className="text-[var(--text-muted)]">Cancelled:</span>{" "}
                     {new Date(order.cancelledAt).toLocaleString()}
                   </li>
                 )}
@@ -184,7 +184,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
                   Cancel order
                 </button>
                 {order.status === "placed" && (
-                  <p className="text-xs text-white/50 mt-2">
+                  <p className="text-xs text-[var(--text-muted)] mt-2">
                     Cancelling will restock all line-item products in a single
                     transaction.
                   </p>
@@ -193,7 +193,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
             )}
           </div>
         ) : (
-          <div className="p-6 pt-12 text-white/50">Loading order...</div>
+          <div className="p-6 pt-12 text-[var(--text-muted)]">Loading order...</div>
         )}
       </div>
     </>

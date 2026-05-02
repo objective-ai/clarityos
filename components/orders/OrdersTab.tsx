@@ -21,7 +21,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
-  draft: "bg-white/10 text-white/80",
+  draft: "bg-[var(--bg-glass)] text-[var(--text-secondary)]",
   placed: "bg-blue-500/20 text-blue-200",
   dispensed: "bg-emerald-500/20 text-emerald-200",
   cancelled: "bg-red-500/20 text-red-200",
@@ -70,7 +70,7 @@ export function OrdersTab({ patientId, userRole }: Props) {
       </header>
 
       {loading && (
-        <div className="animate-pulse text-white/50">Loading orders...</div>
+        <div className="animate-pulse text-[var(--text-muted)]">Loading orders...</div>
       )}
       {error && (
         <div className="text-red-300 text-sm">
@@ -79,7 +79,7 @@ export function OrdersTab({ patientId, userRole }: Props) {
       )}
 
       {!loading && !error && sortedOrders.length === 0 && (
-        <div className="glass-card p-8 text-center text-white/60">
+        <div className="glass-card p-8 text-center text-[var(--text-secondary)]">
           <div className="mb-3">No optical orders yet.</div>
           <Button onClick={() => setWalkInOpen(true)}>
             + Create the first order
@@ -101,7 +101,7 @@ export function OrdersTab({ patientId, userRole }: Props) {
               className="glass-card p-4 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
             >
               <div>
-                <div className="text-sm text-white/50">
+                <div className="text-sm text-[var(--text-muted)]">
                   {new Date(o.createdAt).toLocaleDateString()}
                 </div>
                 <div className="flex items-center gap-2 mt-1">

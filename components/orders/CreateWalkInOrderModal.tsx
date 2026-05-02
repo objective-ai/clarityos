@@ -138,7 +138,7 @@ export function CreateWalkInOrderModal({
             <h4 className="text-sm font-medium mb-2">Add products</h4>
             <div className="max-h-48 overflow-y-auto glass-card p-2 space-y-1">
               {products.length === 0 && (
-                <div className="text-sm text-white/50 p-2">
+                <div className="text-sm text-[var(--text-muted)] p-2">
                   No active products. Seed first.
                 </div>
               )}
@@ -147,15 +147,15 @@ export function CreateWalkInOrderModal({
                   key={p.id}
                   type="button"
                   onClick={() => addLine(p)}
-                  className="w-full text-left p-2 rounded hover:bg-white/10 text-sm flex justify-between"
+                  className="w-full text-left p-2 rounded hover:bg-[var(--bg-glass)] text-sm flex justify-between text-[var(--text-primary)]"
                 >
                   <span>
-                    <span className="font-mono text-xs text-white/50">
+                    <span className="font-mono text-xs text-[var(--text-muted)]">
                       {p.sku}
                     </span>{" "}
                     · {p.brand} {p.model}
                   </span>
-                  <span className="text-white/70">
+                  <span className="text-[var(--text-secondary)]">
                     ${p.retailPrice} · {p.stockQty} in stock
                   </span>
                 </button>
@@ -168,7 +168,7 @@ export function CreateWalkInOrderModal({
               Line items ({lines.length})
             </h4>
             {lines.length === 0 ? (
-              <div className="text-sm text-white/50">
+              <div className="text-sm text-[var(--text-muted)]">
                 No line items yet — pick a product above.
               </div>
             ) : (
@@ -178,7 +178,7 @@ export function CreateWalkInOrderModal({
                   return (
                     <li key={i} className="flex items-center gap-2">
                       <div className="flex-1 text-sm">
-                        <span className="font-mono text-xs text-white/50">
+                        <span className="font-mono text-xs text-[var(--text-muted)]">
                           {p?.sku ?? l.productId.slice(0, 8)}
                         </span>{" "}
                         {p?.brand} {p?.model}

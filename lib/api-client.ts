@@ -117,7 +117,26 @@ export async function apiFetch<T = unknown>(
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
-      const message = (errBody as { detail?: string }).detail ?? `API error ${res.status}`;
+      const detail = (errBody as { detail?: unknown }).detail;
+      let message: string;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        // FastAPI 422 returns detail: [{type, loc, msg, input, ctx?}, ...].
+        // Join the human-readable msg fields; without this branch the array
+        // gets toString'd into "[object Object]" via the Error constructor.
+        message = detail
+          .map((d) =>
+            d && typeof d === "object" && "msg" in d
+              ? `${(d as { loc?: unknown[] }).loc?.slice(-1)[0] ?? "field"}: ${(d as { msg: string }).msg}`
+              : JSON.stringify(d),
+          )
+          .join("; ");
+      } else if (detail != null) {
+        message = JSON.stringify(detail);
+      } else {
+        message = `API error ${res.status}`;
+      }
       throw new HttpError(res.status, message);
     }
 
