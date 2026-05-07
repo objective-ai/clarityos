@@ -37,6 +37,7 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
 export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
   const cancelOrder = useOpticalOrderStore((s) => s.cancelOrder);
   const [mounted, setMounted] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -63,7 +64,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
     (order.status === "draft" || order.status === "placed");
 
   async function handleCancel() {
-    if (!order) return;
+    if (!order || cancelling) return;
     if (
       !confirm(
         `Cancel order ${order.id.slice(0, 8)}? This will restock all line items.`,
@@ -71,6 +72,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
     ) {
       return;
     }
+    setCancelling(true);
     try {
       await cancelOrder(order.id);
       // Keep drawer open so the user sees the updated status pill ("Cancelled"),
@@ -78,6 +80,8 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
       // User explicitly closes via the X button or backdrop click.
     } catch (e) {
       alert(`Failed to cancel: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -191,9 +195,10 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
                   type="button"
                   variant="destructive"
                   onClick={handleCancel}
+                  disabled={cancelling}
                   className="w-full"
                 >
-                  Cancel order
+                  {cancelling ? "Cancelling..." : "Cancel order"}
                 </Button>
                 {order.status === "placed" && (
                   <p className="text-xs text-[var(--text-muted)] mt-2">

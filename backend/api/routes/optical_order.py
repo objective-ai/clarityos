@@ -250,6 +250,8 @@ async def place_order(
     """
     staff = await resolve_staff(ctx, db)
 
+    # Row-lock the order so concurrent /place calls serialise — second
+    # request waits, then re-reads status='placed' and 409s.
     order = (
         await db.execute(
             select(OpticalOrder)
@@ -257,6 +259,7 @@ async def place_order(
                 OpticalOrder.id == order_id,
                 OpticalOrder.tenant_id == ctx.tenant_id,
             )
+            .with_for_update()
             .options(selectinload(OpticalOrder.line_items))
         )
     ).scalar_one_or_none()
@@ -376,6 +379,12 @@ async def cancel_order(
     """
     staff = await resolve_staff(ctx, db)
 
+    # Row-lock the order itself so concurrent cancel/dispense calls serialise.
+    # Without this, two simultaneous /cancel requests both observe
+    # status='placed' before either commits, both restock, and inventory
+    # ends up double-credited (UAT 2026-05-07: clicking Cancel twice
+    # incremented stock by 2x the line qty). Locking forces the second
+    # request to wait, then re-read the now-cancelled status and 409.
     order = (
         await db.execute(
             select(OpticalOrder)
@@ -383,6 +392,7 @@ async def cancel_order(
                 OpticalOrder.id == order_id,
                 OpticalOrder.tenant_id == ctx.tenant_id,
             )
+            .with_for_update()
             .options(selectinload(OpticalOrder.line_items))
         )
     ).scalar_one_or_none()
@@ -473,6 +483,9 @@ async def dispense_order(
     """Transition placed -> dispensed; status + audit row only (no stock movement)."""
     staff = await resolve_staff(ctx, db)
 
+    # Row-lock so concurrent /dispense calls serialise (second request waits,
+    # re-reads status='dispensed', then 409s). No stock movement here, but
+    # double-dispense would still write two audit rows without the lock.
     order = (
         await db.execute(
             select(OpticalOrder)
@@ -480,6 +493,7 @@ async def dispense_order(
                 OpticalOrder.id == order_id,
                 OpticalOrder.tenant_id == ctx.tenant_id,
             )
+            .with_for_update()
             .options(selectinload(OpticalOrder.line_items))
         )
     ).scalar_one_or_none()
