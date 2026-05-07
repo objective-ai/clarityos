@@ -6,6 +6,9 @@ import { OrderDetailDrawer } from "@/components/orders/OrderDetailDrawer";
 import { CreateWalkInOrderModal } from "@/components/orders/CreateWalkInOrderModal";
 import type { OpticalOrder, OrderStatus } from "@/types/opticalOrder";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+type BadgeVariant = "secondary" | "info" | "success" | "destructive";
 
 interface Props {
   patientId: string;
@@ -20,11 +23,11 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
-  draft: "bg-[var(--bg-glass)] text-[var(--text-secondary)]",
-  placed: "bg-blue-500/15 text-blue-700 dark:text-blue-200",
-  dispensed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
-  cancelled: "bg-red-500/15 text-red-700 dark:text-red-200",
+const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
+  draft: "secondary",
+  placed: "info",
+  dispensed: "success",
+  cancelled: "destructive",
 };
 
 export function OrdersTab({ patientId, userRole }: Props) {
@@ -105,11 +108,9 @@ export function OrdersTab({ patientId, userRole }: Props) {
                   {new Date(o.createdAt).toLocaleDateString()}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_BADGE_CLASS[o.status]}`}
-                  >
+                  <Badge variant={STATUS_BADGE_VARIANT[o.status]}>
                     {STATUS_LABELS[o.status]}
-                  </span>
+                  </Badge>
                   <span className="text-sm">
                     {o.lineItems.length}{" "}
                     {o.lineItems.length === 1 ? "item" : "items"}

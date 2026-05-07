@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import type { OpticalOrder, OrderStatus } from "@/types/opticalOrder";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+type BadgeVariant = "secondary" | "info" | "success" | "destructive";
 
 interface Props {
   open: boolean;
@@ -22,11 +26,11 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
-  draft: "bg-[var(--bg-glass)] text-[var(--text-secondary)]",
-  placed: "bg-blue-500/15 text-blue-700 dark:text-blue-200",
-  dispensed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
-  cancelled: "bg-red-500/15 text-red-700 dark:text-red-200",
+const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
+  draft: "secondary",
+  placed: "info",
+  dispensed: "success",
+  cancelled: "destructive",
 };
 
 export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
@@ -105,11 +109,9 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
                 Optical order
               </div>
               <div className="flex items-center gap-2">
-                <span
-                  className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_BADGE_CLASS[order.status]}`}
-                >
+                <Badge variant={STATUS_BADGE_VARIANT[order.status]}>
                   {STATUS_LABELS[order.status]}
-                </span>
+                </Badge>
                 <span className="font-mono text-xs text-[var(--text-secondary)]">
                   {order.id.slice(0, 8)}
                 </span>
@@ -175,14 +177,15 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
 
             {/* Cancel CTA — gated */}
             {canCancel && (
-              <div className="pt-4 border-t border-white/10">
-                <button
+              <div className="pt-4 border-t border-[var(--glass-border)]">
+                <Button
                   type="button"
+                  variant="destructive"
                   onClick={handleCancel}
-                  className="w-full py-2 px-4 rounded-md bg-red-500/15 text-red-700 dark:text-red-200 hover:bg-red-500/25 transition-colors text-sm font-medium"
+                  className="w-full"
                 >
                   Cancel order
-                </button>
+                </Button>
                 {order.status === "placed" && (
                   <p className="text-xs text-[var(--text-muted)] mt-2">
                     Cancelling will restock all line-item products in a single

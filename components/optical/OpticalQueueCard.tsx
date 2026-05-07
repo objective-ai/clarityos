@@ -273,7 +273,6 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
               variant="default"
               size="sm"
               onClick={() => setOrderModalOpen(true)}
-              className="bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30"
             >
               + Create Order
             </Button>

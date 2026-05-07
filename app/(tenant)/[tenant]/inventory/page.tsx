@@ -298,7 +298,7 @@ function StockBadge({ status }: { status: "in_stock" | "low" | "out" }) {
     );
   }
   if (status === "low") {
-    return <Badge className="ml-2 bg-yellow-500/20 text-yellow-200">Low</Badge>;
+    return <Badge variant="warning" className="ml-2">Low</Badge>;
   }
-  return <Badge className="ml-2 bg-emerald-500/20 text-emerald-200">In stock</Badge>;
+  return <Badge variant="success" className="ml-2">In stock</Badge>;
 }
