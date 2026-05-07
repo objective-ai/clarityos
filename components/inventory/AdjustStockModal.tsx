@@ -69,7 +69,7 @@ export function AdjustStockModal({ open, onClose, product }: Props) {
           </DialogTitle>
         </DialogHeader>
         <div className="px-7 pb-4 space-y-3">
-          <div className="text-sm text-white/70">
+          <div className="text-sm text-[var(--text-secondary)]">
             Current stock:{" "}
             <span className="font-semibold">{product.stockQty}</span> · SKU{" "}
             <span className="font-mono text-xs">{product.sku}</span>
