@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import type { OpticalOrder, OrderStatus } from "@/types/opticalOrder";
@@ -35,6 +36,11 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
 
 export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
   const cancelOrder = useOpticalOrderStore((s) => s.cancelOrder);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // ESC key closes drawer (verbatim from AppointmentDetailDrawer)
   useEffect(() => {
@@ -47,6 +53,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
 
   // Hydration safety — Phase 10.2-07 fix (verbatim)
   if (!open && !order) return null;
+  if (!mounted) return null;
 
   const canCancel =
     !!order &&
@@ -72,7 +79,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
     }
   }
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop — clickable to close */}
       <div
@@ -199,6 +206,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
           <div className="p-6 pt-12 text-[var(--text-muted)]">Loading order...</div>
         )}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
