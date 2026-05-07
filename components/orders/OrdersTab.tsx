@@ -22,9 +22,9 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 
 const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
   draft: "bg-[var(--bg-glass)] text-[var(--text-secondary)]",
-  placed: "bg-blue-500/20 text-blue-200",
-  dispensed: "bg-emerald-500/20 text-emerald-200",
-  cancelled: "bg-red-500/20 text-red-200",
+  placed: "bg-blue-500/15 text-blue-700 dark:text-blue-200",
+  dispensed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  cancelled: "bg-red-500/15 text-red-700 dark:text-red-200",
 };
 
 export function OrdersTab({ patientId, userRole }: Props) {
@@ -98,7 +98,7 @@ export function OrdersTab({ patientId, userRole }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void openOrder(o);
               }}
-              className="glass-card p-4 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+              className="glass-card p-4 flex items-center justify-between cursor-pointer hover:bg-[var(--bg-glass)] transition-colors"
             >
               <div>
                 <div className="text-sm text-[var(--text-muted)]">

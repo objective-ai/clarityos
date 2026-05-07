@@ -24,9 +24,9 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 
 const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
   draft: "bg-[var(--bg-glass)] text-[var(--text-secondary)]",
-  placed: "bg-blue-500/20 text-blue-200",
-  dispensed: "bg-emerald-500/20 text-emerald-200",
-  cancelled: "bg-red-500/20 text-red-200",
+  placed: "bg-blue-500/15 text-blue-700 dark:text-blue-200",
+  dispensed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-200",
+  cancelled: "bg-red-500/15 text-red-700 dark:text-red-200",
 };
 
 export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
@@ -91,7 +91,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 transition-colors"
+          className="absolute top-4 right-4 z-10 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-glass)] transition-colors"
           aria-label="Close drawer"
         >
           <X className="w-5 h-5" />
@@ -179,7 +179,7 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="w-full py-2 px-4 rounded-md bg-red-500/20 text-red-200 hover:bg-red-500/30 transition-colors text-sm font-medium"
+                  className="w-full py-2 px-4 rounded-md bg-red-500/15 text-red-700 dark:text-red-200 hover:bg-red-500/25 transition-colors text-sm font-medium"
                 >
                   Cancel order
                 </button>
