@@ -13,6 +13,7 @@ import { useInventoryStore } from "@/store/inventoryStore";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import type {
   OpticalOrder,
+  OpticalOrderActionWarning,
   OpticalOrderCreatePayload,
   OpticalOrderLineItemCreatePayload,
 } from "@/types/opticalOrder";
@@ -23,7 +24,10 @@ interface Props {
   /** Pre-fill encounter when called from optical-queue card (13-13). */
   encounterId?: string | null;
   onClose: () => void;
-  onCreated?: (order: OpticalOrder) => void | Promise<void>;
+  onCreated?: (
+    order: OpticalOrder,
+    warnings?: OpticalOrderActionWarning[],
+  ) => void | Promise<void>;
 }
 
 interface DraftLine {
@@ -46,7 +50,6 @@ export function CreateWalkInOrderModal({
 
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [autoPlace, setAutoPlace] = useState(false);
-  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,7 +57,6 @@ export function CreateWalkInOrderModal({
     if (!open) return;
     setLines([]);
     setAutoPlace(false);
-    setWarningMessage(null);
     setError(null);
     void loadProducts({ activeOnly: true });
   }, [open, loadProducts]);
@@ -82,7 +84,6 @@ export function CreateWalkInOrderModal({
 
   async function handleSubmit() {
     setError(null);
-    setWarningMessage(null);
     if (lines.length === 0) {
       setError("Add at least one line item.");
       return;
@@ -99,18 +100,13 @@ export function CreateWalkInOrderModal({
         })),
       };
       let created = await createOrder(payload);
+      let warnings: OpticalOrderActionWarning[] = [];
       if (autoPlace) {
         const result = await placeOrder(created.id);
         created = result.order;
-        if (result.warnings.length > 0) {
-          // Keep modal open so user sees warning before navigating away.
-          setWarningMessage(result.warnings.map((w) => w.message).join(" "));
-          await onCreated?.(created);
-          setSubmitting(false);
-          return;
-        }
+        warnings = result.warnings;
       }
-      await onCreated?.(created);
+      await onCreated?.(created, warnings);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -231,9 +227,6 @@ export function CreateWalkInOrderModal({
             <div className="text-lg font-semibold">${total.toFixed(2)}</div>
           </div>
 
-          {warningMessage && (
-            <div className="text-yellow-300 text-sm">{warningMessage}</div>
-          )}
           {error && <div className="text-red-300 text-sm">{error}</div>}
         </div>
 

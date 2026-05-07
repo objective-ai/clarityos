@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
-import type { OpticalOrder, OrderStatus } from "@/types/opticalOrder";
+import type {
+  OpticalOrder,
+  OpticalOrderActionWarning,
+  OrderStatus,
+} from "@/types/opticalOrder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +19,8 @@ interface Props {
   order: OpticalOrder | null;
   /** Role of the current user — used to gate the Cancel CTA. */
   userRole?: string | null;
+  /** Warnings from the most recent place action — shown as banner at top. */
+  warnings?: OpticalOrderActionWarning[];
   onClose: () => void;
 }
 
@@ -34,7 +40,13 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
   cancelled: "destructive",
 };
 
-export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
+export function OrderDetailDrawer({
+  open,
+  order,
+  userRole,
+  warnings,
+  onClose,
+}: Props) {
   const cancelOrder = useOpticalOrderStore((s) => s.cancelOrder);
   const [mounted, setMounted] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -116,6 +128,30 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
 
         {order ? (
           <div className="p-6 pt-12 flex-1 overflow-y-auto space-y-6">
+            {warnings && warnings.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-md border px-3 py-2 text-sm"
+                style={{
+                  background: "rgba(251,191,36,0.10)",
+                  borderColor: "rgba(251,191,36,0.35)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                <div
+                  className="font-semibold mb-1"
+                  style={{ color: "#FBBF24" }}
+                >
+                  Order placed with warning
+                </div>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {warnings.map((w, i) => (
+                    <li key={i}>{w.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* Header */}
             <div>
               <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-1">

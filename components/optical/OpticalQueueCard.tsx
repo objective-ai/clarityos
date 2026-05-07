@@ -288,6 +288,15 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
           setOrderModalOpen(false);
           void fetchQueue();
         }}
+        onCreated={(_created, warnings) => {
+          if (warnings && warnings.length > 0) {
+            alert(
+              `Order placed with warning:\n\n${warnings
+                .map((w) => `• ${w.message}`)
+                .join("\n")}`,
+            );
+          }
+        }}
       />
     </Card>
   );

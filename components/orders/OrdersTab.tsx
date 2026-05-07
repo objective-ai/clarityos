@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import { OrderDetailDrawer } from "@/components/orders/OrderDetailDrawer";
 import { CreateWalkInOrderModal } from "@/components/orders/CreateWalkInOrderModal";
-import type { OpticalOrder, OrderStatus } from "@/types/opticalOrder";
+import type {
+  OpticalOrder,
+  OpticalOrderActionWarning,
+  OrderStatus,
+} from "@/types/opticalOrder";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -41,18 +45,23 @@ export function OrdersTab({ patientId, userRole }: Props) {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [drawerWarnings, setDrawerWarnings] = useState<
+    OpticalOrderActionWarning[]
+  >([]);
 
   useEffect(() => {
     void loadOrders({ patientId });
   }, [patientId, loadOrders]);
 
   async function openOrder(order: OpticalOrder) {
+    setDrawerWarnings([]);
     await loadOrder(order.id);
     setDrawerOpen(true);
   }
 
   function closeDrawer() {
     setDrawerOpen(false);
+    setDrawerWarnings([]);
     // Defer clearCurrentOrder so the drawer's slide-out animation finishes
     // before the panel goes blank.
     window.setTimeout(() => clearCurrentOrder(), 250);
@@ -127,6 +136,7 @@ export function OrdersTab({ patientId, userRole }: Props) {
         open={drawerOpen}
         order={currentOrder}
         userRole={userRole}
+        warnings={drawerWarnings}
         onClose={closeDrawer}
       />
 
@@ -134,8 +144,9 @@ export function OrdersTab({ patientId, userRole }: Props) {
         open={walkInOpen}
         patientId={patientId}
         onClose={() => setWalkInOpen(false)}
-        onCreated={async (created) => {
+        onCreated={async (created, warnings) => {
           setWalkInOpen(false);
+          setDrawerWarnings(warnings ?? []);
           await loadOrder(created.id);
           setDrawerOpen(true);
         }}
