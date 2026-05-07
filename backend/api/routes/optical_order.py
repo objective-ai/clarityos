@@ -289,15 +289,13 @@ async def place_order(
             )
         ).scalar_one()
         # Soft-block: warn but allow the transition (CONTEXT §B).
+        new_stock = product.stock_qty - line.qty
         if product.stock_qty <= 0:
             warnings.append(
                 OpticalOrderActionWarning(
                     code="zero_stock",
                     product_id=product.id,
-                    message=(
-                        f"{product.sku} is out of stock; order placed anyway "
-                        f"(stock will go negative)."
-                    ),
+                    message=f"{product.sku}: stock {new_stock}",
                 )
             )
         elif product.stock_qty <= product.reorder_threshold:
@@ -305,12 +303,10 @@ async def place_order(
                 OpticalOrderActionWarning(
                     code="low_stock",
                     product_id=product.id,
-                    message=(
-                        f"{product.sku} stock is low ({product.stock_qty} remaining)."
-                    ),
+                    message=f"{product.sku}: stock {new_stock}",
                 )
             )
-        product.stock_qty = product.stock_qty - line.qty
+        product.stock_qty = new_stock
         db.add(
             InventoryTransaction(
                 id=uuid.uuid4(),
