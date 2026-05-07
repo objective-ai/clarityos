@@ -73,7 +73,9 @@ export function OrderDetailDrawer({ open, order, userRole, onClose }: Props) {
     }
     try {
       await cancelOrder(order.id);
-      onClose();
+      // Keep drawer open so the user sees the updated status pill ("Cancelled"),
+      // the new Cancelled timestamp in the Timeline, and the Cancel CTA hidden.
+      // User explicitly closes via the X button or backdrop click.
     } catch (e) {
       alert(`Failed to cancel: ${e instanceof Error ? e.message : String(e)}`);
     }
