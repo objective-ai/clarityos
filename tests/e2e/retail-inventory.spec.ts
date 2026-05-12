@@ -41,19 +41,28 @@ test.describe("@inventory retail-inventory phase 13", () => {
     const stamp = Date.now();
     const uniqueModel = `E2E-${stamp}`;
     await page.getByRole("button", { name: /^\+ New Product$/ }).click();
-    await page.getByPlaceholder("Brand").fill("PlaywrightTest");
-    await page.getByPlaceholder("Model").fill(uniqueModel);
-    await page.getByPlaceholder("Retail price").fill("99.00");
-    await page.getByPlaceholder("Eye size (mm)").fill("50");
+    // Scope inputs to the dialog — the page's "Search brand or model" search bar
+    // also has a placeholder containing "brand", which collides in strict mode.
+    const createDialog = page.getByRole("dialog");
+    await createDialog.getByPlaceholder("Brand").fill("PlaywrightTest");
+    await createDialog.getByPlaceholder("Model").fill(uniqueModel);
+    await createDialog.getByPlaceholder("Retail price").fill("99.00");
+    await createDialog.getByPlaceholder("Eye size (mm)").fill("50");
     await page.getByRole("button", { name: /Create product/i }).click();
 
     const ourRow = page.locator("tr", { hasText: uniqueModel }).first();
     await expect(ourRow).toBeVisible({ timeout: 5000 });
 
-    // Edit retail price
+    // Edit retail price — scope to dialog so any future placeholder collision
+    // with the inventory toolbar can't hijack the input.
     await ourRow.getByRole("button", { name: /^Edit$/ }).click();
-    await page.getByPlaceholder("Retail price").fill("109.00");
-    await page.getByRole("button", { name: /Save changes/i }).click();
+    const editDialog = page.getByRole("dialog");
+    await expect(editDialog).toBeVisible();
+    await editDialog.getByPlaceholder("Retail price").fill("109.00");
+    await editDialog.getByRole("button", { name: /Save changes/i }).click();
+    // Wait for the dialog to close so the row table re-render has actually
+    // applied; otherwise we can race the post-save refetch.
+    await expect(editDialog).toBeHidden({ timeout: 5000 });
     await expect(ourRow.getByText(/\$109/)).toBeVisible({ timeout: 5000 });
 
     // Adjust stock by -1 (with required note)
@@ -88,10 +97,15 @@ test.describe("@inventory retail-inventory phase 13", () => {
     const preStock = parseInt(preStockText.match(/\d+/)?.[0] ?? "0", 10);
     expect(preStock).toBeGreaterThan(0);
 
-    // Open optical queue and click + Create Order on the first card
+    // Open optical queue and click + Create Order on the first card.
+    // /api/optical/queue is consistently 6-7s on dev, so wait for the loading
+    // spinner to clear before probing for cards (15s budget for cold cache).
     await page.goto(`/${TENANT_SLUG}/optical`);
+    await expect(page.getByText(/Loading optical queue\.\.\./i)).toBeHidden({
+      timeout: 15_000,
+    });
     const card = page.locator("[data-testid='optical-queue-card']").first();
-    await card.waitFor({ state: "visible", timeout: 10_000 });
+    await card.waitFor({ state: "visible", timeout: 5_000 });
     await card.getByRole("button", { name: /\+ Create Order/i }).click();
 
     // Modal opens — pick the Wayfarer (picker buttons render brand+model+sku).
@@ -161,31 +175,46 @@ test.describe("@inventory retail-inventory phase 13", () => {
 
     // Patient detail tabs are plain <button>s (NOT role="tab") — use exact text.
     await page.getByRole("button", { name: "Orders", exact: true }).click();
+    // OrdersTab is dynamic-imported — wait for header + initial fetch.
+    await expect(
+      page.getByRole("heading", { name: /Optical orders/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Loading orders\.\.\./i)).toBeHidden({
+      timeout: 15_000,
+    });
 
     // Open the most recent order — order rows are <li role="button"> in OrdersTab.
     // Filter to placed/draft so we hit a cancellable order if scenario 2 ran.
     const orderRows = page
       .locator("li[role='button']")
       .filter({ hasText: /Placed|Draft|Dispensed/ });
-    await expect(orderRows.first()).toBeVisible({ timeout: 5000 });
+    await expect(orderRows.first()).toBeVisible({ timeout: 10_000 });
     await orderRows.first().click();
 
     // Drawer assertions — OrderDetailDrawer uses role=dialog aria-modal=true with aria-label
     const drawer = page.locator("[role='dialog'][aria-modal='true']");
-    await expect(drawer).toBeVisible();
+    await expect(drawer).toBeVisible({ timeout: 10_000 });
     await expect(drawer.getByText(/Line items/i)).toBeVisible();
     await expect(drawer.getByText(/Timeline/i)).toBeVisible();
 
-    // If status is Placed, cancel it (gated by owner/admin role — dev seed is owner)
+    // If status is Placed, cancel it (gated by owner/admin role — dev seed is owner).
+    // Per commit 721048e the drawer intentionally stays open after a successful
+    // cancel so the user sees the status flip — assert the post-cancel state in
+    // the drawer (Cancelled status pill + Cancel CTA hidden) instead of expecting
+    // it to close.
     const cancelBtn = drawer.getByRole("button", { name: /Cancel order/i });
     if (await cancelBtn.isVisible().catch(() => false)) {
       page.on("dialog", (dlg) => {
         void dlg.accept();
       });
       await cancelBtn.click();
-      // Drawer closes after successful cancel
+      await expect(drawer.getByText(/^Cancelled$/i).first()).toBeVisible({
+        timeout: 5000,
+      });
+      await expect(cancelBtn).toBeHidden({ timeout: 2000 });
+      // User explicitly closes the drawer; cancelled badge then surfaces in list
+      await page.keyboard.press("Escape");
       await expect(drawer).toBeHidden({ timeout: 5000 });
-      // Cancelled badge appears in the orders list
       await expect(
         page.locator("li[role='button']").filter({ hasText: /Cancelled/ }).first(),
       ).toBeVisible({ timeout: 5000 });
@@ -276,12 +305,15 @@ test.describe("@inventory retail-inventory phase 13", () => {
   test("zero-stock soft-block: place against zero-stock product → warning + order still creates (INV-12)", async ({
     page,
   }) => {
-    // Step 1: drive Disney kids frame to stock_qty=0 via Adjust
+    // Step 1: drive Disney kids frame to stock_qty<=0 via Adjust.
+    // The stock cell renders as "{n}{badge}" with no separator — capture the
+    // signed integer (incl. leading "-") so accumulated negative state from
+    // prior runs is parsed correctly. Skip the adjust if already <=0.
     await page.goto(`/${TENANT_SLUG}/inventory`);
     const targetRow = page.locator("tr", { hasText: SEED_KIDS_FRAME_SKU });
     await expect(targetRow).toBeVisible({ timeout: 5000 });
     const stockText = await targetRow.locator("td").nth(2).innerText();
-    const stockQty = parseInt(stockText.match(/\d+/)?.[0] ?? "0", 10);
+    const stockQty = parseInt(stockText.match(/-?\d+/)?.[0] ?? "0", 10);
 
     if (stockQty > 0) {
       await targetRow.getByRole("button", { name: /^Adjust$/ }).click();
@@ -293,14 +325,24 @@ test.describe("@inventory retail-inventory phase 13", () => {
         .getByRole("dialog")
         .getByRole("button", { name: /^Adjust$/ })
         .click();
-      await expect(targetRow.locator("td").nth(2)).toContainText("0", {
+      // Wait for the dialog to close before asserting the row update.
+      await expect(page.getByRole("dialog")).toBeHidden({ timeout: 5000 });
+      await expect(targetRow.locator("td").nth(2)).toContainText(/^0/, {
         timeout: 5000,
       });
     }
 
-    // Step 2: open Walk-In Order modal from the patient Orders tab
+    // Step 2: open Walk-In Order modal from the patient Orders tab.
+    // OrdersTab is dynamic-imported; wait for the tab header to mount and the
+    // initial /api/optical-orders fetch to resolve before probing CTAs.
     await page.goto(`/${TENANT_SLUG}/patients/${SEED_PATIENT_ID}`);
     await page.getByRole("button", { name: "Orders", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: /Optical orders/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Loading orders\.\.\./i)).toBeHidden({
+      timeout: 15_000,
+    });
 
     // CTA differs depending on whether any orders already exist
     const newWalkInBtn = page.getByRole("button", {
@@ -326,13 +368,20 @@ test.describe("@inventory retail-inventory phase 13", () => {
       .check();
     await modal.getByRole("button", { name: /Create & Place/i }).click();
 
-    // Modal stays open + yellow warning text appears + the order WAS created
-    // (warning surfaces in modal as <div className="text-yellow-300">).
-    await expect(modal.getByText(/out of stock|stock is low/i)).toBeVisible({
+    // After Create & Place, modal closes and the OrderDetailDrawer opens with a
+    // yellow "Order placed with warning" banner. Backend warning copy is
+    // `{sku}: stock {n}` (commit d65cc3f). Order WAS created (soft-block).
+    const drawer = page.locator("[role='dialog'][aria-modal='true']");
+    await expect(drawer).toBeVisible({ timeout: 5000 });
+    const banner = drawer.getByRole("alert");
+    await expect(banner.getByText(/Order placed with warning/i)).toBeVisible({
       timeout: 5000,
     });
+    await expect(
+      banner.getByText(new RegExp(`${SEED_KIDS_FRAME_SKU}.*stock`, "i")),
+    ).toBeVisible();
 
-    // Cleanup — close the modal. The order remains placed at qty=0; subsequent
+    // Cleanup — close the drawer. The order remains placed at qty=0; subsequent
     // runs re-zero the stock idempotently. Re-seed restores baseline if needed.
     await page.keyboard.press("Escape");
   });
