@@ -104,6 +104,12 @@ class OpticalQueueItem(AppBaseModel):
     # Workflow status
     status: OpticalStatus = OpticalStatus.WAITING
 
+    # Phase 14 — draft optical order indicator (OPT14-14).
+    # Count of OpticalOrder rows with status='draft' for this encounter.
+    # Drives the "Draft pending" pill on OpticalQueueCard so opticians
+    # don't accidentally start a second configurator session.
+    draft_order_count: int = Field(default=0, ge=0)
+
 
 # ---------------------------------------------------------------------------
 # Queue Response

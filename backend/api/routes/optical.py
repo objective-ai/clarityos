@@ -249,6 +249,13 @@ async def get_optical_queue(
         # falls back to enc.optical_status when no live orders exist.
         computed_status = _compute_optical_status(enc)
 
+        # Phase 14 OPT14-14 — count draft orders so the queue card can
+        # surface a "Draft pending" pill (prevents duplicate-draft creation).
+        # Counts from the already-eagerloaded enc.optical_orders — no N+1.
+        draft_count = sum(
+            1 for o in enc.optical_orders if o.status == "draft"
+        )
+
         items.append(
             OpticalQueueItem(
                 encounter_id=enc.id,
@@ -269,6 +276,7 @@ async def get_optical_queue(
                 pd_os=final_rx.pd_os,
                 rx_change_alert=rx_change_alert,
                 status=computed_status,
+                draft_order_count=draft_count,
             )
         )
 

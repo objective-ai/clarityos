@@ -402,6 +402,7 @@ def seed_tenant_schema(session: Session) -> None:
     _seed_encounters(session)
     _seed_insurance_payers(session)
     _seed_retail_inventory(session)
+    _seed_lens_reference(session)
     _seed_patient_insurance(session)
     _seed_superbills(session)
     _seed_intake_tokens(session)
@@ -1969,6 +1970,124 @@ def _seed_retail_inventory(session: Session) -> None:
         ok(f"Retail inventory: {frames_added} new frames, {contacts_added} new contacts (10 frames + 5 contacts total).")
     else:
         warn("Retail inventory already seeded — skipping (10 frames + 5 contacts already present).")
+
+
+def _seed_lens_reference(session: Session) -> None:
+    """Phase 14 OPT14-11 — seed lens reference catalog (4 types + 6 materials + 7 coatings).
+
+    Idempotency mirrors _seed_retail_inventory: pre-check (tenant_id, name,
+    is_active=true) before each insert so re-runs add zero rows.
+    """
+    from decimal import Decimal
+
+    from sqlalchemy import select as _select
+
+    from backend.db.models.tenant.clinical import (
+        LensCoating,
+        LensMaterial,
+        LensType,
+    )
+
+    step("Seeding Lens Reference Catalog (Phase 14)")
+
+    LENS_TYPES = [
+        ("Single Vision", False, False, 0),
+        ("Bifocal", True, False, 1),
+        ("Progressive", True, True, 2),
+        ("Reading", False, False, 3),
+    ]
+    types_added = 0
+    for (name, seg, vert, order) in LENS_TYPES:
+        exists = session.execute(
+            _select(LensType.id).where(
+                LensType.tenant_id == TENANT_ID,
+                LensType.name == name,
+                LensType.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if exists is not None:
+            continue
+        session.add(
+            LensType(
+                tenant_id=TENANT_ID,
+                name=name,
+                requires_seg_height=seg,
+                requires_vertex=vert,
+                display_order=order,
+            )
+        )
+        types_added += 1
+
+    LENS_MATERIALS = [
+        ("CR-39", Decimal("1.50"), 58, 0),
+        ("Polycarbonate", Decimal("1.59"), 30, 1),
+        ("Trivex", Decimal("1.53"), 43, 2),
+        ("Hi-Index 1.67", Decimal("1.67"), 32, 3),
+        ("Hi-Index 1.74", Decimal("1.74"), 33, 4),
+        ("Hi-Index 1.80", Decimal("1.80"), 30, 5),
+    ]
+    materials_added = 0
+    for (name, ri, abbe, order) in LENS_MATERIALS:
+        exists = session.execute(
+            _select(LensMaterial.id).where(
+                LensMaterial.tenant_id == TENANT_ID,
+                LensMaterial.name == name,
+                LensMaterial.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if exists is not None:
+            continue
+        session.add(
+            LensMaterial(
+                tenant_id=TENANT_ID,
+                name=name,
+                refractive_index=ri,
+                abbe_value=abbe,
+                display_order=order,
+            )
+        )
+        materials_added += 1
+
+    LENS_COATINGS = [
+        ("AR", "treatment", 0),
+        ("UV", "treatment", 1),
+        ("Blue Light", "treatment", 2),
+        ("Photochromic", "treatment", 3),
+        ("Polarized", "tint", 4),
+        ("Scratch-Resistant", "finish", 5),
+        ("Mirror", "finish", 6),
+    ]
+    coatings_added = 0
+    for (name, category, order) in LENS_COATINGS:
+        exists = session.execute(
+            _select(LensCoating.id).where(
+                LensCoating.tenant_id == TENANT_ID,
+                LensCoating.name == name,
+                LensCoating.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if exists is not None:
+            continue
+        session.add(
+            LensCoating(
+                tenant_id=TENANT_ID,
+                name=name,
+                category=category,
+                display_order=order,
+            )
+        )
+        coatings_added += 1
+
+    session.flush()
+    if types_added or materials_added or coatings_added:
+        ok(
+            f"Lens catalog: {types_added} new types, {materials_added} new materials, "
+            f"{coatings_added} new coatings (4 types + 6 materials + 7 coatings total)."
+        )
+    else:
+        warn(
+            "Lens catalog already seeded — skipping (4 types + 6 materials + 7 coatings already present)."
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════
