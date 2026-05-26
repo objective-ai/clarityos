@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
 import {
   Dialog,
   DialogContent,
@@ -43,6 +45,7 @@ export function CreateWalkInOrderModal({
   onClose,
   onCreated,
 }: Props) {
+  const router = useRouter();
   const products = useInventoryStore((s) => s.products);
   const loadProducts = useInventoryStore((s) => s.loadProducts);
   const createOrder = useOpticalOrderStore((s) => s.createOrder);
@@ -106,6 +109,21 @@ export function CreateWalkInOrderModal({
         created = result.order;
         warnings = result.warnings;
       }
+
+      // Phase 14 OPT14-13 — spectacle (frame) lines need the configurator to
+      // capture lens config + measurements + vision plan. Contacts-only
+      // walk-ins keep the existing close-and-toast flow.
+      const hasFrameLine = lines.some((line) => {
+        const product = products.find((p) => p.id === line.productId);
+        return product?.productType === "frame";
+      });
+      if (hasFrameLine && !autoPlace) {
+        await onCreated?.(created, warnings);
+        onClose();
+        router.push(`/optical/orders/${created.id}/`);
+        return;
+      }
+
       await onCreated?.(created, warnings);
       onClose();
     } catch (e) {

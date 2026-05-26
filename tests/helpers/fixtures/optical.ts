@@ -60,6 +60,7 @@ export function makeOpticalQueueItem(
     pdOs: null,
     rxChangeAlert: makeRxChangeAlert(),
     status: "waiting",
+    draftOrderCount: 0,
     ...overrides,
   };
 }

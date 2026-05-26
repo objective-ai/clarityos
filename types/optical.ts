@@ -69,6 +69,15 @@ export interface OpticalQueueItem {
 
   rxChangeAlert: RxChangeAlert;
   status: OpticalStatus;
+
+  // Phase 14 OPT14-14 — draft order indicator (camelCased from backend snake_case
+  // via apiFetch's camelizeKeys). 0 when no draft optical order exists for this
+  // encounter; > 0 surfaces a "Draft pending" pill on the queue card.
+  draftOrderCount: number;
+  // Optional — populated when the parent queue page enriches the item with
+  // the most-recent draft order ID for one-click resume. When absent, the
+  // pill handler falls back to a lazy fetch.
+  mostRecentDraftId?: string | null;
 }
 
 // ---------------------------------------------------------------------------

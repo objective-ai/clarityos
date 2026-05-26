@@ -43,8 +43,15 @@ function makeOrder(overrides: Partial<OpticalOrder> = {}): OpticalOrder {
         unitPrice: "120.00",
         lineTotal: "120.00",
         createdAt: "2026-04-01T10:00:00Z",
+        lensConfig: null,
       },
     ],
+    visionPlan: {},
+    fitting: {},
+    suggestionResolutions: {},
+    finalRefractionId: null,
+    habitualRefractionId: null,
+    jobTicketGeneratedAt: null,
     ...overrides,
   };
 }
@@ -118,6 +125,7 @@ describe("OrdersTab", () => {
           unitPrice: "100.00",
           lineTotal: "100.00",
           createdAt: "2026-04-15T10:00:00Z",
+          lensConfig: null,
         },
         {
           id: "li-b",
@@ -127,6 +135,7 @@ describe("OrdersTab", () => {
           unitPrice: "100.00",
           lineTotal: "100.00",
           createdAt: "2026-04-15T10:00:00Z",
+          lensConfig: null,
         },
       ],
     });

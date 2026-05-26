@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+
+import { useLensCatalogStore } from "@/store/lensCatalogStore";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import type {
   OpticalOrder,
@@ -40,6 +42,24 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
   cancelled: "destructive",
 };
 
+function resolveLensConfigDisplay(
+  lc: Record<string, any> | null | undefined,
+  lensTypes: { id: string; name: string }[],
+  lensMaterials: { id: string; name: string }[],
+  lensCoatings: { id: string; name: string }[],
+) {
+  if (!lc) return null;
+  const type =
+    lensTypes.find((t) => t.id === lc.lens_type_id)?.name ?? "—";
+  const material =
+    lensMaterials.find((m) => m.id === lc.material_id)?.name ?? "—";
+  const coatings = (lc.coating_ids ?? [])
+    .map((cid: string) => lensCoatings.find((c) => c.id === cid)?.name)
+    .filter(Boolean)
+    .join(", ");
+  return { type, material, coatings };
+}
+
 export function OrderDetailDrawer({
   open,
   order,
@@ -48,12 +68,22 @@ export function OrderDetailDrawer({
   onClose,
 }: Props) {
   const cancelOrder = useOpticalOrderStore((s) => s.cancelOrder);
+  const loadOrder = useOpticalOrderStore((s) => s.loadOrder);
+  const { lensTypes, lensMaterials, lensCoatings, loadAll: loadLensCatalogs } =
+    useLensCatalogStore();
   const [mounted, setMounted] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [generatingTicket, setGeneratingTicket] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      void loadLensCatalogs();
+    }
+  }, [open, loadLensCatalogs]);
 
   // ESC key closes drawer (verbatim from AppointmentDetailDrawer)
   useEffect(() => {
@@ -74,6 +104,36 @@ export function OrderDetailDrawer({
     userRole !== null &&
     CANCEL_ROLES.has(userRole.toLowerCase()) &&
     (order.status === "draft" || order.status === "placed");
+
+  async function handleGenerateJobTicket() {
+    if (!order || generatingTicket) return;
+    setGeneratingTicket(true);
+    try {
+      const resp = await fetch(
+        `/api/optical-orders/${order.id}/job-ticket/`,
+        { method: "POST" },
+      );
+      if (!resp.ok) {
+        console.error("Job ticket generation failed", resp.status);
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `job-ticket-${order.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      // Refresh so jobTicketGeneratedAt populates → label flips to "Re-generate".
+      await loadOrder(order.id);
+    } catch (e) {
+      console.error("Job ticket download failed", (e as Error).message);
+    } finally {
+      setGeneratingTicket(false);
+    }
+  }
 
   async function handleCancel() {
     if (!order || cancelling) return;
@@ -176,24 +236,118 @@ export function OrderDetailDrawer({
                 Line items ({order.lineItems.length})
               </h3>
               <ul className="space-y-2">
-                {order.lineItems.map((li) => (
-                  <li
-                    key={li.id}
-                    className="glass-card p-3 flex justify-between items-start text-sm"
-                  >
-                    <div>
-                      <div className="font-mono text-xs text-[var(--text-muted)]">
-                        {li.productId.slice(0, 8)}
+                {order.lineItems.map((li) => {
+                  const lensDisplay = resolveLensConfigDisplay(
+                    li.lensConfig,
+                    lensTypes,
+                    lensMaterials,
+                    lensCoatings,
+                  );
+                  return (
+                    <li
+                      key={li.id}
+                      className="glass-card p-3 text-sm"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-mono text-xs text-[var(--text-muted)]">
+                            {li.productId.slice(0, 8)}
+                          </div>
+                          <div>
+                            Qty {li.qty} × ${li.unitPrice}
+                          </div>
+                        </div>
+                        <div className="font-medium">${li.lineTotal}</div>
                       </div>
-                      <div>
-                        Qty {li.qty} × ${li.unitPrice}
-                      </div>
-                    </div>
-                    <div className="font-medium">${li.lineTotal}</div>
-                  </li>
-                ))}
+                      {lensDisplay && (
+                        <div className="mt-1 pl-3 text-xs text-[var(--text-secondary)] border-l-2 border-[var(--glass-border)]">
+                          <div>
+                            Lens: {lensDisplay.type} · {lensDisplay.material}
+                          </div>
+                          {lensDisplay.coatings && (
+                            <div>Coatings: {lensDisplay.coatings}</div>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
+
+            {/* Vision Plan (Phase 14) */}
+            {order.visionPlan &&
+              Object.keys(order.visionPlan).length > 0 && (
+                <section className="pt-3 border-t border-[var(--glass-border)]">
+                  <h3 className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-2">
+                    Vision Plan
+                  </h3>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-[var(--text-primary)]">
+                    {order.visionPlan.name && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Plan</dt>
+                        <dd>{order.visionPlan.name}</dd>
+                      </>
+                    )}
+                    {order.visionPlan.member_id && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Member ID</dt>
+                        <dd>{order.visionPlan.member_id}</dd>
+                      </>
+                    )}
+                    {order.visionPlan.group_number && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Group #</dt>
+                        <dd>{order.visionPlan.group_number}</dd>
+                      </>
+                    )}
+                    {order.visionPlan.authorization_number && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Auth #</dt>
+                        <dd>{order.visionPlan.authorization_number}</dd>
+                      </>
+                    )}
+                    {order.visionPlan.copay != null && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Copay</dt>
+                        <dd>${order.visionPlan.copay}</dd>
+                      </>
+                    )}
+                    {order.visionPlan.allowance != null && (
+                      <>
+                        <dt className="text-[var(--text-muted)]">Allowance</dt>
+                        <dd>${order.visionPlan.allowance}</dd>
+                      </>
+                    )}
+                  </dl>
+                </section>
+              )}
+
+            {/* Generate Job Ticket (Phase 14) — only when placed */}
+            {order.status === "placed" && (
+              <section className="pt-3 border-t border-[var(--glass-border)]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateJobTicket}
+                  disabled={generatingTicket}
+                  className="border-[var(--glass-border)] text-[var(--text-primary)]"
+                >
+                  {generatingTicket
+                    ? "Generating…"
+                    : order.jobTicketGeneratedAt
+                      ? "Re-generate Job Ticket"
+                      : "Generate Job Ticket"}
+                </Button>
+                {order.jobTicketGeneratedAt && (
+                  <p className="mt-2 text-xs text-[var(--text-muted)]">
+                    Last generated{" "}
+                    {new Date(order.jobTicketGeneratedAt).toLocaleString()}
+                  </p>
+                )}
+              </section>
+            )}
 
             {/* Status timeline */}
             <section>

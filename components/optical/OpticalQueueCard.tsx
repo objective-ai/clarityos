@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +12,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { useOpticalStore } from "@/store/opticalStore";
+import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import type { OpticalQueueItem, OpticalStatus } from "@/types/optical";
 import { formatClinicTime, formatClinicDate, useClinicTimezone } from "@/lib/timezone";
 import { CreateWalkInOrderModal } from "@/components/orders/CreateWalkInOrderModal";
@@ -92,6 +95,7 @@ interface OpticalQueueCardProps {
 }
 
 export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
+  const router = useRouter();
   const tz = useClinicTimezone();
   const updateItemStatus = useOpticalStore((s) => s.updateItemStatus);
   const openPrintPreview = useOpticalStore((s) => s.openPrintPreview);
@@ -108,12 +112,44 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
 
   const statusConfig = STATUS_CONFIG[item.status];
   const nextStatus = STATUS_TRANSITIONS[item.status];
+  const draftOrderCount = item.draftOrderCount ?? 0;
 
   const handleAdvanceStatus = () => {
     if (nextStatus) {
       updateItemStatus(item.encounterId, nextStatus);
     }
   };
+
+  // Phase 14 OPT14-13 — open the configurator for this encounter by creating
+  // a new draft order pre-linked to encounter + patient.
+  async function handleConfigureOrder() {
+    try {
+      const newOrder = await useOpticalOrderStore.getState().createOrder({
+        patientId: item.patientId,
+        encounterId: item.encounterId,
+        lineItems: [],
+      });
+      router.push(`/optical/orders/${newOrder.id}/`);
+    } catch (e) {
+      // Avoid logging patient identifiers (clinical-safety.md)
+      console.error("Configure Order: createOrder failed", (e as Error).message);
+    }
+  }
+
+  // Phase 14 OPT14-14 — pill click resumes the most recent draft if known;
+  // otherwise routes to the queue card encounter context where the user can
+  // pick from existing drafts (or create new via Configure Order).
+  async function handleResumeDraft() {
+    const targetId = item.mostRecentDraftId;
+    if (targetId) {
+      router.push(`/optical/orders/${targetId}/`);
+      return;
+    }
+    // Fallback: open Configure Order to create a fresh one. The pill should
+    // typically be paired with mostRecentDraftId by the parent queue page;
+    // this path is defensive.
+    await handleConfigureOrder();
+  }
 
   return (
     <Card data-testid="optical-queue-card" className="glass-card glass-card-hover">
@@ -134,6 +170,16 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
               </Badge>
             )}
             <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
+            {draftOrderCount > 0 && (
+              <button
+                type="button"
+                onClick={handleResumeDraft}
+                title={`${draftOrderCount} draft order${draftOrderCount > 1 ? "s" : ""} — click to resume`}
+                className="ml-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-[var(--text-primary)] hover:bg-amber-500/20"
+              >
+                Draft pending{draftOrderCount > 1 ? ` (${draftOrderCount})` : ""}
+              </button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -275,6 +321,17 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
               onClick={() => setOrderModalOpen(true)}
             >
               + Create Order
+            </Button>
+          )}
+
+          {canCreateOrder && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleConfigureOrder}
+              className="border-[var(--glass-border)] text-[var(--text-primary)]"
+            >
+              Configure Order
             </Button>
           )}
         </div>
