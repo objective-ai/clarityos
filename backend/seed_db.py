@@ -403,6 +403,7 @@ def seed_tenant_schema(session: Session) -> None:
     _seed_insurance_payers(session)
     _seed_retail_inventory(session)
     _seed_lens_reference(session)
+    _seed_phase14_fixture(session)
     _seed_patient_insurance(session)
     _seed_superbills(session)
     _seed_intake_tokens(session)
@@ -2088,6 +2089,92 @@ def _seed_lens_reference(session: Session) -> None:
         warn(
             "Lens catalog already seeded — skipping (4 types + 6 materials + 7 coatings already present)."
         )
+
+
+def _seed_phase14_fixture(session: Session) -> None:
+    """Phase 14 OPT14-18 E2E fixture.
+
+    Augments the canonical Phase 13 seed patient (James Thornton) with:
+    - ai_summary_text containing 'progressive', 'polycarbonate',
+      'anti-reflective' keywords so the suggestion extractor surfaces
+      3 deterministic chips during E2E
+    - assessment_and_plan plain-text (Pitfall 8 — never JSON)
+    - PD distance + PD near on the final refraction (so the configurator
+      pre-fill path exercises)
+
+    Idempotency: skip if the encounter already has 'progressive' in its
+    AI summary text (single-keyword pre-check).
+    """
+    from sqlalchemy import select as _select
+
+    from backend.db.models.tenant.clinical import (
+        Encounter,
+        Patient,
+        Refraction,
+    )
+
+    step("Seeding Phase 14 E2E fixture")
+
+    patient = session.execute(
+        _select(Patient).where(
+            Patient.tenant_id == TENANT_ID,
+            Patient.last_name == "Thornton",
+        )
+    ).scalar_one_or_none()
+    if not patient:
+        warn("Phase 14 fixture: canonical seed patient (Thornton) not found — skipping.")
+        return
+
+    encounter = session.execute(
+        _select(Encounter)
+        .where(
+            Encounter.patient_id == patient.id,
+            Encounter.is_finalized.is_(True),
+        )
+        .order_by(Encounter.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if not encounter:
+        warn("Phase 14 fixture: no finalized encounter found for Thornton — skipping.")
+        return
+
+    # Idempotency — single-keyword pre-check.
+    if (
+        encounter.ai_summary_text
+        and "progressive" in encounter.ai_summary_text.lower()
+    ):
+        warn("Phase 14 fixture already seeded — skipping.")
+        return
+
+    encounter.ai_summary_text = (
+        "Patient presents at age 48 with presbyopic symptoms — difficulty with "
+        "near tasks. Recommend progressive lenses in polycarbonate material for "
+        "impact resistance and lower weight. Anti-reflective coating advised for "
+        "evening driving comfort. UV protection standard."
+    )
+    encounter.assessment_and_plan = (
+        "Presbyopia, near vision difficulty. Plan: dispense progressive lenses "
+        "with polycarbonate material and anti-reflective coating. Recheck in 1 year."
+    )
+
+    # Ensure PD on the final refraction (so configurator pre-fills it).
+    final_rx = session.execute(
+        _select(Refraction).where(
+            Refraction.encounter_id == encounter.id,
+            Refraction.is_final_rx.is_(True),
+        )
+    ).scalar_one_or_none()
+    if final_rx is not None:
+        if final_rx.pd_distance is None:
+            final_rx.pd_distance = Decimal("63.0")
+        if final_rx.pd_near is None:
+            final_rx.pd_near = Decimal("60.0")
+
+    session.flush()
+    ok(
+        f"Phase 14 E2E fixture seeded on encounter {str(encounter.id)[:8]} "
+        f"(patient {patient.last_name})."
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
