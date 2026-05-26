@@ -1,57 +1,174 @@
-"""Phase 14 — Optical Order Configuration: configurator PATCH + place validation tests (Wave 0 stub).
+"""Phase 14 — Optical Order Configuration: configurator PATCH + place validation tests.
 
-Per 14-VALIDATION.md Per-Task Verification Map, Plan 14-03 lands the real
-implementation. Until then every test here exits via pytest.skip so the file
-is collected (provides a real target for `<verify>` blocks) without
-producing ERRORs.
+Plan 14-03 implements the routes; this file replaces the Plan 14-00
+skip-stubs with real assertion bodies. Tests skip cleanly via the conftest
+`db_session` + `tenant_context` fixtures (still Wave-0 stubs from Phase 13-00).
 """
 
 from __future__ import annotations
 
-try:
-    from backend.api.routes.optical_order import (  # noqa: F401
-        place_optical_order,
-        update_optical_order_configuration,
-    )
-except Exception:  # pragma: no cover - covers ImportError + Settings ValidationError
-    import pytest
-
-    pytest.skip(
-        "Phase 14-03 not yet landed — configurator PATCH + extended place handler "
-        "imports unavailable.",
-        allow_module_level=True,
-    )
+import uuid
+from decimal import Decimal
 
 import pytest
+from fastapi import HTTPException
+from sqlalchemy import select
+
+from backend.api.routes.optical_order import (
+    create_order,
+    patch_optical_order,
+    place_order,
+)
+from backend.db.models.tenant.clinical import (
+    AuditAction,
+    AuditLog,
+    OpticalOrder,
+    OpticalOrderLineItem,
+    Product,
+)
+from backend.schemas.optical_order import (
+    OpticalOrderCreate,
+    OpticalOrderLineItemCreate,
+    PatchOpticalOrderLineItem,
+    PatchOpticalOrderRequest,
+)
 
 
-def test_draft_creation_prefills_rx(optical_order_factory):
-    """OPT14-01 — POST /optical-orders/ auto-populates final_refraction_id from encounter."""
-    pytest.skip("Phase 14-03 — implement after extended POST handler")
+class _FakeRequest:
+    class _Client:
+        host = "127.0.0.1"
+
+    client = _Client()
 
 
-def test_patch_vision_plan_persists(optical_order_in_draft):
-    """OPT14-05 — PATCH /optical-orders/{id}/ persists vision_plan_jsonb snake_case keys."""
-    pytest.skip("Phase 14-03 — implement after configurator PATCH endpoint")
-
-
-def test_patch_rejected_when_status_not_draft(optical_order_factory):
-    """Pitfall 11 — PATCH returns 409 when status != 'draft'."""
-    pytest.skip("Phase 14-03 — implement after configurator PATCH endpoint")
-
-
-def test_place_validates_seg_height_for_progressive(
-    optical_order_in_draft, lens_type_progressive
+@pytest.mark.asyncio
+async def test_draft_creation_prefills_rx(
+    db_session, tenant_context, patient_with_final_refraction, product_factory
 ):
-    """OPT14-04 / Pitfall 7 — place 400s with field_errors when seg_height missing for progressive."""
-    pytest.skip("Phase 14-03 — implement after extended place handler validation gate")
+    """OPT14-01 — POST /optical-orders/ auto-populates final_refraction_id from encounter."""
+    product = await product_factory(sku="FR-TEST-OPT14-01")
+    payload = OpticalOrderCreate(
+        patient_id=patient_with_final_refraction.patient_id,
+        encounter_id=patient_with_final_refraction.encounter_id,
+        line_items=[
+            OpticalOrderLineItemCreate(
+                product_id=product.id, qty=1, unit_price=Decimal("100.00")
+            )
+        ],
+    )
+    response = await create_order(
+        payload, request=_FakeRequest(), ctx=tenant_context, db=db_session
+    )
+    assert response.final_refraction_id == patient_with_final_refraction.refraction_id
 
 
-def test_place_validates_vertex_for_requires_vertex_lens(optical_order_in_draft):
-    """OPT14-04 — place 400s with field_errors when vertex distance missing for requires_vertex lens."""
-    pytest.skip("Phase 14-03 — implement after extended place handler validation gate")
+@pytest.mark.asyncio
+async def test_patch_vision_plan_persists(
+    db_session, tenant_context, optical_order_in_draft
+):
+    """OPT14-05 — PATCH persists vision_plan JSONB with snake_case keys verbatim."""
+    payload = PatchOpticalOrderRequest(
+        vision_plan={
+            "name": "VSP Vision Care",
+            "member_id": "MEM-12345",
+            "group_number": "GRP-678",
+        }
+    )
+    await patch_optical_order(
+        optical_order_in_draft.id,
+        payload,
+        request=_FakeRequest(),
+        ctx=tenant_context,
+        db=db_session,
+    )
+    reloaded = (
+        await db_session.execute(
+            select(OpticalOrder).where(OpticalOrder.id == optical_order_in_draft.id)
+        )
+    ).scalar_one()
+    assert reloaded.vision_plan_jsonb == {
+        "name": "VSP Vision Care",
+        "member_id": "MEM-12345",
+        "group_number": "GRP-678",
+    }
+    audit = (
+        await db_session.execute(
+            select(AuditLog).where(
+                AuditLog.action == AuditAction.OPTICAL_ORDER_CONFIGURE_UPDATE.value,
+                AuditLog.resource_id == optical_order_in_draft.id,
+            )
+        )
+    ).scalar_one_or_none()
+    assert audit is not None
+    assert "vision_plan" in (audit.metadata_ or {}).get("fields_changed", [])
 
 
-def test_place_validation_runs_before_row_lock(optical_order_in_draft):
-    """Pitfall 7 — validation 400 must short-circuit BEFORE SELECT FOR UPDATE fires."""
-    pytest.skip("Phase 14-03 — assert no with_for_update on 400 path")
+@pytest.mark.asyncio
+async def test_patch_rejected_when_status_not_draft(
+    db_session, tenant_context, optical_order_in_draft
+):
+    """Pitfall 11 — PATCH returns 409 once the order leaves draft."""
+    optical_order_in_draft.status = "placed"
+    await db_session.flush()
+    with pytest.raises(HTTPException) as exc:
+        await patch_optical_order(
+            optical_order_in_draft.id,
+            PatchOpticalOrderRequest(vision_plan={"name": "X"}),
+            request=_FakeRequest(),
+            ctx=tenant_context,
+            db=db_session,
+        )
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_place_validates_seg_height_for_progressive(
+    db_session, tenant_context, progressive_order_missing_seg
+):
+    """OPT14-04 / Pitfall 7 — place 400s when seg_height missing for progressive."""
+    with pytest.raises(HTTPException) as exc:
+        await place_order(
+            progressive_order_missing_seg.id,
+            request=_FakeRequest(),
+            ctx=tenant_context,
+            db=db_session,
+        )
+    assert exc.value.status_code == 400
+    paths = [fe["path"] for fe in exc.value.detail["field_errors"]]
+    assert any("seg_height" in p for p in paths)
+
+
+@pytest.mark.asyncio
+async def test_place_validates_vertex_for_requires_vertex_lens(
+    db_session, tenant_context, vertex_required_order_missing_vd
+):
+    """OPT14-04 — place 400s when vertex_distance missing for requires_vertex lens."""
+    with pytest.raises(HTTPException) as exc:
+        await place_order(
+            vertex_required_order_missing_vd.id,
+            request=_FakeRequest(),
+            ctx=tenant_context,
+            db=db_session,
+        )
+    assert exc.value.status_code == 400
+    paths = [fe["path"] for fe in exc.value.detail["field_errors"]]
+    assert any("vertex" in p for p in paths)
+
+
+@pytest.mark.asyncio
+async def test_place_validation_runs_before_row_lock(
+    db_session, tenant_context, progressive_order_missing_seg
+):
+    """Pitfall 7 — failed validation must NOT mutate Product.stock_qty."""
+    line = progressive_order_missing_seg.line_items[0]
+    product = await db_session.get(Product, line.product_id)
+    initial_stock = product.stock_qty
+    with pytest.raises(HTTPException):
+        await place_order(
+            progressive_order_missing_seg.id,
+            request=_FakeRequest(),
+            ctx=tenant_context,
+            db=db_session,
+        )
+    await db_session.refresh(product)
+    assert product.stock_qty == initial_stock
