@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: paused
-stopped_at: "Phase 14 plan 14-01 complete (2/12) — paused on Supabase pooler ENOTFOUND. Migration 0019 written + offline-validated; not yet applied. Resume: restore DB access → alembic upgrade head → /reseed → /gsd:execute-phase 14 (will start at 14-02)."
-last_updated: "2026-05-26T13:15:00.000Z"
+status: executing
+stopped_at: "Phase 14 — migration 0019 applied + round-trip clean (DB unblocked 2026-05-26). Resumed at Plan 14-02."
+last_updated: "2026-05-26T13:25:00.000Z"
 progress:
   total_phases: 12
   completed_phases: 7
