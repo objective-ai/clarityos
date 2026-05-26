@@ -78,9 +78,51 @@ EXPECTED_OPTICAL_ORDER_RESPONSE_PHASE14_EXTRA_KEYS = {
 
 def test_optical_order_response_contract_phase14_keys():
     """OPT14-17 — OpticalOrderResponse.model_dump(by_alias=True) includes Phase 14 extensions."""
-    pytest.skip("Schemas extended in Phase 14-01")
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from uuid import uuid4
+
+    from backend.schemas.optical_order import OpticalOrderResponse
+
+    now = datetime.now(timezone.utc)
+    response = OpticalOrderResponse(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        patient_id=uuid4(),
+        encounter_id=None,
+        status="draft",
+        total_price=Decimal("0.00"),
+        created_by_id=uuid4(),
+        placed_at=None,
+        dispensed_at=None,
+        cancelled_at=None,
+        created_at=now,
+        updated_at=now,
+        line_items=[],
+    )
+    keys = set(response.model_dump(by_alias=True).keys())
+    assert EXPECTED_OPTICAL_ORDER_RESPONSE_PHASE14_EXTRA_KEYS.issubset(keys), (
+        f"Missing Phase 14 keys: "
+        f"{EXPECTED_OPTICAL_ORDER_RESPONSE_PHASE14_EXTRA_KEYS - keys}"
+    )
 
 
 def test_optical_order_line_item_contract_lens_config():
     """OPT14-17 — OpticalOrderLineItemResponse.model_dump(by_alias=True) includes lensConfig."""
-    pytest.skip("Schemas extended in Phase 14-01")
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from uuid import uuid4
+
+    from backend.schemas.optical_order import OpticalOrderLineItemResponse
+
+    line = OpticalOrderLineItemResponse(
+        id=uuid4(),
+        order_id=uuid4(),
+        product_id=uuid4(),
+        qty=1,
+        unit_price=Decimal("100.00"),
+        line_total=Decimal("100.00"),
+        created_at=datetime.now(timezone.utc),
+    )
+    keys = set(line.model_dump(by_alias=True).keys())
+    assert "lensConfig" in keys, f"lensConfig missing from line item response: {keys}"
