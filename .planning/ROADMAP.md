@@ -42,7 +42,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 11 | 4/4 | Complete    | 2026-04-21 | — |
 | 12 | 7/11 | In Progress|  | — |
 | 13 | 14/16 | In Progress|  | — |
-| 14 | 11/12 | In Progress|  | — |
+| 14 | 12/12 | Complete   | 2026-05-26 | — |
 | 15 | Point of Sale | 0/? | Not started | — |
 | 16 | Reporting & Exports | 0/? | Not started | — |
 | 17 | AI Scribe Audio | 0/? | Not started | — |
@@ -183,7 +183,7 @@ Plans:
   7. AI Scribe optical recommendations appear as ghosted suggestions in order form
 
 **Requirements:** [OPT14-01, OPT14-02, OPT14-03, OPT14-04, OPT14-05, OPT14-06, OPT14-07, OPT14-08, OPT14-09, OPT14-10, OPT14-11, OPT14-12, OPT14-13, OPT14-14, OPT14-15, OPT14-16, OPT14-17, OPT14-18]
-**Plans:** 11/12 plans executed
+**Plans:** 12/12 plans complete
 
 Plans:
 - [ ] 14-00-PLAN.md — Wave 0 test scaffold (pytest stubs + vitest stubs + Playwright skeleton) + append OPT14-01..18 to REQUIREMENTS.md
@@ -196,7 +196,7 @@ Plans:
 - [ ] 14-07-PLAN.md — 11 BFF proxy routes (PATCH order, job-ticket Blob stream, suggestions, lens-catalog CRUD)
 - [ ] 14-08-PLAN.md — Frontend stores: opticalOrderConfigStore (1.5s debounce + flush-on-blur) + lensCatalogStore + TS types
 - [ ] 14-09-PLAN.md — Configurator page route + 7 components (RxSideBySide, FramePicker, LensConfig, Measurements, VisionPlan, SuggestionChip, Footer)
-- [ ] 14-10-PLAN.md — Entry-point wiring: queue CTA + Draft pending pill + walk-in redirect + OrdersTab routing + OrderDetailDrawer Phase 14 sections (absorbs INV-15) + todo archive
+- [x] 14-10-PLAN.md — Entry-point wiring: queue CTA + Draft pending pill + walk-in redirect + OrdersTab routing + OrderDetailDrawer Phase 14 sections (absorbs INV-15) + todo archive (completed 2026-05-26)
 - [ ] 14-11-PLAN.md — Playwright E2E spec + seed Phase 14 fixture + finalize 14-VALIDATION.md + manual HIPAA checkpoint
 
 ### Phase 15: Point of Sale
