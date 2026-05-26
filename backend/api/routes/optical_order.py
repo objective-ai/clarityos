@@ -26,6 +26,7 @@ from backend.core.permissions import ClinicalAction, require_permission
 from backend.core.security import TenantContext, resolve_staff
 from backend.db.models.tenant.clinical import (
     AuditAction,
+    Encounter,
     InventoryTransaction,
     LensType,
     OpticalOrder,
@@ -39,8 +40,10 @@ from backend.schemas.optical_order import (
     OpticalOrderCreate,
     OpticalOrderPlaceResponse,
     OpticalOrderResponse,
+    OpticalSuggestionsListResponse,
     PatchOpticalOrderRequest,
 )
+from backend.services.optical_suggestions import extract_optical_suggestions
 
 router = APIRouter(dependencies=[Depends(require_entitlement("retail_pos"))])
 
@@ -732,3 +735,156 @@ async def dispense_order(
     await db.commit()
 
     return _order_response(order)
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 — AI Scribe optical suggestion routes
+# ---------------------------------------------------------------------------
+
+
+_VALID_SUGGESTION_FIELDS = {"lens_type", "material", "coatings"}
+
+
+@router.get(
+    "/{order_id}/suggestions/",
+    response_model=OpticalSuggestionsListResponse,
+)
+async def get_optical_suggestions(
+    order_id: uuid.UUID,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.VIEW_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return AI Scribe optical suggestions for the order's encounter.
+
+    Filters out suggestions whose field is already resolved ("accepted" /
+    "dismissed") in order.suggestion_resolutions_jsonb so the UX chip list
+    stays short and doesn't re-prompt after a decision.
+    """
+    order = (
+        await db.execute(
+            select(OpticalOrder).where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    encounter: Encounter | None = None
+    if order.encounter_id:
+        encounter = await db.get(Encounter, order.encounter_id)
+
+    result = extract_optical_suggestions(encounter)
+    resolutions = order.suggestion_resolutions_jsonb or {}
+    result["suggestions"] = [
+        s
+        for s in result["suggestions"]
+        if resolutions.get(s["field"]) not in {"accepted", "dismissed"}
+    ]
+    return result
+
+
+async def _resolve_suggestion(
+    order_id: uuid.UUID,
+    field_name: str,
+    outcome: str,
+    request: Request,
+    ctx: TenantContext,
+    db: AsyncSession,
+) -> OpticalOrderResponse:
+    if field_name not in _VALID_SUGGESTION_FIELDS:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_field", "field": field_name},
+        )
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "not_draft",
+                "message": (
+                    f"Order is {order.status}; suggestions only resolvable in draft"
+                ),
+            },
+        )
+
+    staff = await resolve_staff(ctx, db)
+    current = dict(order.suggestion_resolutions_jsonb or {})
+    current[field_name] = outcome
+    order.suggestion_resolutions_jsonb = current
+    # SQLAlchemy does not auto-detect mutation on Mapped[dict] columns —
+    # without flag_modified() the audit row writes but the JSONB persist
+    # is silently skipped (the value compares equal to the prior copy
+    # because Python dict identity is preserved).
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(order, "suggestion_resolutions_jsonb")
+
+    await log_action(
+        db, ctx, AuditAction.OPTICAL_ORDER_CONFIGURE_UPDATE,
+        "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        metadata={
+            "action": "suggestion_resolution",
+            "field": field_name,
+            "outcome": outcome,
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.flush()
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(OpticalOrder.id == order_id)
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one()
+    await db.commit()
+    return _order_response(order)
+
+
+@router.post(
+    "/{order_id}/suggestions/{field_name}/accept/",
+    response_model=OpticalOrderResponse,
+)
+async def accept_optical_suggestion(
+    order_id: uuid.UUID,
+    field_name: str,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _resolve_suggestion(
+        order_id, field_name, "accepted", request, ctx, db
+    )
+
+
+@router.post(
+    "/{order_id}/suggestions/{field_name}/dismiss/",
+    response_model=OpticalOrderResponse,
+)
+async def dismiss_optical_suggestion(
+    order_id: uuid.UUID,
+    field_name: str,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _resolve_suggestion(
+        order_id, field_name, "dismissed", request, ctx, db
+    )

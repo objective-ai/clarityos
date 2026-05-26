@@ -115,6 +115,24 @@ class PatchOpticalOrderLineItem(CamelCaseModel):
     lens_config: dict[str, Any] | None = None
 
 
+class OpticalSuggestionResponse(CamelCaseModel):
+    """Single suggestion chip returned by extract_optical_suggestions().
+
+    ``value`` is ``str`` for ``lens_type`` / ``material``; ``list[str]`` for
+    ``coatings``. ``matched`` records the substrings that triggered the hit
+    for UX explainability ("matched 'progressive' in A&P").
+    """
+
+    field: str
+    value: Any
+    matched: list[str] = []
+
+
+class OpticalSuggestionsListResponse(CamelCaseModel):
+    suggestions: list[OpticalSuggestionResponse] = []
+    rationale: str
+
+
 class PatchOpticalOrderRequest(CamelCaseModel):
     """Configurator autosave shape — every field optional so the FE can
     PATCH a single delta. JSONB nested keys stay snake_case end-to-end
