@@ -888,3 +888,153 @@ async def dismiss_optical_suggestion(
     return await _resolve_suggestion(
         order_id, field_name, "dismissed", request, ctx, db
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 — Job ticket PDF (lab work order)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{order_id}/job-ticket/")
+async def generate_job_ticket(
+    order_id: uuid.UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.GENERATE_JOB_TICKET)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate the lab work-order PDF for a placed optical order.
+
+    Status gate: 400 when order.status != 'placed'. PDF is streamed in
+    the response body; not persisted to disk. Sets job_ticket_generated_at
+    and writes JOB_TICKET_GENERATE audit row in the primary TXN.
+    """
+    from fastapi import Response as FastAPIResponse
+
+    from backend.db.models.tenant.clinical import (
+        Encounter,
+        LensCoating,
+        LensMaterial,
+        LensType,
+        Patient,
+    )
+    from backend.db.models.public.saas import Tenant
+    from backend.services.job_ticket_pdf import build_job_ticket_pdf
+
+    stmt = (
+        select(OpticalOrder)
+        .where(
+            OpticalOrder.id == order_id,
+            OpticalOrder.tenant_id == ctx.tenant_id,
+        )
+        .options(
+            selectinload(OpticalOrder.line_items),
+            selectinload(OpticalOrder.final_refraction),
+            selectinload(OpticalOrder.habitual_refraction),
+        )
+    )
+    order = (await db.execute(stmt)).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "placed":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "not_placed",
+                "message": "Place order before generating job ticket",
+            },
+        )
+
+    patient = await db.get(Patient, order.patient_id)
+    encounter = (
+        await db.get(Encounter, order.encounter_id) if order.encounter_id else None
+    )
+    tenant = await db.get(Tenant, ctx.tenant_id)
+
+    product_ids = {li.product_id for li in order.line_items}
+    products = (
+        (await db.execute(select(Product).where(Product.id.in_(product_ids))))
+        .scalars()
+        .all()
+        if product_ids
+        else []
+    )
+    products_by_id = {p.id: p for p in products}
+
+    lens_type_ids: set[uuid.UUID] = set()
+    lens_material_ids: set[uuid.UUID] = set()
+    lens_coating_ids: set[uuid.UUID] = set()
+    for li in order.line_items:
+        lc = li.lens_config_jsonb or {}
+        if lc.get("lens_type_id"):
+            val = lc["lens_type_id"]
+            lens_type_ids.add(val if isinstance(val, uuid.UUID) else uuid.UUID(str(val)))
+        if lc.get("material_id"):
+            val = lc["material_id"]
+            lens_material_ids.add(
+                val if isinstance(val, uuid.UUID) else uuid.UUID(str(val))
+            )
+        for cid in lc.get("coating_ids", []) or []:
+            lens_coating_ids.add(
+                cid if isinstance(cid, uuid.UUID) else uuid.UUID(str(cid))
+            )
+
+    lens_types_by_id: dict[uuid.UUID, LensType] = {}
+    if lens_type_ids:
+        rows = (
+            await db.execute(select(LensType).where(LensType.id.in_(lens_type_ids)))
+        ).scalars().all()
+        lens_types_by_id = {r.id: r for r in rows}
+
+    lens_materials_by_id: dict[uuid.UUID, LensMaterial] = {}
+    if lens_material_ids:
+        rows = (
+            await db.execute(
+                select(LensMaterial).where(LensMaterial.id.in_(lens_material_ids))
+            )
+        ).scalars().all()
+        lens_materials_by_id = {r.id: r for r in rows}
+
+    lens_coatings_by_id: dict[uuid.UUID, LensCoating] = {}
+    if lens_coating_ids:
+        rows = (
+            await db.execute(
+                select(LensCoating).where(LensCoating.id.in_(lens_coating_ids))
+            )
+        ).scalars().all()
+        lens_coatings_by_id = {r.id: r for r in rows}
+
+    staff = await resolve_staff(ctx, db)
+    staff_name = getattr(staff, "full_name", None) or "—"
+
+    pdf_bytes = build_job_ticket_pdf(
+        order=order,
+        patient=patient,
+        encounter=encounter,
+        final_refraction=order.final_refraction,
+        habitual_refraction=order.habitual_refraction,
+        products_by_id=products_by_id,
+        lens_types_by_id=lens_types_by_id,
+        lens_materials_by_id=lens_materials_by_id,
+        lens_coatings_by_id=lens_coatings_by_id,
+        tenant=tenant,
+        staff_name=staff_name,
+    )
+
+    order.job_ticket_generated_at = datetime.now(timezone.utc)
+    await log_action(
+        db, ctx, AuditAction.JOB_TICKET_GENERATE,
+        "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        metadata={"byte_count": len(pdf_bytes)},
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+
+    filename = f"job-ticket-{str(order.id)[:8]}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
