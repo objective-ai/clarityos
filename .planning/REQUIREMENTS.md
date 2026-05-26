@@ -160,6 +160,27 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **INV-19**: 5 new `ClinicalAction` enum values added with PERMISSION_MATRIX rows: `VIEW_INVENTORY` {D,T,R,A,O}, `MANAGE_INVENTORY` {A,O}, `CREATE_OPTICAL_ORDER` {T,R,A,O}, `VIEW_OPTICAL_ORDER` {D,T,R,A,O}, `CANCEL_OPTICAL_ORDER` {A,O}
 - [ ] **INV-20**: Inventory admin page at `app/(tenant)/[tenant]/inventory/page.tsx` with per-type tabs (Frames | Contacts), filter row, product table with stock badge column, and modal-driven CRUD + Receive Stock + Adjust Stock actions; sidebar Inventory link gated on `Entitlement.RETAIL_POS`
 
+### Optical Order Configuration (Phase 14)
+
+- [ ] **OPT14-01**: Configurator route opens from optical queue with Final Rx pre-populated and PD pre-filled from `refraction.pd_distance` / `pd_near` (ROADMAP success criterion #1)
+- [ ] **OPT14-02**: Habitual Rx column rendered side-by-side with Final Rx in configurator left pane (OD/OS × sphere/cyl/axis/add/prism); delta-flag row when |Final − Habitual| SE > 0.50D (ROADMAP success criterion #2)
+- [ ] **OPT14-03**: Frame picker reads Phase 13 products?type=frame catalog; lens type/material/coatings selectable from new admin-managed reference catalogs `lens_types`/`lens_materials`/`lens_coatings` (ROADMAP success criterion #3)
+- [ ] **OPT14-04**: Seg height OD/OS captured; required-marker triggers when `lens_type.requires_seg_height=true`; vertex distance required when `requires_vertex=true`; place handler 400s with `field_errors: [{path, code, message}]` on missing required fields (ROADMAP success criterion #4)
+- [ ] **OPT14-05**: Vision plan name, member ID, group number captured in `vision_plan_jsonb` (snake_case keys: name, member_id, group_number, authorization_number?, copay?, allowance?) (ROADMAP success criterion #5)
+- [ ] **OPT14-06**: `POST /optical-orders/{id}/job-ticket/` returns reportlab PDF with header (clinic), patient block, two-column Rx (Habitual | Final), frame, lens, coatings, measurements, vision plan, footer (staff + timestamp); sets `job_ticket_generated_at`; gated on `status='placed'` (ROADMAP success criterion #6)
+- [ ] **OPT14-07**: AI Scribe optical recommendations surface as ghosted ✨ chips inline in configurator; accept fills field; dismiss persists to `OpticalOrder.suggestion_resolutions_jsonb`; deterministic keyword extractor — no new Claude calls (ROADMAP success criterion #7)
+- [ ] **OPT14-08**: Alembic migration 0019 adds 3 lens reference tables (`lens_types`, `lens_materials`, `lens_coatings`) + 5 OpticalOrder columns (`vision_plan_jsonb`, `fitting_jsonb`, `suggestion_resolutions_jsonb`, `final_refraction_id`, `habitual_refraction_id`, `job_ticket_generated_at`) + 1 OpticalOrderLineItem column (`lens_config_jsonb`); JSONB server_default via `sa.text("'{}'::jsonb")`; partial unique indexes `(tenant_id, name) WHERE is_active=true` on each reference table
+- [ ] **OPT14-09**: 2 new ClinicalAction values wired into PERMISSION_MATRIX: `GENERATE_JOB_TICKET` {T,R,A,O}, `MANAGE_LENS_CATALOG` {A,O}
+- [ ] **OPT14-10**: 5 new AuditAction VARCHAR values logged via `log_action()` in primary TXN: `OPTICAL_ORDER_CONFIGURE_UPDATE`, `JOB_TICKET_GENERATE`, `LENS_TYPE_CREATE`, `LENS_MATERIAL_CREATE`, `LENS_COATING_CREATE`; UPDATE/DEACTIVATE reuse with `metadata.action` discriminator
+- [ ] **OPT14-11**: `_seed_lens_reference()` idempotently seeds 4 lens types (Single Vision, Bifocal, Progressive, Reading) + 6 materials (CR-39, polycarbonate, trivex, hi-index 1.67/1.74/1.80) + 7 coatings (AR, UV, blue light, photochromic, polarized, scratch-resistant, mirror); wired into `seed_tenant_schema()` after `_seed_retail_inventory()`
+- [ ] **OPT14-12**: Full-page configurator route at `app/(tenant)/[tenant]/optical/orders/[orderId]/page.tsx`; autosave 1.5s debounce + flush-on-blur via `opticalOrderConfigStore` (raw fetch + getAuthHeaders to preserve JSONB snake_case per Pitfall 1); no-ops when status != 'draft' (Pitfall 11)
+- [ ] **OPT14-13**: Three configurator entry points wired: (1) optical-queue card "Configure Order" CTA, (2) Patient Orders tab draft-order click, (3) walk-in modal redirect on submit for spectacle orders
+- [ ] **OPT14-14**: `OpticalQueueItem.draft_order_count: int = 0` schema field + "Draft pending" pill on `OpticalQueueCard.tsx` (absorbs 2026-05-08-optical-queue-draft-order-indicator todo); pill click routes to most recent draft (Open Question #3 resolution)
+- [ ] **OPT14-15**: `OrderDetailDrawer` component — 480px right-slide drawer with ESC + backdrop close, hydration safety (`if (!open && !order) return null`), renders status timeline + line items + lens config (read-only) + vision plan + Generate Job Ticket button; mirrors `AppointmentDetailDrawer.tsx`; absorbs Phase 13 INV-15
+- [ ] **OPT14-16**: BFF proxies registered for all new endpoints (11 routes): PATCH /optical-orders/[id]/; POST /optical-orders/[id]/job-ticket/ (raw fetch — Blob); GET /optical-orders/[id]/suggestions/; POST /optical-orders/[id]/suggestions/[suggestionId]/{accept|dismiss}/; lens-catalog/{types|materials|coatings}/ GET+POST + [id]/ GET+PATCH+DELETE; all with trailing-slash upstream URLs
+- [ ] **OPT14-17**: Pydantic `by_alias` contract tests for `OpticalOrderResponse` (extended), `OpticalOrderLineItemResponse` (lens_config), `LensTypeResponse`, `LensMaterialResponse`, `LensCoatingResponse`, `JobTicketMetaResponse`; vitest literal-keys mirror per `feedback_contract_tests.md`
+- [ ] **OPT14-18**: Playwright E2E covering optical queue → "Configure Order" CTA → configurator autosave (PATCH intercept) → place with missing seg height (400 field_errors) → fix → place succeeds → Generate Job Ticket (PDF download) → OrderDetailDrawer view for placed order
+
 ## v2 Requirements
 
 Deferred to future milestone. Tracked but not in current roadmap.
@@ -335,13 +356,31 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | INV-18 | Phase 13 | Complete |
 | INV-19 | Phase 13 | Complete |
 | INV-20 | Phase 13 | Pending |
+| OPT14-01 | Phase 14 | Pending |
+| OPT14-02 | Phase 14 | Pending |
+| OPT14-03 | Phase 14 | Pending |
+| OPT14-04 | Phase 14 | Pending |
+| OPT14-05 | Phase 14 | Pending |
+| OPT14-06 | Phase 14 | Pending |
+| OPT14-07 | Phase 14 | Pending |
+| OPT14-08 | Phase 14 | Pending |
+| OPT14-09 | Phase 14 | Pending |
+| OPT14-10 | Phase 14 | Pending |
+| OPT14-11 | Phase 14 | Pending |
+| OPT14-12 | Phase 14 | Pending |
+| OPT14-13 | Phase 14 | Pending |
+| OPT14-14 | Phase 14 | Pending |
+| OPT14-15 | Phase 14 | Pending |
+| OPT14-16 | Phase 14 | Pending |
+| OPT14-17 | Phase 14 | Pending |
+| OPT14-18 | Phase 14 | Pending |
 
 **Coverage:**
-- Total requirements: 123
+- Total requirements: 141
 - Complete: 67
-- Pending: 56
+- Pending: 74
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-04-30 — Phase 13 Retail Inventory (20 INV requirements added)*
+*Last updated: 2026-05-14 — Phase 14 Optical Order Configuration (18 OPT14 requirements added)*
