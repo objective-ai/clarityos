@@ -203,6 +203,13 @@ class AuditAction(str, enum.Enum):
     OPTICAL_ORDER_PLACE = "optical_order_place"
     OPTICAL_ORDER_CANCEL = "optical_order_cancel"
     OPTICAL_ORDER_DISPENSE = "optical_order_dispense"
+    # Phase 14 — Optical Order Configuration (migration 0019)
+    # Stored as VARCHAR(50); no ALTER TYPE needed.
+    OPTICAL_ORDER_CONFIGURE_UPDATE = "optical_order_configure_update"
+    JOB_TICKET_GENERATE = "job_ticket_generate"
+    LENS_TYPE_CREATE = "lens_type_create"
+    LENS_MATERIAL_CREATE = "lens_material_create"
+    LENS_COATING_CREATE = "lens_coating_create"
 
 
 # ---------------------------------------------------------------------------
@@ -1592,6 +1599,30 @@ class OpticalOrder(TimestampMixin, TenantBase):
         DateTime(timezone=True), nullable=True
     )
 
+    # Phase 14 — Optical Order Configuration (migration 0019)
+    vision_plan_jsonb: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="'{}'::jsonb"
+    )
+    fitting_jsonb: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="'{}'::jsonb"
+    )
+    suggestion_resolutions_jsonb: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="'{}'::jsonb"
+    )
+    final_refraction_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("refractions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    habitual_refraction_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("refractions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    job_ticket_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # --- Relationships ---
     line_items: Mapped[list["OpticalOrderLineItem"]] = relationship(
         "OpticalOrderLineItem", back_populates="order",
@@ -1604,6 +1635,14 @@ class OpticalOrder(TimestampMixin, TenantBase):
     )
     created_by: Mapped["Staff"] = relationship(
         "Staff", foreign_keys=[created_by_id]
+    )
+    # Phase 14 — explicit foreign_keys per Pitfall 6 (two FKs to refractions
+    # would otherwise raise AmbiguousForeignKeysError at mapper configure).
+    final_refraction: Mapped["Refraction | None"] = relationship(
+        "Refraction", foreign_keys=[final_refraction_id], lazy="selectin"
+    )
+    habitual_refraction: Mapped["Refraction | None"] = relationship(
+        "Refraction", foreign_keys=[habitual_refraction_id], lazy="selectin"
     )
 
     def __repr__(self) -> str:
@@ -1645,6 +1684,10 @@ class OpticalOrderLineItem(TenantBase):
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # Phase 14 — per-line lens configuration (null for frame-only / contact lines).
+    lens_config_jsonb: Mapped[dict | None] = mapped_column(
+        JSONB, nullable=True
     )
 
     # --- Relationships ---
@@ -1721,3 +1764,122 @@ class InventoryTransaction(TenantBase):
             f"<InventoryTransaction product_id={self.product_id} "
             f"delta={self.delta} reason={self.reason}>"
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 — Lens reference catalog (admin-managed)
+#
+# Three tenant-scoped, soft-deletable, display-ordered reference tables that
+# drive the configurator's lens selection. Mirrors the Product shape minus the
+# pricing / stock columns. Partial unique index on (tenant_id, name) WHERE
+# is_active=true lives in migration 0019 (raw SQL — sqlalchemy's
+# postgresql_where did not always emit the WHERE clause cleanly per
+# Phase 13 0017 precedent).
+# ---------------------------------------------------------------------------
+
+
+class LensType(TimestampMixin, SoftDeleteMixin, TenantBase):
+    """Admin-managed lens type (Single Vision, Bifocal, Progressive, Reading).
+
+    ``requires_seg_height`` drives the configurator's required-marker on the
+    seg-height field; ``requires_vertex`` does the same for the vertex
+    distance field (OPT14-04 / Pitfall 7).
+    """
+
+    __tablename__ = "lens_types"
+    __table_args__ = (
+        Index("ix_lens_types_tenant", "tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    requires_seg_height: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    requires_vertex: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    display_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+
+    def __repr__(self) -> str:
+        return f"<LensType name={self.name!r} seg={self.requires_seg_height}>"
+
+
+class LensMaterial(TimestampMixin, SoftDeleteMixin, TenantBase):
+    """Admin-managed lens material (CR-39, polycarbonate, trivex, hi-index …).
+
+    ``refractive_index`` + ``abbe_value`` are optical properties surfaced as
+    tooltips in the configurator UI; both nullable because not every material
+    has them documented (e.g. legacy entries).
+    """
+
+    __tablename__ = "lens_materials"
+    __table_args__ = (
+        Index("ix_lens_materials_tenant", "tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    refractive_index: Mapped[Decimal | None] = mapped_column(
+        Numeric(3, 2), nullable=True
+    )
+    abbe_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    display_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+
+    def __repr__(self) -> str:
+        return f"<LensMaterial name={self.name!r} n={self.refractive_index}>"
+
+
+class LensCoating(TimestampMixin, SoftDeleteMixin, TenantBase):
+    """Admin-managed lens coating (AR, UV, blue light, photochromic, …).
+
+    ``category`` segments treatments vs tints vs finishes for grouped display
+    in the configurator. Nullable because legacy / uncategorised entries.
+    """
+
+    __tablename__ = "lens_coatings"
+    __table_args__ = (
+        Index("ix_lens_coatings_tenant", "tenant_id"),
+        CheckConstraint(
+            "category IN ('treatment', 'tint', 'finish') OR category IS NULL",
+            name="ck_lens_coatings_category",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    category: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    display_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+
+    def __repr__(self) -> str:
+        return f"<LensCoating name={self.name!r} category={self.category}>"
