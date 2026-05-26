@@ -42,7 +42,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 11 | 4/4 | Complete    | 2026-04-21 | — |
 | 12 | 7/11 | In Progress|  | — |
 | 13 | 14/16 | In Progress|  | — |
-| 14 | 9/12 | In Progress|  | — |
+| 14 | 10/12 | In Progress|  | — |
 | 15 | Point of Sale | 0/? | Not started | — |
 | 16 | Reporting & Exports | 0/? | Not started | — |
 | 17 | AI Scribe Audio | 0/? | Not started | — |
@@ -183,7 +183,7 @@ Plans:
   7. AI Scribe optical recommendations appear as ghosted suggestions in order form
 
 **Requirements:** [OPT14-01, OPT14-02, OPT14-03, OPT14-04, OPT14-05, OPT14-06, OPT14-07, OPT14-08, OPT14-09, OPT14-10, OPT14-11, OPT14-12, OPT14-13, OPT14-14, OPT14-15, OPT14-16, OPT14-17, OPT14-18]
-**Plans:** 9/12 plans executed
+**Plans:** 10/12 plans executed
 
 Plans:
 - [ ] 14-00-PLAN.md — Wave 0 test scaffold (pytest stubs + vitest stubs + Playwright skeleton) + append OPT14-01..18 to REQUIREMENTS.md
