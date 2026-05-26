@@ -213,3 +213,34 @@ async def inventory_transaction_factory(db_session, tenant_context):
         return tx
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 (Wave 0) — Optical Order Configuration lens-catalog + draft-order
+# fixtures. Plan 14-01 lands the LensType/LensMaterial/LensCoating ORM and the
+# OpticalOrder column extensions; until then these fixtures skip cleanly.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def lens_type_progressive():
+    """Wave 0 stub — LensType ORM lands in Phase 14-01."""
+    pytest.skip("Phase 14-01 — LensType ORM not yet added")
+
+
+@pytest.fixture
+def lens_material_polycarbonate():
+    """Wave 0 stub — LensMaterial ORM lands in Phase 14-01."""
+    pytest.skip("Phase 14-01 — LensMaterial ORM not yet added")
+
+
+@pytest.fixture
+def lens_coating_ar():
+    """Wave 0 stub — LensCoating ORM lands in Phase 14-01."""
+    pytest.skip("Phase 14-01 — LensCoating ORM not yet added")
+
+
+@pytest.fixture
+def optical_order_in_draft():
+    """Wave 0 stub — OpticalOrder factory extension lands in Phase 14-01."""
+    pytest.skip("Phase 14-01 — OpticalOrder Phase 14 columns not yet added")

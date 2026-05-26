@@ -60,3 +60,27 @@ def test_product_response_camel_keys():
 def test_optical_order_response_camel_keys():
     """INV-13 — OpticalOrderResponse.model_dump(by_alias=True) produces these exact keys."""
     pytest.skip("Wave 1 (13-03)")
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 — Optical Order Configuration contract extensions (OPT14-17)
+# ---------------------------------------------------------------------------
+
+EXPECTED_OPTICAL_ORDER_RESPONSE_PHASE14_EXTRA_KEYS = {
+    "finalRefractionId",
+    "habitualRefractionId",
+    "visionPlan",
+    "fitting",
+    "jobTicketGeneratedAt",
+    "suggestionResolutions",
+}
+
+
+def test_optical_order_response_contract_phase14_keys():
+    """OPT14-17 — OpticalOrderResponse.model_dump(by_alias=True) includes Phase 14 extensions."""
+    pytest.skip("Schemas extended in Phase 14-01")
+
+
+def test_optical_order_line_item_contract_lens_config():
+    """OPT14-17 — OpticalOrderLineItemResponse.model_dump(by_alias=True) includes lensConfig."""
+    pytest.skip("Schemas extended in Phase 14-01")
