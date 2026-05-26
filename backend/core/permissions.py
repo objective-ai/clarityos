@@ -87,6 +87,10 @@ class ClinicalAction(StrEnum):
     VIEW_OPTICAL_ORDER = "view_optical_order"
     CANCEL_OPTICAL_ORDER = "cancel_optical_order"
 
+    # Phase 14 — Optical Order Configuration
+    GENERATE_JOB_TICKET = "generate_job_ticket"
+    MANAGE_LENS_CATALOG = "manage_lens_catalog"
+
 
 # ---------------------------------------------------------------------------
 # Permission matrix  (action → allowed roles)
@@ -162,6 +166,13 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     ClinicalAction.CREATE_OPTICAL_ORDER:  {_T, _R, _A, _O},
     ClinicalAction.VIEW_OPTICAL_ORDER:    {_D, _T, _R, _A, _O},
     ClinicalAction.CANCEL_OPTICAL_ORDER:  {_A, _O},
+
+    # Phase 14 — Optical Order Configuration
+    # GENERATE_JOB_TICKET mirrors CREATE_OPTICAL_ORDER (excludes Doctor —
+    # opticians + admin issue lab tickets, not optometrists).
+    # MANAGE_LENS_CATALOG mirrors MANAGE_INVENTORY (admin/owner only).
+    ClinicalAction.GENERATE_JOB_TICKET:   {_T, _R, _A, _O},
+    ClinicalAction.MANAGE_LENS_CATALOG:   {_A, _O},
 }
 
 
