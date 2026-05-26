@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 14 context gathered (auto-mode)
-last_updated: "2026-05-26T19:19:30.138Z"
+status: paused
+stopped_at: "Phase 14 plan 14-01 complete (2/12) — paused on Supabase pooler ENOTFOUND. Migration 0019 written + offline-validated; not yet applied. Resume: restore DB access → alembic upgrade head → /reseed → /gsd:execute-phase 14 (will start at 14-02)."
+last_updated: "2026-05-26T13:15:00.000Z"
 progress:
   total_phases: 12
   completed_phases: 7
   total_plans: 68
-  completed_plans: 56
+  completed_plans: 58
 ---
 
 ---
@@ -265,13 +265,14 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
+- **Phase 14 paused — Supabase pooler unreachable (2026-05-26):** `asyncpg ENOTFOUND tenant/user postgres.iedzzcokfwnbyfyevjoz` blocks live alembic upgrade + `/reseed`. Migration `0019_optical_order_configuration.py` written and validated offline via `alembic upgrade head --sql` (DDL generation OK). Plans 14-00 + 14-01 are complete and committed (8 atomic commits on `feat/phase-12-crm`). Resume path: (1) restore DB access (or point DATABASE_URL at local Postgres), (2) `alembic upgrade head` to apply 0019, (3) `/reseed`, (4) `/gsd:execute-phase 14` — will start at 14-02 lens-catalog routes since 14-00 + 14-01 SUMMARYs are on disk.
 - **10.3-07 Task 3 (HIPAA-critical human checkpoint):** Phase 10.3 cannot close until OWNER runs the staging canary procedure in `10.3-07-PLAN.md` Task 3 `<how-to-verify>` against a real Sentry DSN and ticks the 6 Manual rows in `10.3-VERIFICATION.md`. Automated coverage (plans 01-06 + 07 tasks 1-2) is green; remaining work is live-Sentry + scrubber + email alert verification. Canary routes must be reverted before merge.
 
 ## Session Continuity
 
-Last session: 2026-05-14T19:29:25.024Z
-Stopped at: Phase 14 context gathered (auto-mode)
-Resume file: .planning/phases/14-optical-order-configuration/14-CONTEXT.md
+Last session: 2026-05-26T13:15:00.000Z
+Stopped at: "Phase 14 plans 14-00 + 14-01 complete; paused on Supabase pooler ENOTFOUND"
+Resume file: .planning/phases/14-optical-order-configuration/14-01-SUMMARY.md
 
 **Phase 9 Overview:**
 
