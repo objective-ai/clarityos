@@ -17,12 +17,23 @@ import { test, expect } from "./fixtures";
 
 const TENANT_SLUG = "sunview";
 const SEED_PATIENT_LAST_NAME = "Thornton";
+// Thornton's most recent finalized encounter. Plan 14-11 fixture augments
+// this specific encounter with AI summary text + PD on the FINAL refraction.
+// The optical queue is date-filtered so the spec must navigate the date picker.
+const SEED_ENCOUNTER_DATE = "2026-01-14";
+
+async function gotoQueueOnSeedDate(page: import("@playwright/test").Page) {
+  await page.goto(`/${TENANT_SLUG}/optical`);
+  await page.waitForLoadState("networkidle");
+  const dateInput = page.locator('input[type="date"]').first();
+  await dateInput.fill(SEED_ENCOUNTER_DATE);
+  await dateInput.blur();
+  await page.waitForLoadState("networkidle");
+}
 
 test.describe("Phase 14: Optical Order Configuration", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`/${TENANT_SLUG}/optical`);
-    // Wait for the queue page header to settle; storageState handles auth.
-    await page.waitForLoadState("networkidle");
+    await gotoQueueOnSeedDate(page);
   });
 
   test("queue → Configure Order CTA → configurator renders with prefilled Final Rx", async ({
@@ -157,8 +168,8 @@ test.describe("Phase 14: Optical Order Configuration", () => {
     await card.getByRole("button", { name: /Configure Order/i }).click();
     await page.waitForURL(/\/optical\/orders\/([0-9a-f-]+)/);
 
-    // Navigate back to the queue page.
-    await page.goto(`/${TENANT_SLUG}/optical`);
+    // Navigate back to the queue page on the seed encounter date.
+    await gotoQueueOnSeedDate(page);
 
     const refreshedCard = page
       .locator('[data-testid="optical-queue-card"]')
