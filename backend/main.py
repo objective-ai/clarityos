@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, inventory, messaging, optical, optical_order, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
+from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, inventory, lens_catalog, messaging, optical, optical_order, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
 from backend.api.routes.system import sample_health_now
 from backend.core.config import settings
 from backend.core.sentry_setup import init_sentry
@@ -133,6 +133,11 @@ app.include_router(
     optical_order.router,
     prefix="/api/optical-orders",
     tags=["Optical Orders"],
+)
+app.include_router(
+    lens_catalog.router,
+    prefix="/api/lens-catalog",
+    tags=["Lens Catalog"],
 )
 app.include_router(
     intake.public_router,
