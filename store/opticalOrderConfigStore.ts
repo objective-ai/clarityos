@@ -41,6 +41,7 @@ interface OpticalOrderConfigState {
   suggestionsRationale: string;
 
   load: (orderId: string) => Promise<void>;
+  addLineItem: (productId: string, unitPrice: string | number) => Promise<void>;
   patchVisionPlan: (next: Record<string, any>) => void;
   patchFitting: (next: Record<string, any>) => void;
   patchLineItemLensConfig: (
@@ -90,6 +91,41 @@ export const useOpticalOrderConfigStore = create<OpticalOrderConfigState>()(
         dirty: new Set(),
         loading: false,
       });
+    },
+
+    addLineItem: async (productId, unitPrice) => {
+      const draft = get().draft;
+      if (!draft) return;
+      // Flush any pending JSONB autosave first so the BE-side total recompute
+      // sees the latest visionPlan/fitting state when it returns the updated
+      // order. Without this, an in-flight patch could clobber our response.
+      await get().flush();
+      const headers = {
+        ...(await getAuthHeaders()),
+        "Content-Type": "application/json",
+      };
+      // Use no-trailing-slash URL to avoid a 308 from Next's default
+      // trailingSlash:false that drops the POST body on redirect in
+      // some browsers. The BFF route file matches either form.
+      const resp = await fetch(
+        `/api/optical-orders/${draft.id}/line-items`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            productId,
+            qty: 1,
+            unitPrice: String(unitPrice),
+          }),
+        },
+      );
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => "");
+        console.error(`addLineItem failed: ${resp.status} ${body}`);
+        return;
+      }
+      const updated = (await resp.json()) as OpticalOrder;
+      set({ draft: updated, committed: updated, dirty: new Set() });
     },
 
     patchVisionPlan: (next) => {

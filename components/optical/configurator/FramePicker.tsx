@@ -18,8 +18,9 @@ interface Props {
 
 export function FramePicker({ orderId, fieldErrors }: Props) {
   const { products, loadProducts } = useInventoryStore();
-  const { draft } = useOpticalOrderConfigStore();
+  const { draft, addLineItem } = useOpticalOrderConfigStore();
   const [search, setSearch] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
     loadProducts({ productType: "frame", activeOnly: true });
@@ -70,14 +71,26 @@ export function FramePicker({ orderId, fieldErrors }: Props) {
         )}
         {filtered.map((p: any) => {
           const selected = lineFrameIds.has(p.id);
+          const isAdding = adding === p.id;
           return (
-            <div
+            <button
               key={p.id}
+              type="button"
+              disabled={selected || isAdding}
+              onClick={async () => {
+                if (selected) return;
+                setAdding(p.id);
+                try {
+                  await addLineItem(p.id, p.retailPrice);
+                } finally {
+                  setAdding(null);
+                }
+              }}
               className={`rounded border p-2 text-left text-xs ${
                 selected
                   ? "border-[#2DD4BF]"
-                  : "border-[var(--glass-border)]"
-              }`}
+                  : "border-[var(--glass-border)] hover:border-[#2DD4BF]/60"
+              } ${isAdding ? "opacity-60" : ""}`}
             >
               <div className="text-[var(--text-primary)]">
                 {p.brand} {p.model}
@@ -85,7 +98,12 @@ export function FramePicker({ orderId, fieldErrors }: Props) {
               <div className="text-[var(--text-muted)]">
                 SKU {p.sku} · ${p.retailPrice}
               </div>
-            </div>
+              {selected && (
+                <div className="mt-1 text-[10px] uppercase text-[#2DD4BF]">
+                  Added
+                </div>
+              )}
+            </button>
           );
         })}
       </div>

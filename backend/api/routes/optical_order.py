@@ -38,6 +38,7 @@ from backend.db.session import get_db
 from backend.schemas.optical_order import (
     OpticalOrderActionWarning,
     OpticalOrderCreate,
+    OpticalOrderLineItemCreate,
     OpticalOrderPlaceResponse,
     OpticalOrderResponse,
     OpticalSuggestionsListResponse,
@@ -347,6 +348,119 @@ async def patch_optical_order(
         )
     ).scalar_one()
     await db.commit()
+    return _order_response(order)
+
+
+# ---------------------------------------------------------------------------
+# POST /{order_id}/line-items/ — append one line to a draft (Phase 14)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{order_id}/line-items/",
+    response_model=OpticalOrderResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_optical_order_line_item(
+    order_id: uuid.UUID,
+    payload: OpticalOrderLineItemCreate,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Append a single line item to a draft order (FramePicker entry-point).
+
+    Phase 14 configurator creates an empty draft on Configure Order, then
+    the frame picker calls this endpoint when the user picks a frame. The
+    bare PATCH route can only mutate existing lines, so a separate POST
+    captures the add-line case cleanly.
+
+    Rejects with 409 when order is not draft. order.total_price is
+    recomputed from the resulting line set.
+    """
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "not_draft",
+                "message": (
+                    f"Order is {order.status}; line items only addable in draft"
+                ),
+            },
+        )
+
+    product = (
+        await db.execute(
+            select(Product).where(
+                Product.id == payload.product_id,
+                Product.tenant_id == ctx.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Product {payload.product_id} not found",
+        )
+    if not product.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Product {product.sku} is inactive",
+        )
+
+    staff = await resolve_staff(ctx, db)
+    unit = Decimal(str(payload.unit_price))
+    line_total = unit * payload.qty
+    new_line = OpticalOrderLineItem(
+        id=uuid.uuid4(),
+        tenant_id=ctx.tenant_id,
+        order_id=order.id,
+        product_id=payload.product_id,
+        qty=payload.qty,
+        unit_price=unit,
+        line_total=line_total,
+    )
+    db.add(new_line)
+    order.total_price = (order.total_price or Decimal("0.00")) + line_total
+
+    await log_action(
+        db, ctx, AuditAction.OPTICAL_ORDER_CONFIGURE_UPDATE,
+        "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        metadata={
+            "action": "add_line_item",
+            "product_id": str(payload.product_id),
+            "qty": payload.qty,
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.flush()
+    # Expire the cached line_items collection so the post-commit re-fetch's
+    # selectin loader hits the DB instead of returning the pre-insert
+    # snapshot from the identity map.
+    db.expire(order, ["line_items"])
+    await db.commit()
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(OpticalOrder.id == order.id)
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one()
     return _order_response(order)
 
 
