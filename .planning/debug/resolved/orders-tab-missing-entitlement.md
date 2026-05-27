@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "no order tab for james thornton — Orders tab not visible on patient detail; Inventory nav also grayed out; optical queue page DOES render → divergent RETAIL_POS gating"
 created: 2026-05-27T00:00:00Z
 updated: 2026-05-27T00:00:00Z

@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Phase 14 UAT Test 12: inventory is grayed out and no lens catalog admin"
 created: 2026-05-27
 updated: 2026-05-27

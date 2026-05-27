@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Phase 14 UAT BLOCKER — 6 sub-findings on configurator page: (1) frames added but can't remove, slow add. (2) lens type and materials not selecting. (3) measurement and vision is empty. (4) no chips visible. (5) left column whitespace, right packed. (6) semi-transparent footer hard to read."
 created: 2026-05-27T00:00:00Z
 updated: 2026-05-27T00:00:00Z

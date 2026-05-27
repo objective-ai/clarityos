@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 14-optical-order-configuration
 source: [14-00-SUMMARY.md, 14-01-SUMMARY.md, 14-02-SUMMARY.md, 14-03-SUMMARY.md, 14-04-SUMMARY.md, 14-05-SUMMARY.md, 14-06-SUMMARY.md, 14-07-SUMMARY.md, 14-08-SUMMARY.md, 14-09-SUMMARY.md, 14-10-SUMMARY.md, 14-11-SUMMARY.md]
 started: 2026-05-26T15:00:00Z
-updated: 2026-05-26T17:00:00Z
+updated: 2026-05-27T22:00:00Z
 ---
 
 ## Current Test
@@ -109,7 +109,7 @@ skipped: 6
 ## Gaps
 
 - truth: "Optical queue cards render the new Configure Order CTA without overlapping existing buttons AND accidental clicks on Configure/Create Order have a cancel/undo path before a persisted draft is created"
-  status: diagnosed
+  status: resolved
   reason: "User reported card layout overlap + 5 stray drafts accumulated from clicks with no undo."
   severity: major
   test: 2
@@ -132,7 +132,7 @@ skipped: 6
   debug_session: ".planning/debug/queue-card-cta-layout-and-cancel.md"
 
 - truth: "Patient detail page exposes Orders tab AND Sidebar Inventory link is enabled for users with RETAIL_POS entitlement"
-  status: diagnosed
+  status: resolved
   reason: "User: 'no order tab for james thornton' (Test 4) and 'inventory is grayed out' (Test 12)."
   severity: major
   test: 4
@@ -157,7 +157,7 @@ skipped: 6
   debug_session: ".planning/debug/orders-tab-missing-entitlement.md"
 
 - truth: "Configurator page works end-to-end: frame add/remove, lens type & material selection commit, Measurements + Vision Plan inputs render, AI suggestion chips appear on Phase 14 fixture encounter, two-column layout balanced, footer readable when content scrolls under it"
-  status: diagnosed
+  status: resolved
   reason: "Six sub-findings on configurator."
   severity: blocker
   test: 5
@@ -197,7 +197,7 @@ skipped: 6
   debug_session: ".planning/debug/configurator-runtime-broken.md"
 
 - truth: "Lens catalog admin UI exists for create/edit/soft-delete of lens types, materials, coatings"
-  status: diagnosed
+  status: resolved
   reason: "User: 'no lens catalog' — separate from Inventory grayed out which shares root cause with Test 4."
   severity: minor
   test: 12
@@ -222,7 +222,7 @@ skipped: 6
   debug_session: ".planning/debug/lens-catalog-admin-missing.md"
 
 - truth: "Accidentally clicking '+ Create Order' on the queue card has a recoverable path — user can cancel or back out without leaving a stray draft order behind"
-  status: failed
+  status: resolved
   reason: "User reported: 'if I click create order by accident, there's no way to go back or cancel the action.' Clicking + Create Order on a queue card creates a persisted draft order and navigates away (likely to configurator) with no obvious Cancel, Discard, or Back action that removes the draft."
   severity: major
   test: 2
@@ -230,7 +230,7 @@ skipped: 6
   missing: []
 
 - truth: "Configurator footer (Cancel / Place Order / Generate Job Ticket) remains readable when content scrolls under its semi-transparent glass background"
-  status: failed
+  status: resolved
   reason: "User reported: 'for configure order, the semi-transparent background is harder to read when text scrolled under.' Screenshot shows the Cancel/Place Order/Generate Job Ticket footer over the Lens Configuration section with low contrast where scrolled content shows through."
   severity: minor
   test: 5

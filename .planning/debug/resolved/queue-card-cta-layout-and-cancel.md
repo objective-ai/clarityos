@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Optical queue cards render the new Configure Order CTA without overlapping existing buttons (Print Rx, + Create Order, Start Processing) AND accidental clicks on + Create Order have a cancel/undo path."
 created: 2026-05-27T00:00:00Z
 updated: 2026-05-27T00:00:00Z
