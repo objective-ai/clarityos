@@ -2091,30 +2091,8 @@ def _seed_lens_reference(session: Session) -> None:
         )
 
 
-def _seed_phase14_fixture(session: Session) -> None:
-    """Phase 14 OPT14-18 E2E fixture.
-
-    Augments the canonical Phase 13 seed patient (James Thornton) with:
-    - ai_summary_text containing 'progressive', 'polycarbonate',
-      'anti-reflective' keywords so the suggestion extractor surfaces
-      3 deterministic chips during E2E
-    - assessment_and_plan plain-text (Pitfall 8 — never JSON)
-    - PD distance + PD near on the final refraction (so the configurator
-      pre-fill path exercises)
-
-    Idempotency: skip if the encounter already has 'progressive' in its
-    AI summary text (single-keyword pre-check).
-    """
-    from sqlalchemy import select as _select
-
-    from backend.db.models.tenant.clinical import (
-        Encounter,
-        Patient,
-        Refraction,
-    )
-
-    step("Seeding Phase 14 E2E fixture")
-
+def _seed_phase14_thornton(session: Session, _select, Patient, Encounter, Refraction) -> None:
+    """Phase 14 OPT14-18 Thornton branch — see _seed_phase14_fixture docstring."""
     patient = session.execute(
         _select(Patient).where(
             Patient.tenant_id == TENANT_ID,
@@ -2122,7 +2100,7 @@ def _seed_phase14_fixture(session: Session) -> None:
         )
     ).scalar_one_or_none()
     if not patient:
-        warn("Phase 14 fixture: canonical seed patient (Thornton) not found — skipping.")
+        warn("Phase 14 fixture: canonical seed patient (Thornton) not found — skipping Thornton.")
         return
 
     encounter = session.execute(
@@ -2135,7 +2113,7 @@ def _seed_phase14_fixture(session: Session) -> None:
         .limit(1)
     ).scalar_one_or_none()
     if not encounter:
-        warn("Phase 14 fixture: no finalized encounter found for Thornton — skipping.")
+        warn("Phase 14 fixture: no finalized encounter found for Thornton — skipping Thornton.")
         return
 
     # Idempotency — single-keyword pre-check.
@@ -2143,7 +2121,7 @@ def _seed_phase14_fixture(session: Session) -> None:
         encounter.ai_summary_text
         and "progressive" in encounter.ai_summary_text.lower()
     ):
-        warn("Phase 14 fixture already seeded — skipping.")
+        warn("Phase 14 Thornton fixture already seeded — skipping.")
         return
 
     encounter.ai_summary_text = (
@@ -2170,10 +2148,69 @@ def _seed_phase14_fixture(session: Session) -> None:
         if final_rx.pd_near is None:
             final_rx.pd_near = Decimal("60.0")
 
+
+def _seed_phase14_hargrove(session: Session, Encounter) -> None:
+    """Phase 14 RC-4 Hargrove branch — seeds AI summary onto ENC_IDS[0]."""
+    hargrove_enc = session.get(Encounter, ENC_IDS[0])
+    if hargrove_enc is None:
+        warn("Phase 14 fixture: Hargrove encounter (ENC_IDS[0]) not found — skipping Hargrove.")
+        return
+    if not hargrove_enc.is_finalized:
+        warn("Phase 14 fixture: Hargrove encounter not finalized — skipping AI summary seed.")
+        return
+    if (
+        hargrove_enc.ai_summary_text
+        and "progressive" in hargrove_enc.ai_summary_text.lower()
+    ):
+        warn("Phase 14 Hargrove fixture already seeded — skipping.")
+        return
+
+    # Synthetic clinical narrative — NO real PHI. Distinct from Thornton's
+    # presbyopia framing so the two encounters carry different surface text
+    # while exercising the same three extractor keyword categories
+    # (progressive / polycarbonate / anti-reflective).
+    hargrove_enc.ai_summary_text = (
+        "55-year-old established myope with worsening astigmatism returns for "
+        "annual exam. Discussed lens upgrade options. Recommend progressive "
+        "lenses to address emerging near-vision strain alongside the existing "
+        "distance correction. Polycarbonate material indicated for active "
+        "lifestyle and impact resistance. Anti-reflective coating advised "
+        "given prolonged screen and night-driving exposure. Continue annual "
+        "diabetic dilated exam."
+    )
+
+
+def _seed_phase14_fixture(session: Session) -> None:
+    """Phase 14 OPT14-18 E2E fixture.
+
+    Seeds AI summaries onto BOTH:
+      - Thornton's most recent finalized encounter (presbyopic narrative)
+      - Hargrove's encounter ENC_IDS[0] (existing myope considering progressives)
+
+    Each branch carries the suggestion-extractor keywords 'progressive',
+    'polycarbonate', 'anti-reflective' so the configurator surfaces 3 chips
+    regardless of which patient's draft is opened.
+
+    Idempotency: each branch has its own 'progressive' pre-check on
+    ai_summary_text — re-running this seeder is a no-op on both branches.
+    """
+    from sqlalchemy import select as _select
+
+    from backend.db.models.tenant.clinical import (
+        Encounter,
+        Patient,
+        Refraction,
+    )
+
+    step("Seeding Phase 14 E2E fixture")
+
+    _seed_phase14_thornton(session, _select, Patient, Encounter, Refraction)
+    _seed_phase14_hargrove(session, Encounter)
+
     session.flush()
     ok(
-        f"Phase 14 E2E fixture seeded on encounter {str(encounter.id)[:8]} "
-        f"(patient {patient.last_name})."
+        "Phase 14 E2E fixture seeded (Thornton + Hargrove encounters carry "
+        "extractor-trigger AI summaries)."
     )
 
 
