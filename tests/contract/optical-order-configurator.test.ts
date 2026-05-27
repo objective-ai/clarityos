@@ -45,6 +45,8 @@ describe("OpticalOrderResponse Phase 14 contract", () => {
     suggestionResolutions: { lens_type: "accepted" },
     finalRefractionId: "r-1",
     habitualRefractionId: "r-2",
+    finalRefraction: null,
+    habitualRefraction: null,
     jobTicketGeneratedAt: null,
   };
 

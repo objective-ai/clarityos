@@ -18,6 +18,27 @@ export interface OpticalOrderLineItem {
   lensConfig: Record<string, any> | null;
 }
 
+// Phase 14 — flat refraction projection embedded in OpticalOrderResponse.
+// Mirrors the BE OpticalRefractionEmbed schema (camelCase wire shape).
+export interface OpticalRefractionEmbed {
+  id: string;
+  encounterId: string;
+  refractionType: string;
+  odSphere: string | null;
+  odCylinder: string | null;
+  odAxis: number | null;
+  odAdd: string | null;
+  osSphere: string | null;
+  osCylinder: string | null;
+  osAxis: number | null;
+  osAdd: string | null;
+  pdDistance: string | null;
+  pdNear: string | null;
+  pdOd: string | null;
+  pdOs: string | null;
+  isFinalRx: boolean;
+}
+
 export interface OpticalOrder {
   id: string;
   tenantId: string;
@@ -40,6 +61,8 @@ export interface OpticalOrder {
   suggestionResolutions: Record<string, any>;
   finalRefractionId: string | null;
   habitualRefractionId: string | null;
+  finalRefraction: OpticalRefractionEmbed | null;
+  habitualRefraction: OpticalRefractionEmbed | null;
   jobTicketGeneratedAt: string | null;
 }
 

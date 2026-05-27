@@ -51,10 +51,8 @@ export default function OpticalOrderConfiguratorPage() {
     );
   }
 
-  // refraction objects loaded via OpticalOrder.final_refraction /
-  // habitual_refraction relationships when the BE response includes them.
-  const habitualRefraction = (draft as any).habitualRefraction ?? null;
-  const finalRefraction = (draft as any).finalRefraction ?? null;
+  const habitualRefraction = draft.habitualRefraction;
+  const finalRefraction = draft.finalRefraction;
 
   async function handlePlace() {
     setFieldErrors([]);

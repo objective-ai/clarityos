@@ -13,9 +13,47 @@ from decimal import Decimal
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 
 from .common import CamelCaseModel
+
+
+# --- Embedded refraction (Phase 14 — flat shape for configurator panel) ---
+
+
+class OpticalRefractionEmbed(CamelCaseModel):
+    """Flat refraction projection embedded inside OpticalOrderResponse.
+
+    Mirrors the ORM column layout (not the nested EyeRxResponse) so the
+    side-by-side panel can read od_sphere/os_sphere directly. Serializes
+    to camelCase via CamelCaseModel — apiFetch is bypassed by the
+    configurator store so values arrive as snake_case via the panel's
+    camelCase fallback unchanged.
+    """
+
+    id: UUID
+    encounter_id: UUID
+    refraction_type: str
+    od_sphere: Decimal | None = None
+    od_cylinder: Decimal | None = None
+    od_axis: int | None = None
+    od_add: Decimal | None = None
+    os_sphere: Decimal | None = None
+    os_cylinder: Decimal | None = None
+    os_axis: int | None = None
+    os_add: Decimal | None = None
+    pd_distance: Decimal | None = None
+    pd_near: Decimal | None = None
+    pd_od: Decimal | None = None
+    pd_os: Decimal | None = None
+    is_final_rx: bool
+
+    @field_validator("refraction_type", mode="before")
+    @classmethod
+    def _coerce_refraction_type(cls, v: Any) -> Any:
+        # RefractionType is a (str, Enum) — coerce to the underlying value
+        # so the JSON wire emits "final"/"habitual"/... not "RefractionType.final".
+        return v.value if hasattr(v, "value") else v
 
 
 # --- Line items ---
@@ -85,6 +123,8 @@ class OpticalOrderResponse(CamelCaseModel):
     )
     final_refraction_id: UUID | None = None
     habitual_refraction_id: UUID | None = None
+    final_refraction: OpticalRefractionEmbed | None = None
+    habitual_refraction: OpticalRefractionEmbed | None = None
     job_ticket_generated_at: datetime | None = None
 
 

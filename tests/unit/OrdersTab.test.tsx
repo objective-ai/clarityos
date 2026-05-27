@@ -51,6 +51,8 @@ function makeOrder(overrides: Partial<OpticalOrder> = {}): OpticalOrder {
     suggestionResolutions: {},
     finalRefractionId: null,
     habitualRefractionId: null,
+    finalRefraction: null,
+    habitualRefraction: null,
     jobTicketGeneratedAt: null,
     ...overrides,
   };
