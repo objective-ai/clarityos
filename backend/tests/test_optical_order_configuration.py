@@ -172,3 +172,222 @@ async def test_place_validation_runs_before_row_lock(
         )
     await db_session.refresh(product)
     assert product.stock_qty == initial_stock
+
+
+# ---------------------------------------------------------------------------
+# Plan 14-12 — DELETE /line-items/{line_id}/ unit tests
+#
+# These are pure-unit tests using SimpleNamespace mocks (per the project
+# anti-pattern memo on "real assertion bodies that skip via fixture chain").
+# They don't depend on the Wave-0 conftest stubs, so they run today.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_remove_line_item_from_draft_unit():
+    """Plan 14-12 — DELETE on a draft removes line + recomputes total + writes audit."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from backend.api.routes.optical_order import remove_optical_order_line_item
+
+    fake_query = MagicMock()
+    fake_query.where = MagicMock(return_value=fake_query)
+    fake_query.options = MagicMock(return_value=fake_query)
+
+    order_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+    product_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+
+    target_line = SimpleNamespace(
+        id=line_id,
+        product_id=product_id,
+        qty=1,
+        line_total=Decimal("100.00"),
+    )
+    surviving_line = SimpleNamespace(
+        id=uuid.uuid4(),
+        product_id=uuid.uuid4(),
+        qty=2,
+        line_total=Decimal("50.00"),
+    )
+    order_pre = SimpleNamespace(
+        id=order_id,
+        tenant_id=tenant_id,
+        status="draft",
+        patient_id=uuid.uuid4(),
+        encounter_id=uuid.uuid4(),
+        line_items=[target_line, surviving_line],
+        total_price=Decimal("150.00"),
+    )
+    order_post = SimpleNamespace(
+        id=order_id,
+        tenant_id=tenant_id,
+        status="draft",
+        patient_id=order_pre.patient_id,
+        encounter_id=order_pre.encounter_id,
+        line_items=[surviving_line],
+        total_price=Decimal("50.00"),
+        # Fields _order_response will touch — keep minimal but non-None
+        ordered_at=None,
+        placed_at=None,
+        cancelled_at=None,
+        dispensed_at=None,
+        final_refraction_id=None,
+        vision_plan_jsonb=None,
+        fitting_jsonb=None,
+        notes=None,
+        created_at=None,
+        updated_at=None,
+    )
+
+    results = [
+        MagicMock(scalar_one_or_none=MagicMock(return_value=order_pre)),
+        MagicMock(scalar_one=MagicMock(return_value=order_post)),
+    ]
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=results)
+    db.delete = AsyncMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+    db.expire = MagicMock()
+
+    request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+    ctx = SimpleNamespace(tenant_id=tenant_id)
+
+    audit_calls: list[dict] = []
+
+    async def fake_log_action(_db, _ctx, action, *args, **kwargs):
+        audit_calls.append({"action": action, "metadata": kwargs.get("metadata")})
+
+    async def fake_resolve_staff(_ctx, _db):
+        return SimpleNamespace(id=uuid.uuid4())
+
+    def fake_order_response(o):
+        return SimpleNamespace(
+            id=o.id,
+            line_items=o.line_items,
+            total_price=o.total_price,
+        )
+
+    with patch("backend.api.routes.optical_order.select", return_value=fake_query), \
+         patch("backend.api.routes.optical_order.selectinload", return_value=MagicMock()), \
+         patch("backend.api.routes.optical_order.log_action", side_effect=fake_log_action), \
+         patch("backend.api.routes.optical_order.resolve_staff", side_effect=fake_resolve_staff), \
+         patch("backend.api.routes.optical_order._order_response", side_effect=fake_order_response):
+        resp = await remove_optical_order_line_item(
+            order_id=order_id,
+            line_id=line_id,
+            request=request,
+            ctx=ctx,
+            db=db,
+        )
+
+    db.delete.assert_awaited_once_with(target_line)
+    # Route recomputes total from surviving lines (not by subtraction)
+    assert order_pre.total_price == Decimal("50.00")  # surviving line = 50
+    assert any(
+        c["metadata"].get("action") == "remove_line_item"
+        and c["metadata"].get("line_id") == str(line_id)
+        for c in audit_calls
+    )
+    assert len(resp.line_items) == 1
+    assert resp.line_items[0].id == surviving_line.id
+
+
+@pytest.mark.asyncio
+async def test_remove_line_item_blocked_on_non_draft_unit():
+    """Plan 14-12 — DELETE 409 'not_draft' when order.status != 'draft'."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from unittest.mock import patch
+
+    from backend.api.routes.optical_order import remove_optical_order_line_item
+
+    fake_query = MagicMock()
+    fake_query.where = MagicMock(return_value=fake_query)
+    fake_query.options = MagicMock(return_value=fake_query)
+
+    order_id = uuid.uuid4()
+    line_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+
+    order_placed = SimpleNamespace(
+        id=order_id,
+        tenant_id=tenant_id,
+        status="placed",
+        line_items=[],
+    )
+    db = MagicMock()
+    db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=order_placed))
+    )
+
+    request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+    ctx = SimpleNamespace(tenant_id=tenant_id)
+
+    with patch("backend.api.routes.optical_order.select", return_value=fake_query), \
+         patch("backend.api.routes.optical_order.selectinload", return_value=MagicMock()), \
+         pytest.raises(HTTPException) as exc:
+        await remove_optical_order_line_item(
+            order_id=order_id,
+            line_id=line_id,
+            request=request,
+            ctx=ctx,
+            db=db,
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.detail["error"] == "not_draft"
+
+
+@pytest.mark.asyncio
+async def test_remove_unknown_line_item_returns_404_unit():
+    """Plan 14-12 — DELETE 404 when line_id is not present on the order."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from unittest.mock import patch
+
+    from backend.api.routes.optical_order import remove_optical_order_line_item
+
+    fake_query = MagicMock()
+    fake_query.where = MagicMock(return_value=fake_query)
+    fake_query.options = MagicMock(return_value=fake_query)
+
+    order_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+
+    order_draft = SimpleNamespace(
+        id=order_id,
+        tenant_id=tenant_id,
+        status="draft",
+        line_items=[
+            SimpleNamespace(
+                id=uuid.uuid4(),
+                product_id=uuid.uuid4(),
+                qty=1,
+                line_total=Decimal("10.00"),
+            )
+        ],
+    )
+    db = MagicMock()
+    db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=order_draft))
+    )
+
+    request = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"))
+    ctx = SimpleNamespace(tenant_id=tenant_id)
+
+    with patch("backend.api.routes.optical_order.select", return_value=fake_query), \
+         patch("backend.api.routes.optical_order.selectinload", return_value=MagicMock()), \
+         pytest.raises(HTTPException) as exc:
+        await remove_optical_order_line_item(
+            order_id=order_id,
+            line_id=uuid.uuid4(),  # bogus
+            request=request,
+            ctx=ctx,
+            db=db,
+        )
+    assert exc.value.status_code == 404

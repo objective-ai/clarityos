@@ -465,6 +465,98 @@ async def add_optical_order_line_item(
 
 
 # ---------------------------------------------------------------------------
+# DELETE /{order_id}/line-items/{line_id}/ — remove a line from a draft (Phase 14, Plan 14-12)
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/{order_id}/line-items/{line_id}/",
+    response_model=OpticalOrderResponse,
+)
+async def remove_optical_order_line_item(
+    order_id: uuid.UUID,
+    line_id: uuid.UUID,
+    request: Request,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.CREATE_OPTICAL_ORDER)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a line item from a draft order (FramePicker × control).
+
+    Pitfall 11 — status guard: only `status='draft'` is mutable. Returns 409
+    {error: 'not_draft', ...} on any other status (mirrors POST handler).
+    """
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(
+                OpticalOrder.id == order_id,
+                OpticalOrder.tenant_id == ctx.tenant_id,
+            )
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "not_draft",
+                "message": (
+                    f"Order is {order.status}; line items only removable in draft"
+                ),
+            },
+        )
+
+    target = next((li for li in order.line_items if li.id == line_id), None)
+    if not target:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Line item {line_id} not found on order {order_id}",
+        )
+
+    staff = await resolve_staff(ctx, db)
+    removed_product_id = target.product_id
+    removed_qty = target.qty
+    removed_line_total = target.line_total or Decimal("0.00")
+
+    await db.delete(target)
+    new_total = sum(
+        (li.line_total or Decimal("0.00"))
+        for li in order.line_items
+        if li.id != line_id
+    ) or Decimal("0.00")
+    order.total_price = new_total
+
+    await log_action(
+        db, ctx, AuditAction.OPTICAL_ORDER_CONFIGURE_UPDATE,
+        "optical_order", order.id,
+        staff_id=staff.id if staff else None,
+        patient_id=order.patient_id,
+        encounter_id=order.encounter_id,
+        metadata={
+            "action": "remove_line_item",
+            "line_id": str(line_id),
+            "product_id": str(removed_product_id),
+            "qty": removed_qty,
+            "line_total": str(removed_line_total),
+        },
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.flush()
+    db.expire(order, ["line_items"])
+    await db.commit()
+    order = (
+        await db.execute(
+            select(OpticalOrder)
+            .where(OpticalOrder.id == order_id)
+            .options(selectinload(OpticalOrder.line_items))
+        )
+    ).scalar_one()
+    return _order_response(order)
+
+
+# ---------------------------------------------------------------------------
 # POST /{order_id}/place/ — atomic draft -> placed (CROWN JEWEL)
 # ---------------------------------------------------------------------------
 
