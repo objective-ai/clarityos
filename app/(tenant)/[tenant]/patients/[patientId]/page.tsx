@@ -58,7 +58,14 @@ const OrdersTab = dynamic(
 
 type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing" | "messages" | "orders";
 
-const BASE_TABS: { key: TabKey; label: string }[] = [
+interface TabDescriptor {
+  key: TabKey;
+  label: string;
+  locked?: boolean;
+  upsell?: string;
+}
+
+const BASE_TABS: TabDescriptor[] = [
   { key: "demographics", label: "Patient Info" },
   { key: "encounters", label: "Encounters" },
   { key: "flowsheets", label: "Flowsheets" },
@@ -442,12 +449,17 @@ export default function PatientDetailPage() {
   const currentUser = useCurrentUser();
   const [activeTab, setActiveTab] = useState<TabKey>("demographics");
 
-  const tabs = useMemo<{ key: TabKey; label: string }[]>(() => {
-    const next = [...BASE_TABS];
-    if (has(Entitlement.RETAIL_POS)) {
-      next.push({ key: "orders", label: "Orders" });
-    }
-    return next;
+  const tabs = useMemo<TabDescriptor[]>(() => {
+    const ordersLocked = !has(Entitlement.RETAIL_POS);
+    return [
+      ...BASE_TABS,
+      {
+        key: "orders",
+        label: "Orders",
+        locked: ordersLocked,
+        upsell: ordersLocked ? "Available with Retail POS add-on" : undefined,
+      },
+    ];
   }, [has]);
 
   const patient = usePatientStore((s) => s.activePatient);
@@ -536,19 +548,30 @@ export default function PatientDetailPage() {
 
       {/* Tab navigation */}
       <div className="flex items-center gap-1 border-b border-[var(--border-subtle)]">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2.5 text-body font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === tab.key
-                ? "border-[var(--accent)] text-[var(--accent)]"
-                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {tabs.map((tab) => {
+          const isLocked = !!tab.locked;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                if (isLocked) return;
+                setActiveTab(tab.key);
+              }}
+              title={isLocked ? tab.upsell : undefined}
+              aria-disabled={isLocked ? "true" : undefined}
+              className={`px-4 py-2.5 text-body font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
+                isActive
+                  ? "border-[var(--accent)] text-[var(--accent)]"
+                  : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              } ${isLocked ? "opacity-50 cursor-not-allowed hover:text-[var(--text-muted)]" : ""}`}
+            >
+              <span>{tab.label}</span>
+              {isLocked && <Lock className="h-3 w-3" aria-hidden />}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab content */}
