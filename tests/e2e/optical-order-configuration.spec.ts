@@ -47,9 +47,14 @@ async function pickFirstFrame(page: import("@playwright/test").Page) {
       `addLineItem POST failed ${resp.status()} ${resp.url()} :: ${body}`,
     );
   }
-  // Wait for the picker to re-render the first frame button as disabled
-  // (the "Added" state), signalling the store has the new line item.
-  await expect(firstFrame).toBeDisabled({ timeout: 5_000 });
+  // Plan 14-12: selected chips render as <div> with a nested × <button
+  // aria-label="Remove frame">. Wait for that as the signal the store has
+  // the new line item (replaces the prior "first frame button is disabled"
+  // assertion, which no longer holds — the button is gone in selected
+  // state, not just disabled).
+  await expect(
+    page.getByRole("button", { name: /Remove frame/i }).first(),
+  ).toBeVisible({ timeout: 5_000 });
 }
 
 async function gotoQueueOnSeedDate(page: import("@playwright/test").Page) {
@@ -288,5 +293,93 @@ test.describe("Phase 14: Optical Order Configuration", () => {
         "No placed order present for this patient — run after the place test.",
       );
     }
+  });
+
+  test("Configure Order → Discard draft → queue card draft pending count does not increment", async ({
+    page,
+  }) => {
+    const initialCard = page
+      .locator('[data-testid="optical-queue-card"]')
+      .filter({ hasText: SEED_PATIENT_LAST_NAME })
+      .first();
+    const initialPill = initialCard.getByRole("button", { name: /Draft pending/i });
+    const initialPillCount = await initialPill.count();
+    let initialDraftN = 0;
+    if (initialPillCount > 0) {
+      const text = (await initialPill.first().innerText()) || "";
+      const match = text.match(/Draft pending(?:\s*\((\d+)\))?/);
+      initialDraftN = match?.[1] ? Number(match[1]) : 1;
+    }
+
+    await initialCard.getByRole("button", { name: /Configure Order/i }).click();
+    await page.waitForURL(/\/optical\/orders\/[0-9a-f-]+/, { timeout: 10_000 });
+
+    const cancelRespP = page.waitForResponse(
+      (r) =>
+        /\/api\/optical-orders\/[0-9a-f-]+\/cancel\/?$/.test(r.url()) &&
+        r.request().method() === "POST" &&
+        r.status() !== 308 &&
+        r.status() !== 307,
+      { timeout: 10_000 },
+    );
+    await page.getByRole("button", { name: /Discard draft/i }).click();
+    const cancelResp = await cancelRespP;
+    expect(cancelResp.ok()).toBe(true);
+
+    await gotoQueueOnSeedDate(page);
+    const refreshedCard = page
+      .locator('[data-testid="optical-queue-card"]')
+      .filter({ hasText: SEED_PATIENT_LAST_NAME })
+      .first();
+    const refreshedPill = refreshedCard.getByRole("button", {
+      name: /Draft pending/i,
+    });
+    const refreshedCount = await refreshedPill.count();
+    if (refreshedCount === 0) {
+      expect(initialDraftN).toBe(0);
+    } else {
+      const text = (await refreshedPill.first().innerText()) || "";
+      const match = text.match(/Draft pending(?:\s*\((\d+)\))?/);
+      const finalN = match?.[1] ? Number(match[1]) : 1;
+      expect(finalN).toBeLessThanOrEqual(initialDraftN);
+    }
+  });
+
+  test("Add frame → remove frame via × → chip gone and lens Type select disabled", async ({
+    page,
+  }) => {
+    const card = page
+      .locator('[data-testid="optical-queue-card"]')
+      .filter({ hasText: SEED_PATIENT_LAST_NAME })
+      .first();
+    await card.getByRole("button", { name: /Configure Order/i }).click();
+    await page.waitForURL(/\/optical\/orders\//);
+
+    await pickFirstFrame(page);
+
+    const removeBtn = page.getByRole("button", { name: /Remove frame/i }).first();
+    await expect(removeBtn).toBeVisible({ timeout: 5_000 });
+
+    const delRespP = page.waitForResponse(
+      (r) =>
+        /\/api\/optical-orders\/[0-9a-f-]+\/line-items\/[0-9a-f-]+\/?$/.test(r.url()) &&
+        r.request().method() === "DELETE" &&
+        r.status() !== 308 &&
+        r.status() !== 307,
+      { timeout: 10_000 },
+    );
+    await removeBtn.click();
+    const delResp = await delRespP;
+    expect(delResp.ok()).toBe(true);
+
+    await expect(
+      page.getByRole("button", { name: /Remove frame/i }),
+    ).toHaveCount(0, { timeout: 5_000 });
+
+    const lensSection = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Lens Configuration" }) });
+    const typeSelect = lensSection.locator("select").first();
+    await expect(typeSelect).toBeDisabled();
   });
 });
