@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import { OrderDetailDrawer } from "@/components/orders/OrderDetailDrawer";
@@ -38,6 +38,7 @@ const STATUS_BADGE_VARIANT: Record<OrderStatus, BadgeVariant> = {
 
 export function OrdersTab({ patientId, userRole }: Props) {
   const router = useRouter();
+  const { tenant } = useParams<{ tenant: string }>();
   const orders = useOpticalOrderStore((s) => s.orders);
   const loading = useOpticalOrderStore((s) => s.loading);
   const error = useOpticalOrderStore((s) => s.error);
@@ -60,7 +61,7 @@ export function OrdersTab({ patientId, userRole }: Props) {
     // Phase 14 OPT14-13 — draft orders route to the full-page configurator;
     // non-draft (placed/dispensed/cancelled) open the read-only drawer.
     if (order.status === "draft") {
-      router.push(`/optical/orders/${order.id}/`);
+      router.push(`/${tenant}/optical/orders/${order.id}/`);
       return;
     }
     setDrawerWarnings([]);

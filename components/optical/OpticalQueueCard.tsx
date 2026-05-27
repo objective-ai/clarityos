@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,6 +96,7 @@ interface OpticalQueueCardProps {
 
 export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
   const router = useRouter();
+  const { tenant } = useParams<{ tenant: string }>();
   const tz = useClinicTimezone();
   const updateItemStatus = useOpticalStore((s) => s.updateItemStatus);
   const openPrintPreview = useOpticalStore((s) => s.openPrintPreview);
@@ -129,7 +130,7 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
         encounterId: item.encounterId,
         lineItems: [],
       });
-      router.push(`/optical/orders/${newOrder.id}/`);
+      router.push(`/${tenant}/optical/orders/${newOrder.id}/`);
     } catch (e) {
       // Avoid logging patient identifiers (clinical-safety.md)
       console.error("Configure Order: createOrder failed", (e as Error).message);

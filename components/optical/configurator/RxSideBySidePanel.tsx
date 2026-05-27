@@ -70,14 +70,7 @@ export function RxSideBySidePanel({ habitual, final }: Props) {
     return f;
   }, [habitual, final]);
 
-  if (!habitual && !final) {
-    return (
-      <div className="rounded border border-[var(--glass-border)] bg-[var(--bg-glass)] p-4 text-[var(--text-secondary)]">
-        No refraction data on this order. PD will need to be measured with a
-        pupillometer.
-      </div>
-    );
-  }
+  const noData = !habitual && !final;
 
   return (
     <section className="rounded border border-[var(--glass-border)] bg-[var(--bg-glass)] p-4">
@@ -92,6 +85,12 @@ export function RxSideBySidePanel({ habitual, final }: Props) {
         <div className="mt-3 rounded bg-amber-500/10 px-3 py-2 text-xs text-[var(--text-secondary)]">
           Significant Rx change detected: {flagged.join(", ")} (|Δ SE| &gt; 0.50D)
         </div>
+      )}
+      {noData && (
+        <p className="mt-3 text-xs text-[var(--text-secondary)]">
+          No refraction data on this order. PD will need to be measured with a
+          pupillometer.
+        </p>
       )}
     </section>
   );

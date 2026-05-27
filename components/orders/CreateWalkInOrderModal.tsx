@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import {
   Dialog,
@@ -46,6 +46,7 @@ export function CreateWalkInOrderModal({
   onCreated,
 }: Props) {
   const router = useRouter();
+  const { tenant } = useParams<{ tenant: string }>();
   const products = useInventoryStore((s) => s.products);
   const loadProducts = useInventoryStore((s) => s.loadProducts);
   const createOrder = useOpticalOrderStore((s) => s.createOrder);
@@ -120,7 +121,7 @@ export function CreateWalkInOrderModal({
       if (hasFrameLine && !autoPlace) {
         await onCreated?.(created, warnings);
         onClose();
-        router.push(`/optical/orders/${created.id}/`);
+        router.push(`/${tenant}/optical/orders/${created.id}/`);
         return;
       }
 

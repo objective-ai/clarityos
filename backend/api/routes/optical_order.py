@@ -104,8 +104,12 @@ async def create_order(
     ``encounter_id`` is optional: walk-in retail orders flow straight through
     with ``encounter_id=None`` (INV-10).
     """
-    if not payload.line_items:
-        raise HTTPException(status_code=400, detail="line_items must not be empty")
+    # Phase 14 OPT14-13: empty line_items is allowed at draft creation. The
+    # configurator entry-point ("Configure Order" CTA on the optical queue)
+    # creates a bare draft and the configurator UI adds the frame line later
+    # via the FramePicker. The walk-in path always pre-fills its cart, so
+    # this relaxation doesn't regress Phase 13 INV-10. /place/ still enforces
+    # at least one line downstream — empty drafts can't be placed.
 
     staff = await resolve_staff(ctx, db)
     if not staff:
