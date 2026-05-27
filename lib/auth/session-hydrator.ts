@@ -15,6 +15,11 @@ import type {
 } from "@/types/session";
 import { PLAN_FEATURES } from "@/lib/entitlements";
 
+// Module-level guard so the diagnostic warn fires at most once per session.
+// HMR + React Strict Mode + repeated session refreshes can call
+// hydrateFromSupabaseSession many times — we want one signal, not spam.
+let __planFeaturesFallbackWarned = false;
+
 /**
  * Decode the JWT payload (middle segment) without verifying the signature.
  * The session-hydrator runs only after Supabase JS has already validated the
@@ -99,10 +104,22 @@ export function hydrateFromSupabaseSession(session: Session): AppSession {
 
   // If the JWT hook doesn't inject entitlements, derive from plan name
   const rawEntitlements: EntitlementKey[] = meta.entitlements ?? [];
-  const entitlements: EntitlementKey[] =
-    rawEntitlements.length > 0
-      ? rawEntitlements
-      : (PLAN_FEATURES[planName] ?? []);
+  let entitlements: EntitlementKey[];
+  if (rawEntitlements.length > 0) {
+    entitlements = rawEntitlements;
+  } else {
+    entitlements = PLAN_FEATURES[planName] ?? [];
+    if (!__planFeaturesFallbackWarned) {
+      __planFeaturesFallbackWarned = true;
+      // Diagnostic only — not an error. Saves ~30 min on the next recurrence
+      // of the silent-fallback chain (see debugging_supabase_jwt_entitlements.md).
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[session-hydrator] No entitlements in JWT app_metadata; falling back to PLAN_FEATURES[${planName}]. ` +
+        `If RETAIL_POS or other add-ons are missing, walk the chain at debugging_supabase_jwt_entitlements.md.`
+      );
+    }
+  }
 
   // Fail loudly if tenant claims are missing — JWT hook must be enabled
   if (!meta.tenant_id || !meta.tenant_slug || !meta.schema_name) {
@@ -133,4 +150,9 @@ export function hydrateFromSupabaseSession(session: Session): AppSession {
     accessToken: session.access_token,
     expiresAt: new Date(session.expires_at! * 1000),
   };
+}
+
+/** Test-only: resets the once-per-session warn guard. Do not call from app code. */
+export function __resetPlanFeaturesFallbackWarnedForTest(): void {
+  __planFeaturesFallbackWarned = false;
 }
