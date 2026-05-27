@@ -40,9 +40,9 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 10.3 | 6/7 | Complete    | 2026-04-29 | — |
 | 10.4 | 7/7 | Complete   | 2026-04-21 | — |
 | 11 | 4/4 | Complete    | 2026-04-21 | — |
-| 12 | 7/11 | In Progress|  | — |
-| 13 | 14/16 | In Progress|  | — |
-| 14 | 12/12 | Complete   | 2026-05-26 | — |
+| 12 | 11/11 | Complete   | 2026-04-30 | — |
+| 13 | 16/16 | Complete   | 2026-05-02 | — |
+| 14 | 15/15 | Complete   | 2026-05-27 | — |
 | 15 | Point of Sale | 0/? | Not started | — |
 | 16 | Reporting & Exports | 0/? | Not started | — |
 | 17 | AI Scribe Audio | 0/? | Not started | — |

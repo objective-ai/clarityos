@@ -76,3 +76,11 @@ finalized-enc.yaml
 encounter-state.yml
 encounter-refractions*.png
 dashboard-after-login.png
+playwright-report/
+.superpowers/
+
+# Root-level UI snapshot debris (saved during manual Playwright exploration —
+# pages-as-yaml from playwright-cli, ad-hoc PNG screenshots). Scoped to repo
+# root so legit yml/png inside known directories aren't excluded.
+/*.yml
+/*.png
