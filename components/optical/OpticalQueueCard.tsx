@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +14,6 @@ import { useOpticalStore } from "@/store/opticalStore";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 import type { OpticalQueueItem, OpticalStatus } from "@/types/optical";
 import { formatClinicTime, formatClinicDate, useClinicTimezone } from "@/lib/timezone";
-import { CreateWalkInOrderModal } from "@/components/orders/CreateWalkInOrderModal";
 import { Entitlement } from "@/lib/entitlements";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useCurrentUser } from "@/store/sessionStore";
@@ -100,7 +98,6 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
   const tz = useClinicTimezone();
   const updateItemStatus = useOpticalStore((s) => s.updateItemStatus);
   const openPrintPreview = useOpticalStore((s) => s.openPrintPreview);
-  const fetchQueue = useOpticalStore((s) => s.fetchQueue);
 
   const { has } = useEntitlements();
   const currentUser = useCurrentUser();
@@ -108,8 +105,6 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
   const canCreateOrder =
     has(Entitlement.RETAIL_POS) &&
     ["owner", "admin", "technician", "receptionist"].includes(role);
-
-  const [orderModalOpen, setOrderModalOpen] = useState(false);
 
   const statusConfig = STATUS_CONFIG[item.status];
   const nextStatus = STATUS_TRANSITIONS[item.status];
@@ -263,7 +258,7 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button
             variant="outline"
             size="sm"
@@ -315,47 +310,17 @@ export function OpticalQueueCard({ item }: OpticalQueueCardProps) {
             </Button>
           )}
 
-          {canCreateOrder && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => setOrderModalOpen(true)}
-            >
-              + Create Order
-            </Button>
-          )}
-
-          {canCreateOrder && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleConfigureOrder}
-              className="border-[var(--glass-border)] text-[var(--text-primary)]"
-            >
+          {/* Plan 14-12: consolidated "+ Create Order" into Configure Order. The
+              walk-in modal flow is still reachable via Orders Tab. Removed the
+              dual CTA because the footer overflowed at md/xl grid widths and
+              the dual labels encouraged misclicks (5 stray drafts in UAT). */}
+          {canCreateOrder && item.encounterId && (
+            <Button variant="default" size="sm" onClick={handleConfigureOrder}>
               Configure Order
             </Button>
           )}
         </div>
       </CardContent>
-
-      <CreateWalkInOrderModal
-        open={orderModalOpen}
-        patientId={item.patientId}
-        encounterId={item.encounterId}
-        onClose={() => {
-          setOrderModalOpen(false);
-          void fetchQueue();
-        }}
-        onCreated={(_created, warnings) => {
-          if (warnings && warnings.length > 0) {
-            alert(
-              `Order placed with warning:\n\n${warnings
-                .map((w) => `• ${w.message}`)
-                .join("\n")}`,
-            );
-          }
-        }}
-      />
     </Card>
   );
 }
