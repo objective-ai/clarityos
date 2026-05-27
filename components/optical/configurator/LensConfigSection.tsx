@@ -36,6 +36,7 @@ export function LensConfigSection({ suggestions, fieldErrors }: Props) {
   }, [draft]);
 
   const lc: Record<string, any> = lensLine?.lensConfig ?? {};
+  const noLines = !lensLine;
 
   const lensTypeSuggestion = suggestions.find((s) => s.field === "lens_type");
   const materialSuggestion = suggestions.find((s) => s.field === "material");
@@ -54,6 +55,11 @@ export function LensConfigSection({ suggestions, fieldErrors }: Props) {
       <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
         Lens Configuration
       </h2>
+      {noLines && (
+        <div className="mb-3 rounded border border-dashed border-[var(--glass-border)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+          Select a frame above to configure lenses.
+        </div>
+      )}
       <div className="space-y-3">
         <Row label="Type" suggestion={lensTypeSuggestion} onAccept={() => {
           const v = lensTypeSuggestion?.value;
@@ -65,7 +71,8 @@ export function LensConfigSection({ suggestions, fieldErrors }: Props) {
             value={lc.lens_type_id ?? ""}
             onChange={(e) => setField("lens_type_id", e.target.value || null)}
             onBlur={() => flush()}
-            className="w-full rounded border border-[var(--glass-border)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+            disabled={noLines}
+            className="w-full rounded border border-[var(--glass-border)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">Select lens type…</option>
             {lensTypes.map((t) => (
@@ -91,7 +98,8 @@ export function LensConfigSection({ suggestions, fieldErrors }: Props) {
             value={lc.material_id ?? ""}
             onChange={(e) => setField("material_id", e.target.value || null)}
             onBlur={() => flush()}
-            className="w-full rounded border border-[var(--glass-border)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)]"
+            disabled={noLines}
+            className="w-full rounded border border-[var(--glass-border)] bg-transparent px-3 py-2 text-sm text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">Select material…</option>
             {lensMaterials.map((m) => (
@@ -129,6 +137,7 @@ export function LensConfigSection({ suggestions, fieldErrors }: Props) {
                   <input
                     type="checkbox"
                     checked={checked}
+                    disabled={noLines}
                     onChange={() => {
                       const cur = new Set<string>(lc.coating_ids ?? []);
                       if (checked) cur.delete(c.id);
@@ -136,6 +145,7 @@ export function LensConfigSection({ suggestions, fieldErrors }: Props) {
                       setField("coating_ids", Array.from(cur));
                     }}
                     onBlur={() => flush()}
+                    className="disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   {c.name}
                 </label>

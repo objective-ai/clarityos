@@ -30,6 +30,8 @@ export function MeasurementsSection({ fitting, fieldErrors }: Props) {
   const { draft, patchFitting, flush } = useOpticalOrderConfigStore();
   const { lensTypes } = useLensCatalogStore();
 
+  const noLines = (draft?.lineItems ?? []).length === 0;
+
   const { requiresSegHeight, requiresVertex } = useMemo(() => {
     const lensLine = (draft?.lineItems ?? []).find(
       (li) => li.lensConfig != null,
@@ -49,6 +51,11 @@ export function MeasurementsSection({ fitting, fieldErrors }: Props) {
       <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
         Measurements
       </h2>
+      {noLines && (
+        <div className="mb-3 rounded border border-dashed border-[var(--glass-border)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+          Select a frame above to enable measurements.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 text-xs">
         {FITTING_FIELDS.map(([key, label]) => {
           const required =
@@ -69,6 +76,7 @@ export function MeasurementsSection({ fitting, fieldErrors }: Props) {
                 type="number"
                 step="0.1"
                 value={fitting?.[key] ?? ""}
+                disabled={noLines}
                 onChange={(e) =>
                   patchFitting({
                     ...(fitting ?? {}),
@@ -76,7 +84,7 @@ export function MeasurementsSection({ fitting, fieldErrors }: Props) {
                   })
                 }
                 onBlur={() => flush()}
-                className={`rounded border bg-transparent px-2 py-1 text-[var(--text-primary)] ${
+                className={`rounded border bg-transparent px-2 py-1 text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed ${
                   fieldError
                     ? "border-red-400"
                     : "border-[var(--glass-border)]"
