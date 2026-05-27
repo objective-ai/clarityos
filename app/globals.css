@@ -151,6 +151,16 @@ body {
   scroll-margin-top: calc(var(--header-height) + 16px);
 }
 
+/* Native <select> dropdown panel — options inherit text color from the parent
+   but the dropdown panel itself defaults to white in most browsers, producing
+   white-on-white text in dark mode. Force CSS-variable colors on every option
+   so all native selects (configurator, intake, settings) render readably in
+   both themes. (Pitfall 10 — no hardcoded white/black.) */
+option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 /* =========================================================================
    Ambient Background — gradient orbs behind all content
    ========================================================================= */
