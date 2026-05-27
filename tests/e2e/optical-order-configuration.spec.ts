@@ -22,6 +22,36 @@ const SEED_PATIENT_LAST_NAME = "Thornton";
 // The optical queue is date-filtered so the spec must navigate the date picker.
 const SEED_ENCOUNTER_DATE = "2026-01-14";
 
+async function pickFirstFrame(page: import("@playwright/test").Page) {
+  // FramePicker renders frame products as <button> children inside the
+  // Frame section. Wait for at least one frame to load, then click the
+  // first enabled one (the click POSTs /line-items/ and re-renders).
+  const frameSection = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Frame" }) });
+  const firstFrame = frameSection.locator("button").first();
+  await firstFrame.waitFor({ state: "visible", timeout: 10_000 });
+  const lineItemPost = page.waitForResponse(
+    (resp) =>
+      resp.url().includes("/line-items") &&
+      resp.request().method() === "POST" &&
+      resp.status() !== 308 &&
+      resp.status() !== 307,
+    { timeout: 10_000 },
+  );
+  await firstFrame.click();
+  const resp = await lineItemPost;
+  if (!resp.ok()) {
+    const body = await resp.text().catch(() => "<no body>");
+    throw new Error(
+      `addLineItem POST failed ${resp.status()} ${resp.url()} :: ${body}`,
+    );
+  }
+  // Wait for the picker to re-render the first frame button as disabled
+  // (the "Added" state), signalling the store has the new line item.
+  await expect(firstFrame).toBeDisabled({ timeout: 5_000 });
+}
+
 async function gotoQueueOnSeedDate(page: import("@playwright/test").Page) {
   await page.goto(`/${TENANT_SLUG}/optical`);
   await page.waitForLoadState("networkidle");
@@ -50,11 +80,13 @@ test.describe("Phase 14: Optical Order Configuration", () => {
     await page.waitForURL(/\/optical\/orders\/[0-9a-f-]+/, { timeout: 10_000 });
 
     // Side-by-side Rx panel renders both Habitual + Final headers.
-    await expect(page.getByText("Habitual")).toBeVisible();
-    await expect(page.getByText("Final")).toBeVisible();
-    // Final Rx OD sphere from seed (Thornton's finalized encounter has a
-    // FINAL refraction; exact value lives in seed_db.py — the panel surfaces it).
-    await expect(page.getByText("Refraction (Habitual | Final)")).toBeVisible();
+    // The literal header contains both words too, so anchor on the
+    // per-column labels (exact match) plus the section heading.
+    await expect(page.getByText("Habitual", { exact: true })).toBeVisible();
+    await expect(page.getByText("Final", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Refraction (Habitual | Final)" }),
+    ).toBeVisible();
 
     expect(
       consoleErrors.length,
@@ -100,6 +132,10 @@ test.describe("Phase 14: Optical Order Configuration", () => {
     await card.getByRole("button", { name: /Configure Order/i }).click();
     await page.waitForURL(/\/optical\/orders\//);
 
+    // FramePicker is empty until a frame is picked — click the first frame
+    // to create the line item that lens_config validation runs against.
+    await pickFirstFrame(page);
+
     // Select Progressive lens type (requires_seg_height=true per Plan 14-06 seed)
     const typeSelect = page.locator("select").first();
     await typeSelect.selectOption({ label: "Progressive" });
@@ -110,10 +146,13 @@ test.describe("Phase 14: Optical Order Configuration", () => {
     // Place WITHOUT filling seg_height.
     await page.getByRole("button", { name: /Place Order/i }).click();
 
-    // Either inline field error or the 400 response surfaces "seg_height" /
-    // "Seg height required" copy from the BE field_errors.
+    // Inline field error from the BE 400 surfaces the seg_height copy under
+    // the Measurements section once the place call returns.
     await expect(
-      page.getByText(/Seg height|seg_height|progressive/i).first(),
+      page
+        .locator("section")
+        .filter({ has: page.getByRole("heading", { name: "Measurements" }) })
+        .getByText(/Seg height OD\/OS required/i),
     ).toBeVisible({ timeout: 5_000 });
   });
 
@@ -127,26 +166,52 @@ test.describe("Phase 14: Optical Order Configuration", () => {
     await card.getByRole("button", { name: /Configure Order/i }).click();
     await page.waitForURL(/\/optical\/orders\//);
 
+    await pickFirstFrame(page);
+
     await page
       .locator("select")
       .first()
       .selectOption({ label: "Progressive" });
     await page.locator("select").nth(1).selectOption({ index: 1 });
+    // Blur between fills — each onChange spreads the current `fitting`
+    // prop, and back-to-back fills race the React re-render so a later
+    // patch would clobber the earlier field. Blurring flushes the autosave
+    // and lets the next prop carry the prior value.
     await page.getByLabel(/Seg Height OD/i).fill("18.0");
+    await page.getByLabel(/Seg Height OD/i).blur();
     await page.getByLabel(/Seg Height OS/i).fill("18.0");
     await page.getByLabel(/Seg Height OS/i).blur();
+    // Progressive lenses also require vertex distance per Plan 14-06 seed.
+    await page.getByLabel(/Vertex Distance/i).fill("12.0");
+    await page.getByLabel(/Vertex Distance/i).blur();
 
+    const placeRespP = page.waitForResponse(
+      (r) =>
+        /\/optical-orders\/[^/]+\/place/.test(r.url()) &&
+        r.request().method() === "POST" &&
+        r.status() !== 308 &&
+        r.status() !== 307,
+      { timeout: 15_000 },
+    );
     await page.getByRole("button", { name: /Place Order/i }).click();
+    const placeResp = await placeRespP;
+    if (!placeResp.ok()) {
+      const body = await placeResp.text().catch(() => "<no body>");
+      throw new Error(
+        `place POST failed ${placeResp.status()} :: ${body}`,
+      );
+    }
     // Status text in the header flips to "placed"
-    await expect(page.getByText(/placed/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(
+      page.getByRole("heading", { name: /Configure Order — placed/i }),
+    ).toBeVisible({ timeout: 10_000 });
 
     // Generate Job Ticket — assert PDF content-type + downloaded file
     const pdfRespPromise = page.waitForResponse(
       (resp) =>
-        /\/api\/optical-orders\/[0-9a-f-]+\/job-ticket\//.test(resp.url()) &&
+        /\/api\/optical-orders\/[0-9a-f-]+\/job-ticket/.test(resp.url()) &&
         resp.status() === 200,
+      { timeout: 15_000 },
     );
     const [download] = await Promise.all([
       page.waitForEvent("download"),
@@ -185,7 +250,7 @@ test.describe("Phase 14: Optical Order Configuration", () => {
     await refreshedCard
       .getByRole("button", { name: /Draft pending/i })
       .click();
-    await expect(page).toHaveURL(/\/optical\/orders\/[0-9a-f-]+\/$/);
+    await expect(page).toHaveURL(/\/optical\/orders\/[0-9a-f-]+\/?$/);
   });
 
   test("placed order opens OrderDetailDrawer (not configurator) from patient Orders tab", async ({
@@ -200,7 +265,7 @@ test.describe("Phase 14: Optical Order Configuration", () => {
       .locator(`text=${SEED_PATIENT_LAST_NAME}`)
       .first()
       .click();
-    await page.getByRole("tab", { name: /Orders/i }).click();
+    await page.getByRole("button", { name: /^Orders$/i }).click();
 
     const placedRow = page
       .locator('[role="button"]')
