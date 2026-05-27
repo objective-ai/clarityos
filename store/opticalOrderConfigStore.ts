@@ -42,6 +42,7 @@ interface OpticalOrderConfigState {
 
   load: (orderId: string) => Promise<void>;
   addLineItem: (productId: string, unitPrice: string | number) => Promise<void>;
+  removeLineItem: (lineId: string) => Promise<void>;
   patchVisionPlan: (next: Record<string, any>) => void;
   patchFitting: (next: Record<string, any>) => void;
   patchLineItemLensConfig: (
@@ -96,10 +97,12 @@ export const useOpticalOrderConfigStore = create<OpticalOrderConfigState>()(
     addLineItem: async (productId, unitPrice) => {
       const draft = get().draft;
       if (!draft) return;
-      // Flush any pending JSONB autosave first so the BE-side total recompute
-      // sees the latest visionPlan/fitting state when it returns the updated
-      // order. Without this, an in-flight patch could clobber our response.
-      await get().flush();
+      // Plan 14-12 RC-2: skip the no-op flush() round-trip when nothing is
+      // dirty. Flush itself short-circuits, but the await still costs an
+      // event-loop tick the user perceives as "slow".
+      if (get().dirty.size > 0) {
+        await get().flush();
+      }
       const headers = {
         ...(await getAuthHeaders()),
         "Content-Type": "application/json",
@@ -122,6 +125,27 @@ export const useOpticalOrderConfigStore = create<OpticalOrderConfigState>()(
       if (!resp.ok) {
         const body = await resp.text().catch(() => "");
         console.error(`addLineItem failed: ${resp.status} ${body}`);
+        return;
+      }
+      const updated = (await resp.json()) as OpticalOrder;
+      set({ draft: updated, committed: updated, dirty: new Set() });
+    },
+
+    removeLineItem: async (lineId) => {
+      const draft = get().draft;
+      if (!draft) return;
+      if (draft.status !== "draft") return; // Pitfall 11
+      if (get().dirty.size > 0) {
+        await get().flush();
+      }
+      const headers = await getAuthHeaders();
+      const resp = await fetch(
+        `/api/optical-orders/${draft.id}/line-items/${lineId}/`,
+        { method: "DELETE", headers },
+      );
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => "");
+        console.error(`removeLineItem failed: ${resp.status} ${body}`);
         return;
       }
       const updated = (await resp.json()) as OpticalOrder;

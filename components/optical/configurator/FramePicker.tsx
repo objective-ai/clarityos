@@ -18,9 +18,10 @@ interface Props {
 
 export function FramePicker({ orderId, fieldErrors }: Props) {
   const { products, loadProducts } = useInventoryStore();
-  const { draft, addLineItem } = useOpticalOrderConfigStore();
+  const { draft, addLineItem, removeLineItem } = useOpticalOrderConfigStore();
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   useEffect(() => {
     loadProducts({ productType: "frame", activeOnly: true });
@@ -47,6 +48,11 @@ export function FramePicker({ orderId, fieldErrors }: Props) {
       .filter((id): id is string => Boolean(id)),
   );
 
+  const lineByProductId = new Map<string, string>();
+  for (const li of draft?.lineItems ?? []) {
+    if (li.productId) lineByProductId.set(li.productId, li.id);
+  }
+
   const frameErrors = fieldErrors.filter((e) => e.path.includes("product"));
 
   return (
@@ -72,13 +78,69 @@ export function FramePicker({ orderId, fieldErrors }: Props) {
         {filtered.map((p: any) => {
           const selected = lineFrameIds.has(p.id);
           const isAdding = adding === p.id;
+          const isRemoving = removing === p.id;
+
+          const chipBody = (
+            <>
+              <div className="text-[var(--text-primary)]">
+                {p.brand} {p.model}
+              </div>
+              <div className="text-[var(--text-muted)]">
+                SKU {p.sku} · ${p.retailPrice}
+              </div>
+              {isAdding && (
+                <div className="mt-1 text-[10px] uppercase text-[#2DD4BF]">
+                  Adding…
+                </div>
+              )}
+              {selected && !isAdding && (
+                <div className="mt-1 text-[10px] uppercase text-[#2DD4BF]">
+                  Added
+                </div>
+              )}
+            </>
+          );
+
+          if (selected) {
+            // Use a <div> wrapper when selected so the × <button> can nest
+            // without violating the no-nested-interactive-controls rule.
+            return (
+              <div
+                key={p.id}
+                className={`relative rounded border border-[#2DD4BF] p-2 text-left text-xs ${
+                  isRemoving ? "opacity-60" : ""
+                }`}
+              >
+                {chipBody}
+                <button
+                  type="button"
+                  aria-label="Remove frame"
+                  title="Remove this frame from the order"
+                  disabled={isRemoving}
+                  onClick={async () => {
+                    const lineId = lineByProductId.get(p.id);
+                    if (!lineId) return;
+                    setRemoving(p.id);
+                    try {
+                      await removeLineItem(lineId);
+                    } finally {
+                      setRemoving(null);
+                    }
+                  }}
+                  className="absolute right-1 top-1 rounded-full px-1.5 text-[10px] leading-none text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          }
+
           return (
             <button
               key={p.id}
               type="button"
-              disabled={selected || isAdding}
+              disabled={isAdding}
               onClick={async () => {
-                if (selected) return;
                 setAdding(p.id);
                 try {
                   await addLineItem(p.id, p.retailPrice);
@@ -86,23 +148,11 @@ export function FramePicker({ orderId, fieldErrors }: Props) {
                   setAdding(null);
                 }
               }}
-              className={`rounded border p-2 text-left text-xs ${
-                selected
-                  ? "border-[#2DD4BF]"
-                  : "border-[var(--glass-border)] hover:border-[#2DD4BF]/60"
-              } ${isAdding ? "opacity-60" : ""}`}
+              className={`rounded border p-2 text-left text-xs border-[var(--glass-border)] hover:border-[#2DD4BF]/60 ${
+                isAdding ? "opacity-60" : ""
+              }`}
             >
-              <div className="text-[var(--text-primary)]">
-                {p.brand} {p.model}
-              </div>
-              <div className="text-[var(--text-muted)]">
-                SKU {p.sku} · ${p.retailPrice}
-              </div>
-              {selected && (
-                <div className="mt-1 text-[10px] uppercase text-[#2DD4BF]">
-                  Added
-                </div>
-              )}
+              {chipBody}
             </button>
           );
         })}
