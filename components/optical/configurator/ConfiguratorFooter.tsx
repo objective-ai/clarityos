@@ -19,13 +19,13 @@ export function ConfiguratorFooter({
   const canGenerate = status === "placed";
 
   return (
-    <footer className="sticky bottom-0 z-10 flex justify-end gap-3 border-t border-[var(--glass-border)] bg-[var(--bg-glass)] p-4">
+    <footer className="sticky bottom-0 z-10 flex justify-end gap-3 border-t border-[var(--glass-border)] bg-[var(--bg-glass-solid)] p-4 backdrop-blur-md">
       <button
         type="button"
         onClick={onCancel}
         className="rounded border border-[var(--glass-border)] px-4 py-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
       >
-        Cancel
+        {status === "draft" ? "Discard draft" : "Cancel"}
       </button>
       <button
         type="button"

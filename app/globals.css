@@ -19,6 +19,7 @@
   --bg-elevated:  #12151E;
   --bg-overlay:   #1A1D28;
   --bg-glass:     rgba(255, 255, 255, 0.03);
+  --bg-glass-solid: rgba(12, 15, 22, 0.92); /* Plan 14-12 — opaque chrome for sticky surfaces */
 
   /* Borders — barely visible glass edges */
   --border-subtle:  rgba(255, 255, 255, 0.04);
@@ -94,6 +95,7 @@
   --bg-elevated:  #F1F3F9;
   --bg-overlay:   #E8EBF2;
   --bg-glass:     rgba(255, 255, 255, 0.70);
+  --bg-glass-solid: rgba(255, 255, 255, 0.94); /* Plan 14-12 — opaque chrome for sticky surfaces */
 
   --border-subtle:  rgba(0, 0, 0, 0.04);
   --border-default: rgba(0, 0, 0, 0.08);

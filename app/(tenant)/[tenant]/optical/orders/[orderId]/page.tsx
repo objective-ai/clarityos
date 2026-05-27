@@ -12,6 +12,7 @@ import { VisionPlanSection } from "@/components/optical/configurator/VisionPlanS
 import { getAuthHeaders } from "@/lib/api-client";
 import { useLensCatalogStore } from "@/store/lensCatalogStore";
 import { useOpticalOrderConfigStore } from "@/store/opticalOrderConfigStore";
+import { useOpticalOrderStore } from "@/store/opticalOrderStore";
 
 interface FieldError {
   path: string;
@@ -28,6 +29,7 @@ export default function OpticalOrderConfiguratorPage() {
 
   const [fieldErrors, setFieldErrors] = useState<FieldError[]>([]);
   const [placing, setPlacing] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -85,6 +87,25 @@ export default function OpticalOrderConfiguratorPage() {
     }
   }
 
+  async function handleCancel() {
+    // Plan 14-12: when the user backs out of a fresh draft, cancel the
+    // backend row so it doesn't leak as a "Draft pending" pill on the
+    // queue card. On failure we DO NOT navigate — surface an inline error
+    // banner so the user can retry rather than silently leaking a draft.
+    if (draft && draft.status === "draft") {
+      try {
+        setCancelError(null);
+        await useOpticalOrderStore.getState().cancelOrder(draft.id);
+      } catch (e) {
+        const msg = (e as Error).message || "network error";
+        console.error("Discard draft failed", msg);
+        setCancelError(msg);
+        return;
+      }
+    }
+    router.back();
+  }
+
   async function handleGenerateJobTicket() {
     if (draft!.status !== "placed") return;
     const headers = await getAuthHeaders();
@@ -121,25 +142,41 @@ export default function OpticalOrderConfiguratorPage() {
         </h1>
       </header>
 
-      <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-2">
-        <div>
-          <RxSideBySidePanel
-            habitual={habitualRefraction}
-            final={finalRefraction}
-          />
-        </div>
-        <div className="space-y-6">
-          <FramePicker orderId={draft.id} fieldErrors={fieldErrors} />
-          <LensConfigSection
-            orderId={draft.id}
-            suggestions={suggestions}
-            fieldErrors={fieldErrors}
-          />
-          <MeasurementsSection
-            fitting={draft.fitting}
-            fieldErrors={fieldErrors}
-          />
-          <VisionPlanSection visionPlan={draft.visionPlan} />
+      <div className="space-y-6 p-6">
+        {/* Rx banner — full width at top */}
+        <RxSideBySidePanel
+          habitual={habitualRefraction}
+          final={finalRefraction}
+        />
+
+        {/* Inline error banner — surfaces Discard draft failures so the user
+            isn't silently stranded on the configurator. */}
+        {cancelError && (
+          <div
+            role="alert"
+            className="rounded border border-[var(--state-critical)] bg-[var(--accent-dim)] px-4 py-2 text-sm text-[var(--state-critical)]"
+          >
+            Could not discard draft: {cancelError}. Try again or close this tab manually.
+          </div>
+        )}
+
+        {/* 2-column grid for configurator sections */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            <FramePicker orderId={draft.id} fieldErrors={fieldErrors} />
+            <LensConfigSection
+              orderId={draft.id}
+              suggestions={suggestions}
+              fieldErrors={fieldErrors}
+            />
+          </div>
+          <div className="space-y-6">
+            <MeasurementsSection
+              fitting={draft.fitting}
+              fieldErrors={fieldErrors}
+            />
+            <VisionPlanSection visionPlan={draft.visionPlan} />
+          </div>
         </div>
       </div>
 
@@ -148,7 +185,7 @@ export default function OpticalOrderConfiguratorPage() {
         placing={placing}
         onPlace={handlePlace}
         onGenerateJobTicket={handleGenerateJobTicket}
-        onCancel={() => router.back()}
+        onCancel={handleCancel}
       />
     </div>
   );
