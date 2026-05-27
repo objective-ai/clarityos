@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 14 — migration 0019 applied + round-trip clean (DB unblocked 2026-05-26). Resumed at Plan 14-02."
-last_updated: "2026-05-26T13:25:00.000Z"
+stopped_at: "Phase 14 plans 14-00 + 14-01 complete; paused on Supabase pooler ENOTFOUND"
+last_updated: "2026-05-27T21:16:15.535Z"
 progress:
   total_phases: 12
   completed_phases: 7
-  total_plans: 68
-  completed_plans: 58
+  total_plans: 71
+  completed_plans: 68
 ---
 
 ---
@@ -52,7 +52,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 14 (optical-order-configuration) — EXECUTING
-Plan: 1 of 12
+Plan: 1 of 15
 
 ## Performance Metrics
 
