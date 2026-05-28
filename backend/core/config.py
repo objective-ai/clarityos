@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     POSTMARK_WEBHOOK_PASSWORD: str | None = None
     MESSAGING_SCHEDULER_ENABLED: bool = True
 
+    # ── Payments (Phase 15 — Stripe + Fernet credential encryption) ───────
+    PAYMENTS_FERNET_KEY: str = ""
+    PAYMENTS_FERNET_KEY_PREVIOUS: str = ""
+    STRIPE_API_VERSION: str = "2026-03-25.dahlia"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
