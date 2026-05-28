@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, inventory, lens_catalog, messaging, optical, optical_order, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, refunds as _refunds_routes, sale_receipts as _sale_receipts_routes, sales as _sales_routes, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
+from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, inventory, lens_catalog, messaging, optical, optical_order, patient, patient_insurance, patient_problem, payer, pos_daily_close as _pos_daily_close_routes, promotion, public_booking, refraction, refunds as _refunds_routes, sale_receipts as _sale_receipts_routes, sales as _sales_routes, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
 # Side-effect import: sale_payments attaches POST /payments, /stripe-confirm,
 # DELETE pending-payment routes to the shared sales_router via decorators.
 # No separate router is registered (single-router pattern, WARNING #6).
@@ -142,6 +142,7 @@ app.include_router(_sales_routes.router)  # prefix declared on the router itself
 sales_router = _sales_routes.router
 app.include_router(_refunds_routes.router)  # prefix declared on the router itself
 app.include_router(_sale_receipts_routes.router)  # /api/sales/{id}/receipt/ + /api/refunds/{id}/receipt/
+app.include_router(_pos_daily_close_routes.router)  # /api/pos/daily-close/
 app.include_router(
     lens_catalog.router,
     prefix="/api/lens-catalog",

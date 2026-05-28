@@ -8,9 +8,8 @@ from uuid import uuid4
 
 import pytest
 
-pytestmark = pytest.mark.asyncio
 
-
+@pytest.mark.asyncio
 async def test_compute_daily_close_returns_documented_shape():
     """compute_daily_close returns the 5-section dict shape consumed by the
     route (Task 2) and by the PDF/CSV builders.
@@ -88,6 +87,7 @@ async def test_compute_daily_close_returns_documented_shape():
     assert result["stripe_payout_estimate"] == Decimal("145.35")
 
 
+@pytest.mark.asyncio
 async def test_compute_daily_close_zero_day_yields_zero_estimate():
     """No stripe payments → stripe_payout_estimate is 0 (not None) so route
     serialization stays deterministic.
