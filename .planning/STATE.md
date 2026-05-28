@@ -2,7 +2,21 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready
+status: executing
+stopped_at: Completed 15-01 schema-orm; next plan is 15-02 payment-processor-crypto (wave 3, autonomous).
+last_updated: "2026-05-28T07:07:30.245Z"
+progress:
+  total_phases: 12
+  completed_phases: 8
+  total_plans: 83
+  completed_plans: 74
+---
+
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: Executing Phase 15
 stopped_at: Completed 15-01 schema-orm — migration 0020 (8 tables + 4 Tenant cols + InventoryTransaction sale_id/CHECK widen), ORM mirror, 14 AuditAction + 6 ClinicalAction values + matrix. Live alembic upgrade STILL deferred (Supabase pooler blocker from Phase 14). Next plan is 15-02 payment-processor-crypto (single task wave, autonomous).
 last_updated: "2026-05-28T06:48:55.122Z"
 progress:

@@ -189,8 +189,8 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **POS-04**: Daily close report with totals by payment method (cash/stripe_card/external_card/write_off/refund_returned) and category (clinical/retail/optical) — exportable to PDF (reportlab landscape) and CSV (ROADMAP success criterion #4)
 - [ ] **POS-05**: Refunds supported in patient payment history — item-level OR full-sale, with restock for product/optical lines via InventoryTransaction(reason='refund_restock'), OWNER+ADMIN gated, mandatory reason (ROADMAP success criterion #5)
 - [ ] **POS-06**: Split tender supported — multiple Payment rows per Sale; remaining=Sale.total-sum(succeeded payments); close gate enforces remaining<=0
-- [ ] **POS-07**: PaymentProcessor abstract interface in backend/services/payments/base.py with 4 async methods (create_payment_intent, confirm_payment, refund_payment, verify_webhook_signature); StripeProcessor is the only shipped adapter for Phase 15
-- [ ] **POS-08**: Per-tenant Stripe credentials stored Fernet-encrypted at rest (`stripe_secret_key_encrypted`, `stripe_webhook_secret_encrypted`); master key in PAYMENTS_FERNET_KEY env var; ciphertext prefix `gAAAA` asserted in encrypt-on-write tests
+- [x] **POS-07**: PaymentProcessor abstract interface in backend/services/payments/base.py with 4 async methods (create_payment_intent, confirm_payment, refund_payment, verify_webhook_signature); StripeProcessor is the only shipped adapter for Phase 15
+- [x] **POS-08**: Per-tenant Stripe credentials stored Fernet-encrypted at rest (`stripe_secret_key_encrypted`, `stripe_webhook_secret_encrypted`); master key in PAYMENTS_FERNET_KEY env var; ciphertext prefix `gAAAA` asserted in encrypt-on-write tests
 - [ ] **POS-09**: Item-level refunds with restock for product/optical_order lines (InventoryTransaction reason='refund_restock' in primary TXN); superbill lines NEVER restock (clinical service)
 - [ ] **POS-10**: Daily close cash reconciliation persisted on DailyCloseRun(close_date, expected_cash, counted_cash, variance, notes?, run_by_id, run_at); same date can only be closed once (subsequent reads are read-only)
 - [ ] **POS-11**: Write-off (`method='write_off'`) gated to OWNER+ADMIN via RECORD_WRITE_OFF permission with mandatory `reason_note` text
@@ -399,8 +399,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | POS-04 | Phase 15 | Pending |
 | POS-05 | Phase 15 | Pending |
 | POS-06 | Phase 15 | Pending |
-| POS-07 | Phase 15 | Pending |
-| POS-08 | Phase 15 | Pending |
+| POS-07 | Phase 15 | Complete |
+| POS-08 | Phase 15 | Complete |
 | POS-09 | Phase 15 | Pending |
 | POS-10 | Phase 15 | Pending |
 | POS-11 | Phase 15 | Pending |
