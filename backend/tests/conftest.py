@@ -244,3 +244,159 @@ def lens_coating_ar():
 def optical_order_in_draft():
     """Wave 0 stub — OpticalOrder factory extension lands in Phase 14-01."""
     pytest.skip("Phase 14-01 — OpticalOrder Phase 14 columns not yet added")
+
+
+# ---------------------------------------------------------------------------
+# Phase 15 (Wave 0) — Point of Sale fixtures.
+# Plan 15-01 lands the Sale/Payment/Refund ORM; Plan 15-02 lands the
+# PaymentProcessor base + StripeProcessor. Until then these factories raise
+# ImportError on the lazy import and the test module skips cleanly.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def sale_factory(db_session, tenant_context):
+    """Build a Sale ORM instance — does NOT commit. Caller may .add() + .flush()."""
+
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from uuid import uuid4
+
+    async def _make(**overrides):
+        try:
+            from backend.db.models.tenant.clinical import Sale
+        except ImportError:
+            pytest.skip("Sale model not yet implemented (Plan 15-01)")
+        defaults = dict(
+            id=uuid4(),
+            tenant_id=tenant_context.tenant_id,
+            patient_id=overrides.pop("patient_id", uuid4()),
+            status="open",
+            subtotal=Decimal("0.00"),
+            tax=Decimal("0.00"),
+            discount_total=Decimal("0.00"),
+            total=Decimal("0.00"),
+            created_by_id=None,
+            opened_at=datetime.now(timezone.utc),
+        )
+        defaults.update(overrides)
+        return Sale(**defaults)
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def payment_factory(tenant_context):
+    """Build a Payment ORM instance. Caller may .add() + .flush()."""
+
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from uuid import UUID, uuid4
+
+    async def _make(sale_id: UUID, **overrides):
+        try:
+            from backend.db.models.tenant.clinical import Payment
+        except ImportError:
+            pytest.skip("Payment model not yet implemented (Plan 15-01)")
+        defaults = dict(
+            id=uuid4(),
+            tenant_id=tenant_context.tenant_id,
+            sale_id=sale_id,
+            method="cash",
+            amount=Decimal("0.00"),
+            status="succeeded",
+            created_at=datetime.now(timezone.utc),
+        )
+        defaults.update(overrides)
+        return Payment(**defaults)
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def refund_factory(tenant_context):
+    """Build a Refund ORM instance. Caller may .add() + .flush()."""
+
+    from datetime import datetime, timezone
+    from decimal import Decimal
+    from uuid import UUID, uuid4
+
+    async def _make(sale_id: UUID, **overrides):
+        try:
+            from backend.db.models.tenant.clinical import Refund
+        except ImportError:
+            pytest.skip("Refund model not yet implemented (Plan 15-01)")
+        defaults = dict(
+            id=uuid4(),
+            tenant_id=tenant_context.tenant_id,
+            sale_id=sale_id,
+            total_amount=Decimal("0.00"),
+            reason="test refund reason",
+            refunded_by_id=None,
+            created_at=datetime.now(timezone.utc),
+        )
+        defaults.update(overrides)
+        return Refund(**defaults)
+
+    return _make
+
+
+@pytest.fixture
+def fake_stripe_processor():
+    """Drop-in replacement satisfying the PaymentProcessor Protocol (Plan 15-02).
+
+    Returned object exposes async methods matching the Protocol shape; tests
+    swap this in instead of hitting the real Stripe API. The webhook helper
+    lazily imports backend.services.payments.base.WebhookEvent — if Plan 15-02
+    hasn't landed yet, the test that calls verify_webhook_signature skips.
+    """
+
+    from dataclasses import dataclass
+    from decimal import Decimal
+
+    @dataclass(frozen=True)
+    class _FakeIntent:
+        intent_id: str = "pi_fake_123"
+        client_secret: str = "pi_fake_123_secret_xyz"
+        amount: Decimal = Decimal("100.00")
+        currency: str = "usd"
+
+    @dataclass(frozen=True)
+    class _FakePayment:
+        intent_id: str = "pi_fake_123"
+        charge_id: str = "ch_fake_456"
+        last4: str = "4242"
+        brand: str = "visa"
+        status: str = "succeeded"
+        failure_reason: str | None = None
+
+    @dataclass(frozen=True)
+    class _FakeRefund:
+        refund_id: str = "re_fake_789"
+        amount: Decimal = Decimal("10.00")
+        status: str = "succeeded"
+
+    class _FakeProcessor:
+        async def create_payment_intent(self, tenant, amount, currency, metadata):
+            return _FakeIntent(amount=amount, currency=currency)
+
+        async def confirm_payment(self, tenant, payment_intent_id):
+            return _FakePayment(intent_id=payment_intent_id)
+
+        async def refund_payment(self, tenant, payment, amount):
+            return _FakeRefund(amount=amount)
+
+        def verify_webhook_signature(self, tenant, body, signature):
+            try:
+                from backend.services.payments.base import WebhookEvent
+            except ImportError:
+                pytest.skip("PaymentProcessor base not yet implemented (Plan 15-02)")
+            return WebhookEvent(
+                event_id="evt_fake_001",
+                event_type="payment_intent.succeeded",
+                payment_intent_id="pi_fake_123",
+                charge_id="ch_fake_456",
+                raw_payload={},
+            )
+
+    return _FakeProcessor()

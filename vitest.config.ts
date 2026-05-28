@@ -18,7 +18,10 @@ export default defineConfig({
       "tests/**/*.test.tsx",
       "lib/**/*.test.ts",
       "store/**/*.test.ts",
+      "components/**/*.test.tsx",
+      "types/**/*.test.ts",
     ],
+    exclude: ["tests/e2e/**", "node_modules/**"],
     coverage: {
       provider: "v8",
       include: [

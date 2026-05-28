@@ -181,6 +181,25 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [ ] **OPT14-17**: Pydantic `by_alias` contract tests for `OpticalOrderResponse` (extended), `OpticalOrderLineItemResponse` (lens_config), `LensTypeResponse`, `LensMaterialResponse`, `LensCoatingResponse`, `JobTicketMetaResponse`; vitest literal-keys mirror per `feedback_contract_tests.md`
 - [ ] **OPT14-18**: Playwright E2E covering optical queue → "Configure Order" CTA → configurator autosave (PATCH intercept) → place with missing seg height (400 field_errors) → fix → place succeeds → Generate Job Ticket (PDF download) → OrderDetailDrawer view for placed order
 
+### Point of Sale (Phase 15)
+
+- [ ] **POS-01**: Front desk can open a checkout adding clinical charges (Superbill copay) and retail/optical items (ad-hoc Product or placed OpticalOrder) on a dedicated /pos full-page checkout (ROADMAP success criterion #1)
+- [ ] **POS-02**: Payment supported via cash (tendered + change_due) and card via Stripe Elements (PaymentElement + automatic_payment_methods PaymentIntent + server-confirm on retrieve, never client-reported status) (ROADMAP success criterion #2)
+- [ ] **POS-03**: PDF receipt delivered by email (Postmark + React Email + PDF attachment) or browser print (hidden iframe + window.print) — server-side reportlab letter-size template cloned from job_ticket_pdf.py (ROADMAP success criterion #3)
+- [ ] **POS-04**: Daily close report with totals by payment method (cash/stripe_card/external_card/write_off/refund_returned) and category (clinical/retail/optical) — exportable to PDF (reportlab landscape) and CSV (ROADMAP success criterion #4)
+- [ ] **POS-05**: Refunds supported in patient payment history — item-level OR full-sale, with restock for product/optical lines via InventoryTransaction(reason='refund_restock'), OWNER+ADMIN gated, mandatory reason (ROADMAP success criterion #5)
+- [ ] **POS-06**: Split tender supported — multiple Payment rows per Sale; remaining=Sale.total-sum(succeeded payments); close gate enforces remaining<=0
+- [ ] **POS-07**: PaymentProcessor abstract interface in backend/services/payments/base.py with 4 async methods (create_payment_intent, confirm_payment, refund_payment, verify_webhook_signature); StripeProcessor is the only shipped adapter for Phase 15
+- [ ] **POS-08**: Per-tenant Stripe credentials stored Fernet-encrypted at rest (`stripe_secret_key_encrypted`, `stripe_webhook_secret_encrypted`); master key in PAYMENTS_FERNET_KEY env var; ciphertext prefix `gAAAA` asserted in encrypt-on-write tests
+- [ ] **POS-09**: Item-level refunds with restock for product/optical_order lines (InventoryTransaction reason='refund_restock' in primary TXN); superbill lines NEVER restock (clinical service)
+- [ ] **POS-10**: Daily close cash reconciliation persisted on DailyCloseRun(close_date, expected_cash, counted_cash, variance, notes?, run_by_id, run_at); same date can only be closed once (subsequent reads are read-only)
+- [ ] **POS-11**: Write-off (`method='write_off'`) gated to OWNER+ADMIN via RECORD_WRITE_OFF permission with mandatory `reason_note` text
+- [ ] **POS-12**: Enum extensions — 13 new AuditAction VARCHAR values (SALE_CREATE, SALE_OPENED, SALE_PAID, SALE_VOIDED, PAYMENT_RECORDED, PAYMENT_FAILED, WRITE_OFF_RECORDED, REFUND_ISSUED, RECEIPT_EMAILED, RECEIPT_PRINTED, DAILY_CLOSE_RUN, SALE_DISCOUNT_APPLIED, STRIPE_KEYS_UPDATED, STRIPE_WEBHOOK_RECEIVED) and 6 new ClinicalAction values (OPEN_POS, RECORD_PAYMENT, RECORD_WRITE_OFF, ISSUE_REFUND, RUN_DAILY_CLOSE, MANAGE_PAYMENT_CONFIG)
+- [ ] **POS-13**: Single per-tenant `Tenant.sales_tax_rate Numeric(5,4) default 0.0725`; per-line `taxable` boolean override; superbill source_type forced non-taxable; tax = sum(line_total WHERE taxable=true) × rate quantize(0.01, ROUND_HALF_EVEN)
+- [ ] **POS-14**: Superbill copay derivation — when `Superbill.billed_payer_id IS NOT NULL` AND matching active `PatientInsurance` exists, use `PatientInsurance.copay_amount`; else (self-pay) use `Superbill.total_fee`
+- [ ] **POS-15**: Per-line discount ($/% toggle) with mandatory `discount_reason String(200)` text; audit `SALE_DISCOUNT_APPLIED` with metadata `{line_id, type, amount, reason}`
+- [ ] **POS-16**: Pydantic `by_alias=True` contract test for SaleResponse, SaleLineItemResponse, PaymentResponse, RefundResponse, DailyCloseResponse (backend snapshot) mirrored by vitest literal-keys assertion (`feedback_contract_tests.md`)
+
 ## v2 Requirements
 
 Deferred to future milestone. Tracked but not in current roadmap.
@@ -374,13 +393,29 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | OPT14-16 | Phase 14 | Pending |
 | OPT14-17 | Phase 14 | Pending |
 | OPT14-18 | Phase 14 | Pending |
+| POS-01 | Phase 15 | Pending |
+| POS-02 | Phase 15 | Pending |
+| POS-03 | Phase 15 | Pending |
+| POS-04 | Phase 15 | Pending |
+| POS-05 | Phase 15 | Pending |
+| POS-06 | Phase 15 | Pending |
+| POS-07 | Phase 15 | Pending |
+| POS-08 | Phase 15 | Pending |
+| POS-09 | Phase 15 | Pending |
+| POS-10 | Phase 15 | Pending |
+| POS-11 | Phase 15 | Pending |
+| POS-12 | Phase 15 | Pending |
+| POS-13 | Phase 15 | Pending |
+| POS-14 | Phase 15 | Pending |
+| POS-15 | Phase 15 | Pending |
+| POS-16 | Phase 15 | Pending |
 
 **Coverage:**
-- Total requirements: 141
+- Total requirements: 157
 - Complete: 67
-- Pending: 74
+- Pending: 90
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-05-14 — Phase 14 Optical Order Configuration (18 OPT14 requirements added)*
+*Last updated: 2026-05-27 — Phase 15 Point of Sale (16 POS requirements added)*
