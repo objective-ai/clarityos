@@ -62,6 +62,7 @@ async def send_email(
     from_: str | None = None,
     reply_to: str | None = None,
     tag: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> str:
     """Send a pre-rendered HTML email via Postmark. Returns Postmark MessageID.
 
@@ -72,6 +73,11 @@ async def send_email(
     We pass it as a custom header `X-PM-Idempotency-Key` so retried sends are
     visible at the message-log layer; the actual de-dup happens upstream in
     the sender service (Plan 12-03).
+
+    ``attachments`` (Plan 15-06): a list of Postmark attachment dicts —
+    ``[{"Name": "...", "Content": <base64 str>, "ContentType": "..."}]``.
+    Used by the receipt-email handler to attach the PDF body. Left optional
+    so all existing call sites keep working unchanged.
     """
     client = _ensure_client()
     sender = from_ or settings.POSTMARK_FROM_EMAIL
@@ -91,6 +97,8 @@ async def send_email(
         kwargs["ReplyTo"] = reply_to
     if tag:
         kwargs["Tag"] = tag
+    if attachments:
+        kwargs["Attachments"] = attachments
 
     result = await asyncio.to_thread(client.emails.send, **kwargs)
     return result["MessageID"]
