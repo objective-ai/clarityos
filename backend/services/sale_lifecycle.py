@@ -1,18 +1,22 @@
-"""Sale lifecycle pure helpers (POS-01, POS-06, POS-13, POS-14).
+"""Sale lifecycle pure helpers (POS-01, POS-04, POS-06, POS-13, POS-14).
 
 Route handlers (Plan 15-04) compose these into transactional flows.
 """
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from backend.core.audit import log_action
+from backend.core.security import TenantContext
 from backend.db.models.tenant.clinical import (
+    AuditAction,
     OpticalOrder,
     OpticalOrderLineItem,
     PatientInsurance,
@@ -178,6 +182,70 @@ async def prefill_from_optical_order(
         lines.append(li)
     await db.flush()
     return lines
+
+
+async def maybe_dispense_optical_orders(
+    db: AsyncSession, ctx: TenantContext, sale: Sale, mark_dispensed: bool
+) -> list[OpticalOrder]:
+    """Flip OpticalOrder.status placed→dispensed when cart toggle set.
+
+    Returns dispensed orders for audit metadata. Skipped when mark_dispensed=False.
+    """
+    if not mark_dispensed:
+        return []
+    order_ids = {
+        li.source_id
+        for li in sale.lines
+        if li.source_type == "optical_order" and li.source_id
+    }
+    dispensed: list[OpticalOrder] = []
+    for oid in order_ids:
+        order = (
+            await db.execute(select(OpticalOrder).where(OpticalOrder.id == oid))
+        ).scalar_one_or_none()
+        if order and order.status == "placed":
+            order.status = "dispensed"
+            order.dispensed_at = datetime.now(timezone.utc)
+            dispensed.append(order)
+            await log_action(
+                db,
+                ctx,
+                AuditAction.OPTICAL_ORDER_DISPENSE,
+                "optical_order",
+                order.id,
+                metadata={"via_sale_id": str(sale.id)},
+            )
+    return dispensed
+
+
+async def generate_receipt_number(db: AsyncSession, tenant_id: UUID) -> str:
+    """Receipt number format: R-YYYYMMDD-NNNN per tenant per day."""
+    today = date.today()
+    count = (
+        await db.execute(
+            select(func.count(Sale.id)).where(
+                Sale.tenant_id == tenant_id,
+                func.date(Sale.closed_at) == today,
+                Sale.receipt_number.isnot(None),
+            )
+        )
+    ).scalar_one()
+    return f"R-{today.strftime('%Y%m%d')}-{count + 1:04d}"
+
+
+async def close_sale(*args, **kwargs):
+    """Reserved for future programmatic close API.
+
+    The route handler `backend/api/routes/sales.py::close_sale` is the
+    canonical entry point. This service shim is kept so that future webhook
+    code (Plan 15-08) or background jobs can call into the same flow without
+    going through HTTP — implementation lives in the route until a real
+    second caller exists.
+    """
+    raise NotImplementedError(
+        "Use POST /api/sales/{id}/close/ via FastAPI; programmatic shim "
+        "lands when a second caller (webhook / job) needs it."
+    )
 
 
 async def load_cart_from_sources(

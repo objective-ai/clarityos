@@ -7,7 +7,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, inventory, lens_catalog, messaging, optical, optical_order, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
+from backend.api.routes import admin_seed, ai_scribe, analytics, appointment, audit, billing, billing_list, diagnosis, encounter, exam_findings, intake, inventory, lens_catalog, messaging, optical, optical_order, patient, patient_insurance, patient_problem, payer, promotion, public_booking, refraction, sales as _sales_routes, staff, staff_schedule, system, tenant, uptime, vitals, webhooks
+# Side-effect import: sale_payments attaches POST /payments, /stripe-confirm,
+# DELETE pending-payment routes to the shared sales_router via decorators.
+# No separate router is registered (single-router pattern, WARNING #6).
+from backend.api.routes import sale_payments as _sale_payments_routes  # noqa: F401
 from backend.api.routes.system import sample_health_now
 from backend.core.config import settings
 from backend.core.sentry_setup import init_sentry
@@ -134,6 +138,8 @@ app.include_router(
     prefix="/api/optical-orders",
     tags=["Optical Orders"],
 )
+app.include_router(_sales_routes.router)  # prefix declared on the router itself
+sales_router = _sales_routes.router
 app.include_router(
     lens_catalog.router,
     prefix="/api/lens-catalog",
