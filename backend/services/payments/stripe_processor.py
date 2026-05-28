@@ -137,6 +137,21 @@ class StripeProcessor:
             status=refund.status,
         )
 
+    async def cancel_intent(
+        self, tenant: "Tenant", payment_intent_id: str
+    ) -> None:
+        """Cancel an unconfirmed PaymentIntent (Pitfall 7).
+
+        Silently tolerates Stripe failures — the caller has already decided to
+        mark the local Payment canceled; reconciliation via webhook will repair
+        any drift.
+        """
+        api_key = self._api_key(tenant)
+        try:
+            stripe.PaymentIntent.cancel(payment_intent_id, api_key=api_key)
+        except Exception:  # noqa: BLE001 — staff cancel can race with auto-cancel
+            pass
+
     def verify_webhook_signature(
         self, tenant: "Tenant", body: bytes, signature: str
     ) -> WebhookEvent:

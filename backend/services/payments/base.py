@@ -73,6 +73,12 @@ class PaymentProcessor(Protocol):
         self, tenant: "Tenant", body: bytes, signature: str
     ) -> WebhookEvent: ...
 
+    async def cancel_intent(
+        self, tenant: "Tenant", payment_intent_id: str
+    ) -> None:
+        """Cancel an unconfirmed PaymentIntent (Pitfall 7 — orphan-intent mitigation)."""
+        ...
+
 
 def get_processor(processor_name: str = "stripe") -> PaymentProcessor:
     if processor_name == "stripe":
