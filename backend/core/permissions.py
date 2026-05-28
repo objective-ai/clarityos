@@ -91,6 +91,14 @@ class ClinicalAction(StrEnum):
     GENERATE_JOB_TICKET = "generate_job_ticket"
     MANAGE_LENS_CATALOG = "manage_lens_catalog"
 
+    # Phase 15 — Point of Sale
+    OPEN_POS = "open_pos"
+    RECORD_PAYMENT = "record_payment"
+    RECORD_WRITE_OFF = "record_write_off"
+    ISSUE_REFUND = "issue_refund"
+    RUN_DAILY_CLOSE = "run_daily_close"
+    MANAGE_PAYMENT_CONFIG = "manage_payment_config"
+
 
 # ---------------------------------------------------------------------------
 # Permission matrix  (action → allowed roles)
@@ -173,6 +181,17 @@ PERMISSION_MATRIX: dict[ClinicalAction, set[StaffRole]] = {
     # MANAGE_LENS_CATALOG mirrors MANAGE_INVENTORY (admin/owner only).
     ClinicalAction.GENERATE_JOB_TICKET:   {_T, _R, _A, _O},
     ClinicalAction.MANAGE_LENS_CATALOG:   {_A, _O},
+
+    # Phase 15 — Point of Sale (POS-11)
+    # Cashier-tier actions (open + record card/cash) allowed to all non-doctor
+    # staff. Write-off, refund, and daily close are owner/admin only.
+    # Stripe key management is OWNER-only — secrets must never leak to admins.
+    ClinicalAction.OPEN_POS:              {_T, _R, _A, _O},
+    ClinicalAction.RECORD_PAYMENT:        {_T, _R, _A, _O},
+    ClinicalAction.RECORD_WRITE_OFF:      {_A, _O},
+    ClinicalAction.ISSUE_REFUND:          {_A, _O},
+    ClinicalAction.RUN_DAILY_CLOSE:       {_A, _O},
+    ClinicalAction.MANAGE_PAYMENT_CONFIG: {_O},
 }
 
 

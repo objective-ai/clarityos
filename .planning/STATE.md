@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready
-stopped_at: Completed 15-00 Wave-0 Foundation; next plan is 15-01 schema-orm (single autonomous task)
-last_updated: "2026-05-28T06:43:47.107Z"
+stopped_at: Completed 15-01 schema-orm — migration 0020 (8 tables + 4 Tenant cols + InventoryTransaction sale_id/CHECK widen), ORM mirror, 14 AuditAction + 6 ClinicalAction values + matrix. Live alembic upgrade STILL deferred (Supabase pooler blocker from Phase 14). Next plan is 15-02 payment-processor-crypto (single task wave, autonomous).
+last_updated: "2026-05-28T06:48:55.122Z"
 progress:
   total_phases: 12
   completed_phases: 8
@@ -285,8 +285,8 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-05-28T06:43:47.101Z
-Stopped at: Completed 15-00 Wave-0 Foundation; next plan is 15-01 schema-orm (single autonomous task)
-Resume file: .planning/phases/15-point-of-sale/15-01-schema-orm-PLAN.md
+Stopped at: Completed 15-01 schema-orm; next plan is 15-02 payment-processor-crypto (wave 3, autonomous).
+Resume file: .planning/phases/15-point-of-sale/15-02-payment-processor-crypto-PLAN.md
 
 **Phase 9 Overview:**
 

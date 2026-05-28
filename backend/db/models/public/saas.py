@@ -9,15 +9,19 @@ import enum
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from decimal import Decimal
+
 from sqlalchemy import (
     Boolean,
     DateTime,
     Enum as _Enum,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     func,
+    text,
 )
 
 
@@ -86,6 +90,24 @@ class Tenant(TimestampMixin, PublicBase):
     timezone: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="America/Los_Angeles"
     )
+
+    # Phase 15 — Point of Sale (POS-08 tax, POS-13 Stripe credentials).
+    # Stripe secret + webhook secret are Fernet-encrypted in
+    # backend.services.payments.crypto (Plan 15-02) before persistence;
+    # the publishable key is safe in plaintext.
+    sales_tax_rate: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4), nullable=False, server_default=text("0.0725")
+    )
+    stripe_publishable_key: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    stripe_secret_key_encrypted: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    stripe_webhook_secret_encrypted: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+
     settings_jsonb: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     plan: Mapped[SubscriptionPlan | None] = relationship(back_populates="tenants")

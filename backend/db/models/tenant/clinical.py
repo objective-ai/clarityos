@@ -30,6 +30,7 @@ from sqlalchemy import (
     Time,
     UniqueConstraint,
     func,
+    text,
 )
 
 
@@ -210,6 +211,22 @@ class AuditAction(str, enum.Enum):
     LENS_TYPE_CREATE = "lens_type_create"
     LENS_MATERIAL_CREATE = "lens_material_create"
     LENS_COATING_CREATE = "lens_coating_create"
+    # Phase 15 — Point of Sale (migration 0020)
+    # Stored as VARCHAR(50); no ALTER TYPE needed.
+    SALE_CREATE = "sale_create"
+    SALE_OPENED = "sale_opened"
+    SALE_PAID = "sale_paid"
+    SALE_VOIDED = "sale_voided"
+    PAYMENT_RECORDED = "payment_recorded"
+    PAYMENT_FAILED = "payment_failed"
+    WRITE_OFF_RECORDED = "write_off_recorded"
+    REFUND_ISSUED = "refund_issued"
+    RECEIPT_EMAILED = "receipt_emailed"
+    RECEIPT_PRINTED = "receipt_printed"
+    DAILY_CLOSE_RUN = "daily_close_run"
+    SALE_DISCOUNT_APPLIED = "sale_discount_applied"
+    STRIPE_KEYS_UPDATED = "stripe_keys_updated"
+    STRIPE_WEBHOOK_RECEIVED = "stripe_webhook_received"
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +252,44 @@ class InventoryReason(str, enum.Enum):
     ORDER_CANCELLED = "order_cancelled"
     RECEIVE_STOCK = "receive_stock"
     MANUAL_ADJUST = "manual_adjust"
+    # Phase 15 — Point of Sale (migration 0020 widens ck_inventory_reason).
+    SALE_PLACED = "sale_placed"
+    REFUND_RESTOCK = "refund_restock"
+
+
+# ---------------------------------------------------------------------------
+# Phase 15 — Point of Sale enums
+# All stored as VARCHAR with CHECK constraints in DB (per backend-python.md).
+# ---------------------------------------------------------------------------
+
+
+class SaleStatus(str, enum.Enum):
+    OPEN = "open"
+    PAID = "paid"
+    REFUNDED = "refunded"
+    VOIDED = "voided"
+
+
+class SaleLineItemSourceType(str, enum.Enum):
+    SUPERBILL = "superbill"
+    OPTICAL_ORDER = "optical_order"
+    PRODUCT = "product"
+    ADHOC = "adhoc"
+
+
+class PaymentMethod(str, enum.Enum):
+    CASH = "cash"
+    STRIPE_CARD = "stripe_card"
+    EXTERNAL_CARD = "external_card"
+    WRITE_OFF = "write_off"
+
+
+class PaymentStatus(str, enum.Enum):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+    PARTIAL_REFUND = "partial_refund"
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +398,13 @@ class Patient(TimestampMixin, SoftDeleteMixin, TenantBase):
     )
     encounters: Mapped[list["Encounter"]] = relationship(
         "Encounter", back_populates="patient", cascade="all, delete-orphan"
+    )
+    # Phase 15 — Point of Sale. ``lazy="dynamic"`` so the patient detail page can
+    # paginate sales without eager-loading the whole history. Sale deletes
+    # cascade only at the DB level (SET NULL) — never delete patient sales rows
+    # through the ORM (POS-09 audit immutability).
+    sales: Mapped[list["Sale"]] = relationship(
+        "Sale", back_populates="patient", lazy="dynamic"
     )
 
     @property
@@ -1719,8 +1781,15 @@ class InventoryTransaction(TenantBase):
             "ix_inventory_transactions_product",
             "product_id", "created_at",
         ),
+        Index(
+            "ix_inventory_transactions_sale",
+            "tenant_id", "sale_id",
+        ),
+        # Phase 15 widens ck_inventory_reason with 'sale_placed' + 'refund_restock'.
+        # Migration 0020 drops + recreates the CHECK; ORM mirrors the new shape.
         CheckConstraint(
-            "reason IN ('order_placed','order_cancelled','receive_stock','manual_adjust')",
+            "reason IN ('order_placed','order_cancelled','receive_stock',"
+            "'manual_adjust','sale_placed','refund_restock')",
             name="ck_inventory_reason",
         ),
     )
@@ -1741,6 +1810,13 @@ class InventoryTransaction(TenantBase):
     optical_order_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("optical_orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Phase 15 — POS audit trail. Populated by Plan 15-04 on close_sale (when
+    # a product line decrements stock) and by Plan 15-05 on refund_restock.
+    sale_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales.id", ondelete="SET NULL"),
         nullable=True,
     )
     staff_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -1883,3 +1959,559 @@ class LensCoating(TimestampMixin, SoftDeleteMixin, TenantBase):
 
     def __repr__(self) -> str:
         return f"<LensCoating name={self.name!r} category={self.category}>"
+
+
+# ---------------------------------------------------------------------------
+# Phase 15 — Point of Sale: financial-ledger schema
+#
+# Eight tables hold the full sale → payment → refund → daily-close lifecycle.
+# Enum-like columns stored as VARCHAR with CHECK constraints (matches Phase 13
+# convention). Money columns are Numeric(10,2); arithmetic always uses Decimal
+# with ROUND_HALF_EVEN in backend.services.money (Plan 15-03).
+#
+# Cascade rules (POS-09 audit immutability):
+#   - sale → lines / payments / refunds: CASCADE on sale DELETE (sales are not
+#     deleted in practice; cascade exists for test-fixture cleanup only).
+#   - refund → refund_line_items / refund_payments: CASCADE.
+#   - Stripe webhook events: never deleted — append-only idempotency log.
+# ---------------------------------------------------------------------------
+
+
+class Sale(TimestampMixin, TenantBase):
+    """A point-of-sale ledger entry — the financial-and-inventory commit point.
+
+    Lifecycle: ``open`` → ``paid`` (close_sale) → optionally ``refunded`` /
+    ``voided``. Stock decrements happen at close, not at open — see Plan 15-04
+    close_sale for the primary-TXN pattern. ``receipt_number`` is populated on
+    close as ``R-YYYYMMDD-NNNN`` and is unique per tenant.
+    """
+
+    __tablename__ = "sales"
+    __table_args__ = (
+        Index("ix_sales_tenant_patient", "tenant_id", "patient_id"),
+        Index("ix_sales_tenant_status_closed", "tenant_id", "status", "closed_at"),
+        Index("ix_sales_tenant_opened_desc", "tenant_id", "opened_at"),
+        Index(
+            "uq_sales_receipt_number",
+            "tenant_id", "receipt_number",
+            unique=True,
+            postgresql_where=text("receipt_number IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "status IN ('open','paid','refunded','voided')",
+            name="ck_sale_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("patients.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="open", server_default="open"
+    )
+    subtotal: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False,
+        default=Decimal("0.00"), server_default="0.00",
+    )
+    tax: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False,
+        default=Decimal("0.00"), server_default="0.00",
+    )
+    discount_total: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False,
+        default=Decimal("0.00"), server_default="0.00",
+    )
+    total: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False,
+        default=Decimal("0.00"), server_default="0.00",
+    )
+    receipt_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Reserved for future Supabase Storage cache; Phase 15 regenerates the PDF
+    # on every download (Open Q 2 — receipts are cheap and avoid stale data).
+    receipt_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # --- Relationships ---
+    patient: Mapped["Patient | None"] = relationship(
+        "Patient", back_populates="sales", lazy="selectin"
+    )
+    created_by: Mapped["Staff | None"] = relationship(
+        "Staff", foreign_keys=[created_by_id], lazy="selectin"
+    )
+    lines: Mapped[list["SaleLineItem"]] = relationship(
+        "SaleLineItem",
+        back_populates="sale",
+        cascade="all, delete-orphan",
+        order_by="SaleLineItem.created_at",
+        lazy="selectin",
+    )
+    payments: Mapped[list["Payment"]] = relationship(
+        "Payment",
+        back_populates="sale",
+        cascade="all, delete-orphan",
+        order_by="Payment.created_at",
+        lazy="selectin",
+    )
+    refunds: Mapped[list["Refund"]] = relationship(
+        "Refund",
+        back_populates="sale",
+        cascade="all, delete-orphan",
+        order_by="Refund.created_at",
+        lazy="selectin",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Sale id={self.id} status={self.status} "
+            f"total={self.total} receipt={self.receipt_number!r}>"
+        )
+
+
+class SaleLineItem(TimestampMixin, TenantBase):
+    """A single line on a Sale.
+
+    Lines may originate from a Superbill copay (``source_type='superbill'``),
+    an OpticalOrder dispense (``source_type='optical_order'``, with
+    ``optical_order_line_item_id`` populated for exact restock targeting in
+    Plan 15-05), a retail Product (``source_type='product'``), or an ad-hoc
+    line (``source_type='adhoc'``, no source_id required).
+    """
+
+    __tablename__ = "sale_line_items"
+    __table_args__ = (
+        Index("ix_sale_line_items_sale", "sale_id"),
+        Index(
+            "ix_sale_line_items_source",
+            "tenant_id", "source_type", "source_id",
+        ),
+        Index(
+            "ix_sale_line_items_optical_oli",
+            "tenant_id", "optical_order_line_item_id",
+            postgresql_where=text("optical_order_line_item_id IS NOT NULL"),
+        ),
+        CheckConstraint("qty > 0", name="ck_sale_line_qty_positive"),
+        CheckConstraint(
+            "source_type IN ('superbill','optical_order','product','adhoc')",
+            name="ck_sale_line_source_type",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    sale_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    # source_id is nullable: 'adhoc' carries no upstream reference; for
+    # 'optical_order' it points at OpticalOrder.id (NOT line item) for UI
+    # grouping. Exact restock target is ``optical_order_line_item_id`` below.
+    source_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    # Plan 15-05 reads this FK directly to find the OpticalOrderLineItem
+    # (and therefore the product_id to restock) — no fragile line_total
+    # matching. Populated by Plan 15-03 prefill_from_optical_order.
+    optical_order_line_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("optical_order_line_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    qty: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False,
+        default=Decimal("0.00"), server_default="0.00",
+    )
+    discount_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    taxable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    # line_total = qty * unit_price - discount_amount, computed app-side
+    # (backend.services.money) and stored for daily-close aggregation.
+    line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+    # --- Relationships ---
+    sale: Mapped["Sale"] = relationship("Sale", back_populates="lines")
+    optical_order_line_item: Mapped["OpticalOrderLineItem | None"] = relationship(
+        "OpticalOrderLineItem", lazy="selectin"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<SaleLineItem sale_id={self.sale_id} "
+            f"source={self.source_type} total={self.line_total}>"
+        )
+
+
+class Payment(TimestampMixin, TenantBase):
+    """A payment recorded against a Sale.
+
+    Cash/external_card/write_off are recorded inline; stripe_card requires a
+    PaymentIntent + confirm round-trip (Plan 15-04). ``status`` advances from
+    ``pending`` to ``succeeded`` on confirmation. ``reason_note`` is mandatory
+    for write_off — enforced application-side (not by CHECK) because the
+    requirement is contextual to method.
+    """
+
+    __tablename__ = "payments"
+    __table_args__ = (
+        Index("ix_payments_sale", "sale_id"),
+        Index(
+            "uq_payments_processor_payment_id",
+            "tenant_id", "processor_payment_id",
+            unique=True,
+            postgresql_where=text("processor_payment_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_payments_tenant_status_created",
+            "tenant_id", "status", "created_at",
+        ),
+        CheckConstraint("amount > 0", name="ck_payment_amount_positive"),
+        CheckConstraint(
+            "method IN ('cash','stripe_card','external_card','write_off')",
+            name="ck_payment_method",
+        ),
+        CheckConstraint(
+            "status IN ('pending','succeeded','failed','refunded','partial_refund')",
+            name="ck_payment_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    sale_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Cash-only fields
+    tendered: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    change_due: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    # Card fields — Stripe IDs for stripe_card, last4/brand for both stripe + external
+    processor_payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    processor_charge_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last4: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    card_brand: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    auth_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default="pending"
+    )
+    # Required for write_off (insurance contractual adjustment), optional otherwise.
+    reason_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # --- Relationships ---
+    sale: Mapped["Sale"] = relationship("Sale", back_populates="payments")
+    created_by: Mapped["Staff | None"] = relationship(
+        "Staff", foreign_keys=[created_by_id], lazy="selectin"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Payment sale_id={self.sale_id} "
+            f"method={self.method} amount={self.amount} status={self.status}>"
+        )
+
+
+class Refund(TimestampMixin, TenantBase):
+    """A refund issued against a closed Sale.
+
+    Atomicity rule (Plan 15-05): the refund, its line items, payment
+    allocations, processor refund call, restock InventoryTransaction rows, and
+    audit log entry MUST all be in the same primary TXN. ``reason`` is required
+    (POS-15) — refunds without justification are blocked at the schema level.
+    """
+
+    __tablename__ = "refunds"
+    __table_args__ = (
+        Index("ix_refunds_sale", "sale_id"),
+        Index("ix_refunds_tenant_created", "tenant_id", "created_at"),
+        CheckConstraint("total_amount > 0", name="ck_refund_amount_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    sale_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    refunded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    processor_refund_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    # --- Relationships ---
+    sale: Mapped["Sale"] = relationship("Sale", back_populates="refunds")
+    refunded_by: Mapped["Staff | None"] = relationship(
+        "Staff", foreign_keys=[refunded_by_id], lazy="selectin"
+    )
+    line_items: Mapped[list["RefundLineItem"]] = relationship(
+        "RefundLineItem",
+        back_populates="refund",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    payment_allocations: Mapped[list["RefundPayment"]] = relationship(
+        "RefundPayment",
+        back_populates="refund",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Refund sale_id={self.sale_id} "
+            f"total={self.total_amount} reason={self.reason!r}>"
+        )
+
+
+class RefundLineItem(TenantBase):
+    """Join row tying a Refund to a specific SaleLineItem with refunded qty."""
+
+    __tablename__ = "refund_line_items"
+    __table_args__ = (
+        Index("ix_refund_line_items_refund", "refund_id"),
+        Index("ix_refund_line_items_sale_line", "sale_line_item_id"),
+        CheckConstraint("qty > 0", name="ck_refund_line_qty_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    refund_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("refunds.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sale_line_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sale_line_items.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # --- Relationships ---
+    refund: Mapped["Refund"] = relationship("Refund", back_populates="line_items")
+    sale_line_item: Mapped["SaleLineItem"] = relationship(
+        "SaleLineItem", lazy="selectin"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<RefundLineItem refund_id={self.refund_id} "
+            f"sale_line_item_id={self.sale_line_item_id} qty={self.qty}>"
+        )
+
+
+class RefundPayment(TenantBase):
+    """Join row tying a Refund to the Payment(s) being reversed.
+
+    For stripe_card refunds, ``processor_refund_id`` (re_xxx) is populated by
+    Plan 15-05 after the Stripe refund API call. For cash/external_card the
+    field stays null — the audit trail is the row itself.
+    """
+
+    __tablename__ = "refund_payments"
+    __table_args__ = (
+        Index("ix_refund_payments_refund", "refund_id"),
+        Index("ix_refund_payments_payment", "payment_id"),
+        CheckConstraint("amount > 0", name="ck_refund_payment_amount_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    refund_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("refunds.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    processor_refund_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # --- Relationships ---
+    refund: Mapped["Refund"] = relationship("Refund", back_populates="payment_allocations")
+    payment: Mapped["Payment"] = relationship("Payment", lazy="selectin")
+
+    def __repr__(self) -> str:
+        return (
+            f"<RefundPayment refund_id={self.refund_id} "
+            f"payment_id={self.payment_id} amount={self.amount}>"
+        )
+
+
+class DailyCloseRun(TenantBase):
+    """End-of-day cash reconciliation run (POS-10).
+
+    One row per tenant per close_date — UNIQUE constraint blocks duplicate
+    closes for the same business day. ``expected_cash`` is computed from the
+    day's cash payments minus cash refunds; ``counted_cash`` is the till count
+    entered by the staff member running the close; ``variance`` is the signed
+    difference and is what the OWNER reviews as the daily smoke-test.
+    """
+
+    __tablename__ = "daily_close_runs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "close_date", name="uq_daily_close_per_day"),
+        Index("ix_daily_close_tenant_date", "tenant_id", "close_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    close_date: Mapped[date] = mapped_column(Date, nullable=False)
+    expected_cash: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False,
+        default=Decimal("0.00"), server_default="0.00",
+    )
+    counted_cash: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    variance: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    run_by_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("staff.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    run_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # --- Relationships ---
+    run_by: Mapped["Staff"] = relationship(
+        "Staff", foreign_keys=[run_by_id], lazy="selectin"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<DailyCloseRun close_date={self.close_date} "
+            f"variance={self.variance}>"
+        )
+
+
+class StripeWebhookEvent(TenantBase):
+    """Idempotency log for inbound Stripe webhook events (POS-14 / Pitfall 6).
+
+    ``event_id`` is globally unique across all Stripe accounts — the UNIQUE
+    constraint is NOT scoped to tenant_id. The webhook handler in Plan 15-08
+    inserts this row inside the same TXN as the payment-state update, so a
+    duplicate delivery (Stripe retries on 5xx) is rejected by the constraint
+    rather than double-applying the side effect.
+    """
+
+    __tablename__ = "stripe_webhook_events"
+    __table_args__ = (
+        UniqueConstraint("event_id", name="uq_stripe_webhook_event_id"),
+        Index("ix_stripe_webhook_tenant_received", "tenant_id", "received_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payment_intent_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<StripeWebhookEvent event_id={self.event_id} "
+            f"type={self.event_type}>"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Re-export ClinicalAction so Phase 15 Wave-0 tests (test_pos_enums,
+# test_permissions_pos) can import it from this module alongside AuditAction.
+#
+# Use lazy ``__getattr__`` (PEP 562) instead of an unconditional top-level
+# import: backend.core.permissions transitively pulls in backend.core.config,
+# which instantiates a Settings() that requires DATABASE_URL + the Supabase
+# secrets. Alembic env.py imports this module before .env is loaded, so an
+# eager import would crash migration generation. The lazy form resolves
+# ClinicalAction only when an attribute access actually asks for it.
+# ---------------------------------------------------------------------------
+
+
+def __getattr__(name: str):
+    if name == "ClinicalAction":
+        from backend.core.permissions import ClinicalAction as _ClinicalAction
+
+        return _ClinicalAction
+    raise AttributeError(
+        f"module {__name__!r} has no attribute {name!r}"
+    )
