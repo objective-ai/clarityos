@@ -11,7 +11,7 @@ from typing import Iterable
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -596,3 +596,171 @@ async def issue_refund(
     )
     await db.flush()
     return refund
+
+
+# ---------------------------------------------------------------------------
+# Daily-close aggregation (Plan 15-07 — POS-04, POS-10)
+# ---------------------------------------------------------------------------
+
+
+async def compute_daily_close(
+    db: AsyncSession, tenant_id: UUID, close_date: date,
+) -> dict:
+    """5-section daily-close totals for a single tenant + close_date.
+
+    Returns a dict with keys: ``close_date``, ``sales_summary``, ``by_method``,
+    ``by_category``, ``expected_cash``, ``stripe_payout_estimate``. Used by the
+    route (Task 2) to build a ``DailyCloseResponse`` and by the PDF/CSV builders.
+
+    The query order is: sales_summary → refunds_total → by_method → by_category
+    → cash_received → cash_refund_returned. Test mocks rely on this ordering.
+    """
+    # 1. Sales summary — sales closed today (paid OR refunded — refunded still
+    # counts toward the day's gross; refunds are subtracted separately).
+    sales_summary = (
+        await db.execute(
+            select(
+                func.count(Sale.id).label("count"),
+                func.coalesce(func.sum(Sale.total), 0).label("gross"),
+            ).where(
+                Sale.tenant_id == tenant_id,
+                Sale.status.in_(("paid", "refunded")),
+                func.date(Sale.closed_at) == close_date,
+            )
+        )
+    ).one()
+
+    refunds_total = (
+        await db.execute(
+            select(func.coalesce(func.sum(Refund.total_amount), 0)).where(
+                Refund.tenant_id == tenant_id,
+                func.date(Refund.created_at) == close_date,
+            )
+        )
+    ).scalar_one()
+
+    # 2. By payment method — counts all status flips (succeeded, partial_refund,
+    # refunded) so a partially-refunded payment still shows in the method total.
+    by_method_rows = (
+        await db.execute(
+            select(
+                Payment.method,
+                func.count(Payment.id).label("count"),
+                func.coalesce(func.sum(Payment.amount), 0).label("total"),
+            )
+            .join(Sale, Sale.id == Payment.sale_id)
+            .where(
+                Sale.tenant_id == tenant_id,
+                Payment.status.in_(
+                    ("succeeded", "partial_refund", "refunded")
+                ),
+                func.date(Payment.created_at) == close_date,
+            )
+            .group_by(Payment.method)
+        )
+    ).all()
+
+    # 3. By category — case() bucket on SaleLineItem.source_type.
+    by_category_rows = (
+        await db.execute(
+            select(
+                case(
+                    (SaleLineItem.source_type == "superbill", "clinical"),
+                    (SaleLineItem.source_type == "optical_order", "optical"),
+                    else_="retail",
+                ).label("category"),
+                func.count(SaleLineItem.id).label("count"),
+                func.coalesce(func.sum(SaleLineItem.line_total), 0).label(
+                    "total"
+                ),
+            )
+            .join(Sale, Sale.id == SaleLineItem.sale_id)
+            .where(
+                Sale.tenant_id == tenant_id,
+                Sale.status.in_(("paid", "refunded")),
+                func.date(Sale.closed_at) == close_date,
+            )
+            .group_by("category")
+        )
+    ).all()
+
+    # 4. Expected cash = cash payments - cash refunds returned. Stripe / check
+    # don't change the till balance.
+    cash_received = (
+        await db.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0))
+            .join(Sale, Sale.id == Payment.sale_id)
+            .where(
+                Sale.tenant_id == tenant_id,
+                Payment.method == "cash",
+                Payment.status.in_(("succeeded", "partial_refund")),
+                func.date(Payment.created_at) == close_date,
+            )
+        )
+    ).scalar_one()
+
+    cash_refund_returned = (
+        await db.execute(
+            select(func.coalesce(func.sum(RefundPayment.amount), 0))
+            .join(Payment, Payment.id == RefundPayment.payment_id)
+            .join(Refund, Refund.id == RefundPayment.refund_id)
+            .where(
+                Refund.tenant_id == tenant_id,
+                Payment.method == "cash",
+                func.date(Refund.created_at) == close_date,
+            )
+        )
+    ).scalar_one()
+
+    expected_cash = quantize_money(
+        Decimal(cash_received) - Decimal(cash_refund_returned)
+    )
+
+    # 5. Stripe payout estimate — live preview at standard US 2.9% + $0.30 rate
+    # (RESEARCH Open Q 4). Actual payout lands in Stripe webhook later.
+    stripe_total = sum(
+        (r.total for r in by_method_rows if r.method == "stripe_card"),
+        Decimal("0.00"),
+    )
+    stripe_count = sum(
+        (r.count for r in by_method_rows if r.method == "stripe_card"),
+        0,
+    )
+    if stripe_total:
+        fee = quantize_money(
+            Decimal(stripe_total) * Decimal("0.029")
+            + Decimal("0.30") * stripe_count
+        )
+        stripe_payout_estimate = quantize_money(Decimal(stripe_total) - fee)
+    else:
+        stripe_payout_estimate = Decimal("0.00")
+
+    gross_q = quantize_money(Decimal(sales_summary.gross))
+    refunds_q = quantize_money(Decimal(refunds_total))
+    return {
+        "close_date": close_date,
+        "sales_summary": {
+            "count": sales_summary.count,
+            "gross": gross_q,
+            "refunds": refunds_q,
+            "net": quantize_money(gross_q - refunds_q),
+        },
+        "by_method": [
+            {
+                "key": r.method,
+                "count": r.count,
+                "total": quantize_money(Decimal(r.total)),
+            }
+            for r in by_method_rows
+        ],
+        "by_category": [
+            {
+                "key": r.category,
+                "count": r.count,
+                "total": quantize_money(Decimal(r.total)),
+            }
+            for r in by_category_rows
+        ],
+        "expected_cash": expected_cash,
+        "stripe_payout_estimate": stripe_payout_estimate,
+    }
