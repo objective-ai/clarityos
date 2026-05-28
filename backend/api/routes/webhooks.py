@@ -386,3 +386,153 @@ async def _patient_from_phone(
         )
     ).scalars().all()
     return rows[0] if rows else None
+
+
+# ─── Stripe ─────────────────────────────────────────────────────────────────
+# Plan 15-08 (POS-02, POS-12) — extends this router with /stripe handler.
+# Pitfall 1: verify signature over raw request bytes — never JSON.parse first.
+# Pitfall 6: idempotency via StripeWebhookEvent.event_id UNIQUE constraint.
+# Pitfall 11: webhook secret stored encrypted; decrypted via processor adapter.
+
+# Stripe event.type → canonical Payment.status
+_STRIPE_EVENT_TO_PAYMENT_STATUS = {
+    "payment_intent.succeeded": "succeeded",
+    "payment_intent.payment_failed": "failed",
+    "payment_intent.canceled": "canceled",
+    "payment_intent.processing": "processing",
+    "charge.refunded": "refunded",
+}
+
+# Monotonic priority for Payment.status. Higher = wins.
+# pending < processing/requires_action < partial_refund < succeeded < refunded
+# < failed/canceled (failure outranks success so a downstream dispute or
+# cancel-after-success is visible to staff).
+_PAYMENT_STATUS_PRIORITY = {
+    "pending": 0,
+    "processing": 1,
+    "requires_action": 1,
+    "partial_refund": 2,
+    "succeeded": 3,
+    "refunded": 4,
+    "failed": 5,
+    "canceled": 5,
+}
+
+
+def _can_advance(current: str | None, new: str) -> bool:
+    """Return True iff webhook may overwrite ``current`` Payment.status with ``new``."""
+    return _PAYMENT_STATUS_PRIORITY.get(new, -1) >= _PAYMENT_STATUS_PRIORITY.get(
+        current or "", -1
+    )
+
+
+@router.post("/stripe", status_code=http_status.HTTP_200_OK)
+async def stripe_webhook(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Stripe webhook handler — POS-02, POS-12, RESEARCH Pattern 3.
+
+    Flow:
+      1. X-Webhook-Internal HMAC (BFF defense-in-depth)
+      2. Read raw body bytes — never JSON.parse before signature verify (Pitfall 1)
+      3. Parse minimal JSON to discover ``metadata.tenant_id`` for tenant lookup
+      4. Re-verify Stripe signature against that tenant's decrypted webhook secret
+      5. Idempotency: skip if ``StripeWebhookEvent.event_id`` already persisted
+      6. Monotonic Payment.status update via ``_PAYMENT_STATUS_PRIORITY``
+    """
+    from backend.db.models.tenant.clinical import Payment, StripeWebhookEvent
+    from backend.services.payments.stripe_processor import StripeProcessor
+
+    _check_internal_seal(request)
+    sig = request.headers.get("Stripe-Signature", "")
+    if not sig:
+        raise HTTPException(http_status.HTTP_400_BAD_REQUEST, "Missing Stripe-Signature")
+    body = await request.body()
+
+    # Discover tenant via metadata; do NOT trust this parse — signature still re-verified.
+    try:
+        peek = json.loads(body or b"{}")
+        tenant_id_str = (
+            (peek.get("data", {}) or {}).get("object", {}) or {}
+        ).get("metadata", {}).get("tenant_id") if isinstance(peek, dict) else None
+        if not tenant_id_str:
+            raise HTTPException(
+                http_status.HTTP_400_BAD_REQUEST,
+                "Stripe event missing metadata.tenant_id",
+            )
+        tenant_id = UUID(tenant_id_str)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        raise HTTPException(http_status.HTTP_400_BAD_REQUEST, "Invalid Stripe event payload")
+
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None or not tenant.stripe_webhook_secret_encrypted:
+        raise HTTPException(
+            http_status.HTTP_400_BAD_REQUEST,
+            "Tenant not configured for Stripe",
+        )
+
+    # Verify signature with this tenant's webhook secret. construct_event
+    # validates the HMAC over the RAW bytes (never the JSON-parsed payload).
+    processor = StripeProcessor()
+    try:
+        event = processor.verify_webhook_signature(tenant, body, sig)
+    except Exception as exc:  # noqa: BLE001 — Stripe raises SignatureVerificationError
+        raise HTTPException(
+            http_status.HTTP_403_FORBIDDEN, f"Invalid Stripe signature: {exc}"
+        )
+
+    # Idempotency check (Pitfall 6).
+    existing = (
+        await db.execute(
+            select(StripeWebhookEvent).where(
+                StripeWebhookEvent.event_id == event.event_id
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return {"ok": True, "ignored": "duplicate", "event_id": event.event_id}
+
+    event_row = StripeWebhookEvent(
+        tenant_id=tenant_id,
+        event_id=event.event_id,
+        event_type=event.event_type,
+        payment_intent_id=event.payment_intent_id,
+    )
+    db.add(event_row)
+
+    # Monotonic Payment.status update.
+    if event.payment_intent_id:
+        payment = (
+            await db.execute(
+                select(Payment).where(
+                    Payment.tenant_id == tenant_id,
+                    Payment.processor_payment_id == event.payment_intent_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if payment is not None:
+            new_status = _STRIPE_EVENT_TO_PAYMENT_STATUS.get(event.event_type)
+            if new_status and _can_advance(payment.status, new_status):
+                payment.status = new_status
+                if event.charge_id and not payment.processor_charge_id:
+                    payment.processor_charge_id = event.charge_id
+
+    await log_action(
+        db,
+        _system_ctx(tenant_id),
+        AuditAction.STRIPE_WEBHOOK_RECEIVED,
+        "stripe_webhook",
+        event_row.id,
+        metadata={
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+            "payment_intent_id": event.payment_intent_id,
+        },
+    )
+    await db.commit()
+    return {
+        "ok": True,
+        "event_id": event.event_id,
+        "event_type": event.event_type,
+    }
