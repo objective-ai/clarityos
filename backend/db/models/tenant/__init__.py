@@ -1,3 +1,4 @@
+from . import intake  # noqa: F401  — registers IntakeToken for Appointment.intake_token relationship
 from .messaging import (
     InboundMessage,
     MessageChannel,
