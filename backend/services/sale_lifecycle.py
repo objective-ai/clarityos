@@ -4,29 +4,38 @@ Route handlers (Plan 15-04) compose these into transactional flows.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.core.audit import log_action
-from backend.core.security import TenantContext
+from backend.core.security import TenantContext, resolve_staff
+from backend.db.models.public.saas import Tenant
 from backend.db.models.tenant.clinical import (
     AuditAction,
+    InventoryTransaction,
     OpticalOrder,
     OpticalOrderLineItem,
     PatientInsurance,
     Payment,
     PaymentStatus,
+    Product,
+    Refund,
+    RefundLineItem,
+    RefundPayment,
     Sale,
     SaleLineItem,
     Superbill,
 )
 from backend.services.money import quantize_money
+from backend.services.payments.base import PaymentProcessor, PaymentProcessorError
 
 ZERO = Decimal("0.00")
 
@@ -261,3 +270,329 @@ async def load_cart_from_sources(
     for oo_id in optical_order_ids:
         lines.extend(await prefill_from_optical_order(db, sale, oo_id))
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Refund flow (Plan 15-05 — POS-05, POS-09)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RefundLineSpec:
+    """Service-layer DTO mirrors backend.schemas.sales.RefundLineSpec.
+
+    Service stays Pydantic-free; route adapts schema → dataclass at the edge.
+    """
+
+    sale_line_item_id: UUID
+    qty: int
+    amount: Decimal
+
+
+@dataclass
+class RefundPaymentSpec:
+    """Service-layer DTO mirrors backend.schemas.sales.RefundPaymentSpec."""
+
+    payment_id: UUID
+    amount: Decimal
+
+
+async def restock_for_refund_line(
+    db: AsyncSession,
+    ctx: TenantContext,
+    line: SaleLineItem,
+    qty: int,
+    refund_id: UUID,
+    *,
+    staff_id: UUID | None = None,
+) -> InventoryTransaction | None:
+    """Restock a single sale line — product or optical_order branch (POS-09).
+
+    Superbill / adhoc lines NEVER restock (CONTEXT §E). Returns the written
+    InventoryTransaction, or None if no restock applies.
+
+    Optical lines resolve product via the SaleLineItem.optical_order_line_item_id FK
+    populated by Plan 15-03 prefill — no line_total heuristic. A legacy-data fallback
+    keeps backwards compatibility for rows created before Plan 15-01 migration ran.
+    """
+    if line.source_type not in ("product", "optical_order") or qty <= 0:
+        return None
+
+    if line.source_type == "product":
+        product_id = line.source_id
+    else:
+        if line.optical_order_line_item_id is None:
+            # Legacy data path: SaleLineItem rows created before Plan 15-01.
+            # New rows always carry the FK (Plan 15-03 acceptance criterion).
+            order = (
+                await db.execute(
+                    select(OpticalOrder)
+                    .where(OpticalOrder.id == line.source_id)
+                    .options(selectinload(OpticalOrder.line_items))
+                )
+            ).scalar_one_or_none()
+            if not order:
+                return None
+            ooli = next(
+                (o for o in order.line_items if o.line_total == line.line_total),
+                None,
+            )
+            if not ooli:
+                return None
+            product_id = ooli.product_id
+        else:
+            # Standard path — direct FK lookup, no guessing.
+            ooli = await db.get(OpticalOrderLineItem, line.optical_order_line_item_id)
+            if ooli is None:
+                return None
+            product_id = ooli.product_id
+
+    if not product_id:
+        return None
+
+    product = (
+        await db.execute(
+            select(Product)
+            .where(Product.id == product_id)
+            .with_for_update()
+        )
+    ).scalar_one()
+    product.stock_qty += qty
+
+    # reason='refund_restock' is in the widened ck_inventory_reason CHECK (Plan 15-01,
+    # migration 0020). sale_id links the inventory move to the parent sale for daily-
+    # close audit; refund_id is not stored directly (the InventoryTransaction → Sale →
+    # Refund chain provides the same trail).
+    txn = InventoryTransaction(
+        tenant_id=ctx.tenant_id,
+        product_id=product.id,
+        delta=qty,
+        reason="refund_restock",
+        sale_id=line.sale_id,
+        staff_id=staff_id,
+    )
+    db.add(txn)
+    return txn
+
+
+async def maybe_cancel_optical_orders(
+    db: AsyncSession,
+    ctx: TenantContext,
+    sale: Sale,
+    refund: Refund,
+) -> list[OpticalOrder]:
+    """Cascade-cancel OpticalOrders whose every line is now fully refunded.
+
+    Mirrors Phase 13 cancel semantics: status → 'cancelled', cancelled_at stamped,
+    OPTICAL_ORDER_CANCEL audit emitted. Idempotent — orders already cancelled are
+    skipped so re-refunds don't double-log.
+    """
+    order_ids = {
+        li.source_id
+        for li in sale.lines
+        if li.source_type == "optical_order" and li.source_id
+    }
+    cancelled: list[OpticalOrder] = []
+    for order_id in order_ids:
+        order_lines = [
+            li
+            for li in sale.lines
+            if li.source_type == "optical_order" and li.source_id == order_id
+        ]
+        if not order_lines:
+            continue
+        all_refund_lines = (
+            await db.execute(
+                select(RefundLineItem)
+                .join(Refund, RefundLineItem.refund_id == Refund.id)
+                .where(
+                    Refund.sale_id == sale.id,
+                    RefundLineItem.sale_line_item_id.in_([li.id for li in order_lines]),
+                )
+            )
+        ).scalars().all()
+        refunded_by_sli: dict[UUID, int] = {}
+        for rl in all_refund_lines:
+            refunded_by_sli[rl.sale_line_item_id] = (
+                refunded_by_sli.get(rl.sale_line_item_id, 0) + rl.qty
+            )
+        fully_refunded = all(
+            refunded_by_sli.get(li.id, 0) >= li.qty for li in order_lines
+        )
+        if not fully_refunded:
+            continue
+        order = (
+            await db.execute(select(OpticalOrder).where(OpticalOrder.id == order_id))
+        ).scalar_one_or_none()
+        if order and order.status != "cancelled":
+            order.status = "cancelled"
+            order.cancelled_at = datetime.now(timezone.utc)
+            cancelled.append(order)
+            await log_action(
+                db,
+                ctx,
+                AuditAction.OPTICAL_ORDER_CANCEL,
+                "optical_order",
+                order.id,
+                metadata={
+                    "via_refund_id": str(refund.id),
+                    "via_sale_id": str(sale.id),
+                },
+            )
+    return cancelled
+
+
+async def issue_refund(
+    db: AsyncSession,
+    ctx: TenantContext,
+    sale: Sale,
+    line_refunds: list[RefundLineSpec],
+    payment_refunds: list[RefundPaymentSpec],
+    reason: str,
+    processor: PaymentProcessor,
+) -> Refund:
+    """Atomic refund — restock + processor refund + cascade-cancel + audit (POS-05, POS-09).
+
+    All side-effects flushed but NOT committed — caller (route) is responsible for
+    db.commit() so the refund, restock InventoryTransactions, OpticalOrder cancels,
+    and REFUND_ISSUED audit row all land in one TXN (Pitfall 14). If log_action raises
+    or processor.refund_payment fails, the entire TXN rolls back.
+
+    Raises HTTPException 400 on validation failure; HTTPException 502 if Stripe rejects
+    the refund (e.g. payment already refunded, insufficient balance).
+    """
+    if not reason or len(reason.strip()) < 3:
+        raise HTTPException(status_code=400, detail="reason required (min 3 chars)")
+    if len(reason) > 500:
+        raise HTTPException(status_code=400, detail="reason too long (max 500 chars)")
+    if not line_refunds:
+        raise HTTPException(status_code=400, detail="at least one line refund required")
+    if not payment_refunds:
+        raise HTTPException(
+            status_code=400, detail="at least one payment refund required"
+        )
+
+    total_line_amount = quantize_money(
+        sum((lr.amount for lr in line_refunds), Decimal("0.00"))
+    )
+    total_payment_amount = quantize_money(
+        sum((pr.amount for pr in payment_refunds), Decimal("0.00"))
+    )
+    if total_payment_amount != total_line_amount:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"payment refund total {total_payment_amount} must equal "
+                f"line refund total {total_line_amount}"
+            ),
+        )
+
+    staff = await resolve_staff(ctx, db)
+    refund = Refund(
+        tenant_id=ctx.tenant_id,
+        sale_id=sale.id,
+        total_amount=total_line_amount,
+        reason=reason.strip(),
+        refunded_by_id=staff.id if staff else None,
+    )
+    db.add(refund)
+    await db.flush()
+
+    # 1) Per-line restock + RefundLineItem rows
+    line_by_id = {li.id: li for li in sale.lines}
+    for spec in line_refunds:
+        line = line_by_id.get(spec.sale_line_item_id)
+        if line is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"sale_line_item {spec.sale_line_item_id} not on this sale",
+            )
+        await restock_for_refund_line(
+            db,
+            ctx,
+            line,
+            spec.qty,
+            refund.id,
+            staff_id=staff.id if staff else None,
+        )
+        db.add(
+            RefundLineItem(
+                tenant_id=ctx.tenant_id,
+                refund_id=refund.id,
+                sale_line_item_id=line.id,
+                qty=spec.qty,
+                amount=quantize_money(spec.amount),
+            )
+        )
+
+    # 2) Per-payment processor refund (stripe_card only) + RefundPayment rows
+    tenant = await db.get(Tenant, ctx.tenant_id)
+    payment_by_id = {p.id: p for p in sale.payments}
+    stripe_refund_count = 0
+    for spec in payment_refunds:
+        payment = payment_by_id.get(spec.payment_id)
+        if payment is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"payment {spec.payment_id} not on this sale",
+            )
+        processor_refund_id: str | None = None
+        if payment.method == "stripe_card":
+            try:
+                result = await processor.refund_payment(tenant, payment, spec.amount)
+                processor_refund_id = result.refund_id
+                stripe_refund_count += 1
+            except PaymentProcessorError as exc:
+                raise HTTPException(
+                    status_code=502, detail=f"Stripe refund failed: {exc}"
+                ) from exc
+        db.add(
+            RefundPayment(
+                tenant_id=ctx.tenant_id,
+                refund_id=refund.id,
+                payment_id=payment.id,
+                amount=quantize_money(spec.amount),
+                processor_refund_id=processor_refund_id,
+            )
+        )
+        # Update Payment.status — sum prior refunds + this allocation.
+        existing_refunded = (
+            await db.execute(
+                select(func.coalesce(func.sum(RefundPayment.amount), 0)).where(
+                    RefundPayment.payment_id == payment.id
+                )
+            )
+        ).scalar_one()
+        total_refunded = quantize_money(
+            Decimal(existing_refunded) + quantize_money(spec.amount)
+        )
+        if total_refunded >= payment.amount:
+            payment.status = PaymentStatus.REFUNDED.value
+        else:
+            payment.status = PaymentStatus.PARTIAL_REFUND.value
+
+    # 3) Cascade-cancel fully-refunded OpticalOrders (Phase 13 semantics)
+    await maybe_cancel_optical_orders(db, ctx, sale, refund)
+
+    # 4) Sale.status flips to refunded (CONTEXT §E — same enum for partial + full)
+    sale.status = "refunded"
+
+    # 5) Audit (MUST be before commit per Pitfall 14)
+    await log_action(
+        db,
+        ctx,
+        AuditAction.REFUND_ISSUED,
+        "refund",
+        refund.id,
+        staff_id=staff.id if staff else None,
+        patient_id=sale.patient_id,
+        metadata={
+            "sale_id": str(sale.id),
+            "amount": str(refund.total_amount),
+            "reason": refund.reason,
+            "line_count": len(line_refunds),
+            "stripe_refund_count": stripe_refund_count,
+        },
+    )
+    await db.flush()
+    return refund
