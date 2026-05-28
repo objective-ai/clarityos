@@ -43,7 +43,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 12 | 11/11 | Complete   | 2026-04-30 | — |
 | 13 | 16/16 | Complete   | 2026-05-02 | — |
 | 14 | 15/15 | Complete   | 2026-05-27 | — |
-| 15 | Point of Sale | 0/? | Not started | — |
+| 15 | Point of Sale | 0/12 | Planned | — |
 | 16 | Reporting & Exports | 0/? | Not started | — |
 | 17 | AI Scribe Audio | 0/? | Not started | — |
 | 18 | Mobile/Tablet UX | 0/? | Not started | — |
@@ -200,14 +200,30 @@ Plans:
 - [ ] 14-11-PLAN.md — Playwright E2E spec + seed Phase 14 fixture + finalize 14-VALIDATION.md + manual HIPAA checkpoint
 
 ### Phase 15: Point of Sale
-**Goal**: Checkout flow for clinical copays and retail purchases with receipt generation and daily close report
-**Depends on**: Phase 13 (Retail Inventory), Phase 9 (fee schedules)
+**Goal**: Checkout flow for clinical copays and retail purchases with receipt generation and daily close report — financial-ledger plane (Sale/Payment/Refund/DailyCloseRun) on top of Phase 13 (retail inventory) + Phase 10.1 (insurance copay) + Phase 9 (fee schedules); Stripe Elements via per-tenant Fernet-encrypted credentials with a PaymentProcessor abstraction seam; reportlab letter-size receipts + Postmark email; landscape daily-close PDF/CSV with cash reconciliation; OWNER+ADMIN-gated item-level refunds with restock cascade
+**Depends on**: Phase 13 (Retail Inventory), Phase 10.1 (PatientInsurance.copay_amount), Phase 9 (fee schedules), Phase 12 (Postmark + webhook patterns)
+**Requirements:** [POS-01, POS-02, POS-03, POS-04, POS-05, POS-06, POS-07, POS-08, POS-09, POS-10, POS-11, POS-12, POS-13, POS-14, POS-15, POS-16]
 **Success Criteria:**
   1. Front desk can open checkout adding clinical charges and retail/optical items
   2. Payment via cash or card (Stripe)
   3. PDF receipt by email or print
   4. Daily close report with totals by payment method and category
   5. Refunds supported in patient payment history
+**Plans:** 12 plans
+
+Plans:
+- [ ] 15-00-wave0-foundation-PLAN.md — Wave 0: install stripe + cryptography + reportlab deps; 25 test scaffolds with skip-stubs + real assertion bodies; PAYMENTS_FERNET_KEY in .env.example; append POS-01..POS-16 to REQUIREMENTS.md + traceability; Postmark/Stripe BAA scoping checkpoint
+- [ ] 15-01-schema-orm-PLAN.md — Alembic 0020: 8 new tables (Sale, SaleLineItem, Payment, Refund, RefundLineItem, RefundPayment, DailyCloseRun, StripeWebhookEvent) + 4 Tenant columns (sales_tax_rate, stripe_publishable_key, stripe_secret_key_encrypted, stripe_webhook_secret_encrypted); ORM additions; 14 new AuditAction + 6 new ClinicalAction values + PERMISSION_MATRIX rows
+- [ ] 15-02-payment-processor-crypto-PLAN.md — PaymentProcessor Protocol + 4 dataclasses + get_processor() factory; StripeProcessor adapter (automatic_payment_methods, idempotency_key, server-authoritative retrieve); Fernet encrypt/decrypt + MultiFernet rotation; loud failure when PAYMENTS_FERNET_KEY missing
+- [ ] 15-03-schemas-sale-lifecycle-PLAN.md — money.py (quantize_money + to_stripe_cents banker's rounding); sale_lifecycle.py (compute_sale_totals round-of-sum, compute_remaining, prefill_from_superbill copay derivation, prefill_from_optical_order); Pydantic schemas (Sale/Payment/Refund/DailyClose with CamelCaseModel); types/sales.ts; by_alias contract tests
+- [ ] 15-04-sale-cart-payment-routes-PLAN.md — backend/api/routes/sales.py (list/open/get/patch/void/lines CRUD/close) + sale_payments.py (cash/external_card/write_off inline; stripe_card PaymentIntent + stripe-confirm); close handler row-locks Products + InventoryTransaction(reason='sale_placed') + optional OpticalOrder dispense + receipt_number generation — all primary TXN
+- [ ] 15-05-refunds-PLAN.md — backend/api/routes/refunds.py + issue_refund service (atomic restock + processor refund + audit + cascade-cancel OpticalOrder); OWNER+ADMIN gate; mandatory reason 3-500 chars
+- [ ] 15-06-receipts-PLAN.md — reportlab letter-size receipt + refund-receipt PDFs (clone Phase 14 job_ticket_pdf.py); receipt_email template; GET /sales/{id}/receipt/ + POST email + GET /refunds/{id}/receipt/; Postmark NOT Resend per Phase 12 BAA
+- [ ] 15-07-daily-close-PLAN.md — compute_daily_close() 5-section aggregation (summary + by_method + by_category + expected_cash + stripe_payout_estimate); landscape PDF (clone compliance_report.py) + CSV exports; backend/api/routes/pos_daily_close.py with UNIQUE(tenant, close_date) enforcement
+- [ ] 15-08-webhooks-admin-bff-PLAN.md — Stripe webhook handler in webhooks.py (raw body + signature verify + idempotency via StripeWebhookEvent + monotonic priority); admin_payment_config.py (OWNER-only PUT encrypts before persistence, regex-validates pk_/sk_/whsec_); 19 BFF route.ts files (14 proxyToFastAPI + 3 arrayBuffer PDF + 1 raw-text webhook passthrough)
+- [ ] 15-09-stores-pos-page-PLAN.md — posCartStore + refundDraftStore Zustand stores; lib/pos/api.ts typed fetchers; lib/pos/printReceipt.ts hidden-iframe pattern; full-page /pos checkout (cart 60% + payment panel 40%); 8 components (CartLineList, PaymentPanel, CashPaymentForm, StripePaymentForm with redirect:'if_required', ExternalCardPaymentForm, WriteOffPaymentForm, DiscountPopover, ReceiptDeliveryPrompt, PrefillSearchModal)
+- [ ] 15-10-refund-dialog-daily-close-ui-entrypoints-PLAN.md — RefundDialog 480px drawer + PatientPaymentsTab + Sidebar nav + 3 entry-point CTAs (Superbill row, OrderDetailDrawer, AppointmentDetailDrawer); /pos/close-of-day OWNER+ADMIN page with DailyCloseTotalsCard + CashReconciliationCard; PosPaymentsCard admin form with key-format validation
+- [ ] 15-11-e2e-verification-PLAN.md — 3 Playwright specs (pos-checkout, pos-refund, pos-daily-close) + seed_db.py POS fixtures; finalize VALIDATION.md nyquist_compliant:true; HIPAA-critical human checkpoint covering live Stripe testmode + Postmark + entitlement/role matrix + refund cascade
 
 ### Phase 16: Reporting & Exports
 **Goal**: Professional PDF/CSV reports for daily operations, monthly revenue, encounter summaries, and batch CMS-1500 export
