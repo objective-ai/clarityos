@@ -43,7 +43,7 @@ Build order: 8 → 9 → 9.1 → 9.2 → 10 → 10.1 → 10.2 → 10.3 → 10.4 
 | 12 | 11/11 | Complete   | 2026-04-30 | — |
 | 13 | 16/16 | Complete   | 2026-05-02 | — |
 | 14 | 15/15 | Complete   | 2026-05-27 | — |
-| 15 | 5/12 | In Progress|  | — |
+| 15 | 6/12 | In Progress|  | — |
 | 16 | Reporting & Exports | 0/? | Not started | — |
 | 17 | AI Scribe Audio | 0/? | Not started | — |
 | 18 | Mobile/Tablet UX | 0/? | Not started | — |
@@ -209,7 +209,7 @@ Plans:
   3. PDF receipt by email or print
   4. Daily close report with totals by payment method and category
   5. Refunds supported in patient payment history
-**Plans:** 5/12 plans executed
+**Plans:** 6/12 plans executed
 
 Plans:
 - [ ] 15-00-wave0-foundation-PLAN.md — Wave 0: install stripe + cryptography + reportlab deps; 25 test scaffolds with skip-stubs + real assertion bodies; PAYMENTS_FERNET_KEY in .env.example; append POS-01..POS-16 to REQUIREMENTS.md + traceability; Postmark/Stripe BAA scoping checkpoint

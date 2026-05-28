@@ -187,11 +187,11 @@ Requirements for the full MVP. Each maps to roadmap phases.
 - [x] **POS-02**: Payment supported via cash (tendered + change_due) and card via Stripe Elements (PaymentElement + automatic_payment_methods PaymentIntent + server-confirm on retrieve, never client-reported status) (ROADMAP success criterion #2)
 - [ ] **POS-03**: PDF receipt delivered by email (Postmark + React Email + PDF attachment) or browser print (hidden iframe + window.print) — server-side reportlab letter-size template cloned from job_ticket_pdf.py (ROADMAP success criterion #3)
 - [ ] **POS-04**: Daily close report with totals by payment method (cash/stripe_card/external_card/write_off/refund_returned) and category (clinical/retail/optical) — exportable to PDF (reportlab landscape) and CSV (ROADMAP success criterion #4)
-- [ ] **POS-05**: Refunds supported in patient payment history — item-level OR full-sale, with restock for product/optical lines via InventoryTransaction(reason='refund_restock'), OWNER+ADMIN gated, mandatory reason (ROADMAP success criterion #5)
+- [x] **POS-05**: Refunds supported in patient payment history — item-level OR full-sale, with restock for product/optical lines via InventoryTransaction(reason='refund_restock'), OWNER+ADMIN gated, mandatory reason (ROADMAP success criterion #5)
 - [x] **POS-06**: Split tender supported — multiple Payment rows per Sale; remaining=Sale.total-sum(succeeded payments); close gate enforces remaining<=0
 - [x] **POS-07**: PaymentProcessor abstract interface in backend/services/payments/base.py with 4 async methods (create_payment_intent, confirm_payment, refund_payment, verify_webhook_signature); StripeProcessor is the only shipped adapter for Phase 15
 - [x] **POS-08**: Per-tenant Stripe credentials stored Fernet-encrypted at rest (`stripe_secret_key_encrypted`, `stripe_webhook_secret_encrypted`); master key in PAYMENTS_FERNET_KEY env var; ciphertext prefix `gAAAA` asserted in encrypt-on-write tests
-- [ ] **POS-09**: Item-level refunds with restock for product/optical_order lines (InventoryTransaction reason='refund_restock' in primary TXN); superbill lines NEVER restock (clinical service)
+- [x] **POS-09**: Item-level refunds with restock for product/optical_order lines (InventoryTransaction reason='refund_restock' in primary TXN); superbill lines NEVER restock (clinical service)
 - [ ] **POS-10**: Daily close cash reconciliation persisted on DailyCloseRun(close_date, expected_cash, counted_cash, variance, notes?, run_by_id, run_at); same date can only be closed once (subsequent reads are read-only)
 - [x] **POS-11**: Write-off (`method='write_off'`) gated to OWNER+ADMIN via RECORD_WRITE_OFF permission with mandatory `reason_note` text
 - [x] **POS-12**: Enum extensions — 13 new AuditAction VARCHAR values (SALE_CREATE, SALE_OPENED, SALE_PAID, SALE_VOIDED, PAYMENT_RECORDED, PAYMENT_FAILED, WRITE_OFF_RECORDED, REFUND_ISSUED, RECEIPT_EMAILED, RECEIPT_PRINTED, DAILY_CLOSE_RUN, SALE_DISCOUNT_APPLIED, STRIPE_KEYS_UPDATED, STRIPE_WEBHOOK_RECEIVED) and 6 new ClinicalAction values (OPEN_POS, RECORD_PAYMENT, RECORD_WRITE_OFF, ISSUE_REFUND, RUN_DAILY_CLOSE, MANAGE_PAYMENT_CONFIG)
@@ -397,11 +397,11 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | POS-02 | Phase 15 | Complete |
 | POS-03 | Phase 15 | Pending |
 | POS-04 | Phase 15 | Pending |
-| POS-05 | Phase 15 | Pending |
+| POS-05 | Phase 15 | Complete |
 | POS-06 | Phase 15 | Complete |
 | POS-07 | Phase 15 | Complete |
 | POS-08 | Phase 15 | Complete |
-| POS-09 | Phase 15 | Pending |
+| POS-09 | Phase 15 | Complete |
 | POS-10 | Phase 15 | Pending |
 | POS-11 | Phase 15 | Complete |
 | POS-12 | Phase 15 | Complete |
