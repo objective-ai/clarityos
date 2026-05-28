@@ -42,11 +42,15 @@ from backend.db.models.tenant.clinical import (
     OpticalOrder,
     OpticalOrderLineItem,
     Product,
+    Refund,
     Sale,
     SaleLineItem,
 )
 from backend.db.session import get_db
 from backend.schemas.sales import (
+    RefundLineItemResponse,
+    RefundPaymentResponse,
+    RefundResponse,
     SaleCreate,
     SaleLineItemCreate,
     SaleLineItemUpdate,
@@ -533,3 +537,62 @@ async def close_sale(
     await db.commit()
     sale = await _load_sale(db, ctx, sale_id)
     return _sale_response(sale)
+
+
+# ---------------------------------------------------------------------------
+# Nested refunds list (Plan 15-05) — single-router pattern (WARNING #6).
+# ---------------------------------------------------------------------------
+
+
+def _refund_to_response(refund: Refund) -> RefundResponse:
+    return RefundResponse.model_validate(
+        {
+            "id": refund.id,
+            "sale_id": refund.sale_id,
+            "total_amount": refund.total_amount,
+            "reason": refund.reason,
+            "processor_refund_id": refund.processor_refund_id,
+            "refunded_by_id": refund.refunded_by_id,
+            "created_at": refund.created_at,
+            "line_items": [
+                RefundLineItemResponse.model_validate(li) for li in refund.line_items
+            ],
+            "payment_refunds": [
+                RefundPaymentResponse.model_validate(pa)
+                for pa in refund.payment_allocations
+            ],
+        }
+    )
+
+
+@router.get("/{sale_id}/refunds/", response_model=list[RefundResponse])
+async def list_sale_refunds(
+    sale_id: UUID,
+    ctx: TenantContext = Depends(require_permission(ClinicalAction.OPEN_POS)),
+    db: AsyncSession = Depends(get_db),
+):
+    # Verify the sale exists in this tenant before returning refund rows.
+    exists = (
+        await db.execute(
+            select(Sale.id).where(
+                Sale.id == sale_id, Sale.tenant_id == ctx.tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    rows = (
+        await db.execute(
+            select(Refund)
+            .where(
+                Refund.sale_id == sale_id,
+                Refund.tenant_id == ctx.tenant_id,
+            )
+            .options(
+                selectinload(Refund.line_items),
+                selectinload(Refund.payment_allocations),
+            )
+            .order_by(Refund.created_at.desc())
+        )
+    ).scalars().all()
+    return [_refund_to_response(r) for r in rows]
