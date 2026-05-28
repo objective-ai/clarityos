@@ -7,6 +7,10 @@ unknown keys are left untouched, missing required keys raise.
 PHI scrubbing only applies to operational SMS (HIPAA minimum-necessary).
 Email is not scrubbed — the channel is for richer clinic-PHI content
 when the patient opts in.
+
+Originally a single ``templates.py`` module; promoted to a package in
+Plan 15-06 so the receipt email renderer can live alongside
+(``templates/receipt_email.py``) without colliding with the module name.
 """
 from __future__ import annotations
 
