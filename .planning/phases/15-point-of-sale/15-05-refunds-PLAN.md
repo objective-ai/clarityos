@@ -13,7 +13,7 @@ requirements: [POS-05, POS-09]
 
 must_haves:
   truths:
-    - "POST /api/refunds/ creates a Refund + RefundLineItem(s) + RefundPayment(s) + restocks Product (with_for_update) + writes InventoryTransaction(reason='refund_restock') + audits REFUND_ISSUED — ALL in single db.commit()"
+    - "POST /api/refunds/ creates a Refund + RefundLineItem(s) + RefundPayment(s) + restocks Product (with_for_update) + writes InventoryTransaction(reason='refund_restock', sale_id=line.sale_id) + audits REFUND_ISSUED — ALL in single db.commit(); reason value validates against extended ck_inventory_reason CHECK (Plan 15-01)"
     - "ISSUE_REFUND permission gated to OWNER+ADMIN (POS-11)"
     - "Refund.reason is mandatory, length 3-500 (CONTEXT §E)"
     - "Card refunds via processor.refund_payment for stripe_card payments only; cash/external_card/write_off are ledger-only (no processor call)"
@@ -30,8 +30,8 @@ must_haves:
       contains: "async def issue_refund"
   key_links:
     - from: "issue_refund"
-      to: "InventoryTransaction(reason='refund_restock')"
-      via: "restock_for_refund_line helper in primary TXN"
+      to: "InventoryTransaction(reason='refund_restock', sale_id=...)"
+      via: "restock_for_refund_line reads SaleLineItem.optical_order_line_item_id FK (no line_total heuristic) — WARNING #3 + BLOCKER #2"
       pattern: "refund_restock"
     - from: "issue_refund"
       to: "OpticalOrder.status='cancelled'"
@@ -149,38 +149,43 @@ class OpticalOrderLineItem:
         if line.source_type == "product":
             product_id = line.source_id
         else:
-            # Resolve via OpticalOrderLineItem — flat sale-line grouping per Open Q 1
-            # multiple sale lines for one OpticalOrder share source_id but each is a separate optical_order_line_item
-            # Heuristic: match by description? Better — look up OpticalOrderLineItem.product_id by ordering
-            # For Phase 15 simplicity: store optical_order_line_item_id in SaleLineItem.source_id is INCORRECT;
-            # the canonical mapping is sale_line.source_id == optical_order.id but per-line product resolution
-            # requires either (a) an extra column or (b) a lookup. Use (b): query OpticalOrderLineItem matching the description.
-            # Better: extend SaleLineItem with optional `source_line_item_id` to point at OpticalOrderLineItem.
-            # Per Plan 15-01 schema we don't have that. Resolve heuristically by matching first OpticalOrderLineItem with
-            # same product description not already restocked-out.
-            # SIMPLEST CORRECT APPROACH for Phase 15: look up OpticalOrderLineItem directly via stored product reference.
-            # CONCRETE: re-fetch the OpticalOrder.line_items eagerly, pick the line matching by description+qty.
-            order = (await db.execute(
-                select(OpticalOrder).where(OpticalOrder.id == line.source_id)
-                .options(selectinload(OpticalOrder.line_items))
-            )).scalar_one_or_none()
-            if not order:
-                return None
-            # Pick the first OOLI whose product matches the SaleLineItem.description — best-effort
-            ooli = next((o for o in order.line_items if o.line_total == line.line_total), None)
-            if not ooli:
-                return None
-            product_id = ooli.product_id
+            # WARNING #3 fix (checker iter 1): resolve via SaleLineItem.optical_order_line_item_id FK
+            # populated by Plan 15-03 prefill_from_optical_order. No line_total heuristic.
+            if line.optical_order_line_item_id is None:
+                # Legacy data path: SaleLineItem rows created before Plan 15-01 migration ran.
+                # Fallback to old description-matching heuristic for backwards compatibility ONLY.
+                # New rows always have the FK populated (verified by Plan 15-03 acceptance criteria).
+                order = (await db.execute(
+                    select(OpticalOrder).where(OpticalOrder.id == line.source_id)
+                    .options(selectinload(OpticalOrder.line_items))
+                )).scalar_one_or_none()
+                if not order:
+                    return None
+                ooli = next((o for o in order.line_items if o.line_total == line.line_total), None)
+                if not ooli:
+                    return None
+                product_id = ooli.product_id
+            else:
+                # Standard path: direct FK lookup, no guessing.
+                ooli = await db.get(OpticalOrderLineItem, line.optical_order_line_item_id)
+                if ooli is None:
+                    return None
+                product_id = ooli.product_id
 
         product = (await db.execute(
             select(Product).where(Product.id == product_id).with_for_update()
         )).scalar_one()
         product.stock_qty += qty
+        # BLOCKER #1 (checker iter 1): reason='refund_restock' is now in extended ck_inventory_reason CHECK (Plan 15-01).
+        # BLOCKER #2: sale_id column exists (Plan 15-01) — link the inventory move to the parent sale via the refund's sale.
+        # Caller-passed `refund_id` is unused here directly — sale_id is the audit link to the financial parent.
+        # We can resolve sale_id from line.sale_id (each SaleLineItem.sale_id is non-null).
         txn = InventoryTransaction(
             tenant_id=ctx.tenant_id,
             product_id=product.id,
             delta=qty,
             reason="refund_restock",
+            sale_id=line.sale_id,            # BLOCKER #2: requires Plan 15-01 sale_id column
             staff_id=None,   # set by caller via ctx if needed
         )
         db.add(txn)
@@ -340,6 +345,10 @@ class OpticalOrderLineItem:
     - `pytest backend/tests/test_refund_optical_cascade.py -v` passes with assertions covering:
       - Refunding all optical_order lines flips OpticalOrder.status to 'cancelled'
       - Partial optical_order refund leaves OpticalOrder.status unchanged
+    - `grep -c "optical_order_line_item_id" backend/services/sale_lifecycle.py` returns >= 2 — WARNING #3: restock branch reads the FK directly (standard path + legacy-data fallback both reference it)
+    - `grep -c "line\.line_total" backend/services/sale_lifecycle.py` returns <= 2 — WARNING #3: line_total heuristic now lives ONLY in the legacy-data fallback branch (or zero usages if no legacy rows exist)
+    - `grep -c "sale_id=line\.sale_id" backend/services/sale_lifecycle.py` returns >= 1 — BLOCKER #2: refund_restock InventoryTransaction passes sale_id (column now exists per Plan 15-01)
+    - `grep -c "db\.get(OpticalOrderLineItem" backend/services/sale_lifecycle.py` returns >= 1 — WARNING #3: standard path uses direct FK get, not selectinload-and-guess
   </acceptance_criteria>
   <done>Refund service-layer atomic; restock + processor + cascade-cancel + audit all in one TXN.</done>
 </task>

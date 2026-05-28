@@ -8,6 +8,7 @@ files_modified:
   - requirements.txt
   - package.json
   - .env.example
+  - .planning/phases/15-point-of-sale/15-VALIDATION.md
   - backend/tests/conftest.py
   - backend/tests/test_pos_models.py
   - backend/tests/test_sale_cart_load.py
@@ -42,6 +43,7 @@ requirements: [POS-01, POS-02, POS-03, POS-04, POS-05, POS-06, POS-07, POS-08, P
 
 must_haves:
   truths:
+    - "15-VALIDATION.md per-task table pre-populated upfront (one row per anticipated task across plans 15-00..15-11) — WARNING #4 fix from checker iter 1"
     - "Stripe SDK + cryptography pinned and importable in backend"
     - "Stripe React + stripe-js installed and importable in frontend"
     - "PAYMENTS_FERNET_KEY documented in .env.example"
@@ -61,6 +63,9 @@ must_haves:
     - path: ".planning/REQUIREMENTS.md"
       provides: "POS-01..POS-16 requirement rows + traceability table entries"
       contains: "POS-01"
+    - path: ".planning/phases/15-point-of-sale/15-VALIDATION.md"
+      provides: "Per-task Verification Map populated with one row per anticipated task across plans 15-00..15-11"
+      contains: "15-01-01 |"
   key_links:
     - from: ".env.example"
       to: "backend/services/payments/crypto.py (later plan)"
@@ -452,8 +457,60 @@ Fernet(key).decrypt(ciphertext: bytes) -> bytes
   <done>Skip-state Wave-0 scaffold green; REQUIREMENTS.md has POS-01..POS-16 + traceability rows; later plans can flip skip → real with a single import.</done>
 </task>
 
+<task type="auto" tdd="false">
+  <name>Task 3: Pre-populate 15-VALIDATION.md per-task table with one row per anticipated task across plans 15-01..15-11 (WARNING #4 fix from checker iter 1)</name>
+  <files>.planning/phases/15-point-of-sale/15-VALIDATION.md</files>
+  <read_first>
+    - .planning/phases/15-point-of-sale/15-VALIDATION.md (current state — Per-Task Verification Map has a single placeholder row that must be expanded)
+    - All 12 plans 15-00..15-11 in .planning/phases/15-point-of-sale/ (read frontmatter `requirements` + each `<task>` name for the table rows)
+  </read_first>
+  <action>
+    Replace the placeholder row under "## Per-Task Verification Map" with one row per task across plans 15-00..15-11. Each row's columns:
+
+    | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
+
+    Conventions:
+    - **Task ID:** `{plan}-{task#}` (e.g., `15-01-01`)
+    - **Plan:** `{NN}` matching plan filename
+    - **Wave:** read from plan frontmatter `wave:` field
+    - **Requirement:** primary POS-XX id from the plan's `requirements:` list (most-relevant; pick highest-coverage one if multiple)
+    - **Test Type:** unit | contract | route | e2e | smoke | manual
+    - **Automated Command:** the exact command in that task's `<verify><automated>...</automated></verify>` block (trim to ~80 chars; full command resolved at execute time)
+    - **File Exists:** `❌ W0` initially (Wave 0 created the test files but not all symbols import yet) → flips to `✅` as plans land
+    - **Status:** `⬜ pending` initially → `✅ passing` / `❌ failing` as execution progresses (updated by Plan 15-11 verification pass)
+
+    Tasks to enumerate (read each plan's `<task>` blocks; this list is the expected minimum — append more if a plan adds tasks):
+    - 15-00-01 (deps), 15-00-02 (Wave-0 scaffolding), 15-00-03 (VALIDATION pre-pop), 15-00-04 (BAA checkpoint)
+    - 15-01-01 (schema + ORM)
+    - 15-02-01 (PaymentProcessor base + Stripe), 15-02-02 (crypto)
+    - 15-03-01 (money + lifecycle helpers), 15-03-02 (schemas + TS types)
+    - 15-04-01 (sales routes + close), 15-04-02 (payment routes mounted on sales_router)
+    - 15-05-01 (issue_refund service), 15-05-02 (refunds routes)
+    - 15-06-01..N (receipts — read plan)
+    - 15-07-01..N (daily close — read plan)
+    - 15-08-01..N (webhooks + admin — read plan)
+    - 15-09-01..N (stores + /pos page — read plan)
+    - 15-10-01..N (refund + close UI + entry points — read plan)
+    - 15-11-01..N (E2E verification — read plan)
+
+    Plan 15-11 will UPDATE this table (flip pending → passing/failing) but MUST NOT re-derive rows from scratch — they exist upfront after this Task 3.
+
+    Also flip `nyquist_compliant: false` → `nyquist_compliant: true` in the frontmatter once every row has a non-empty Automated Command.
+  </action>
+  <verify>
+    <automated>grep -cE "^\| 15-[0-9]{2}-[0-9]+ \|" .planning/phases/15-point-of-sale/15-VALIDATION.md</automated>
+  </verify>
+  <acceptance_criteria>
+    - `grep -cE "^\| 15-[0-9]{2}-[0-9]+ \|" .planning/phases/15-point-of-sale/15-VALIDATION.md` returns >= 24 (one row per task across plans 15-00..15-11; minimum 2 tasks each on average)
+    - The original placeholder row `| 15-01-01 | 01 | 1 | (TBD) | unit | ... | ❌ W0 | ⬜ pending |` is REPLACED (not just appended below) — `grep -c "(TBD)" .planning/phases/15-point-of-sale/15-VALIDATION.md` returns 0
+    - Every row has a non-empty Automated Command column (no empty `| |` cells)
+    - `grep -c "^nyquist_compliant: true$" .planning/phases/15-point-of-sale/15-VALIDATION.md` returns 1
+  </acceptance_criteria>
+  <done>15-VALIDATION.md per-task table is exhaustive upfront; Plan 15-11 just updates statuses, doesn't backfill rows.</done>
+</task>
+
 <task type="checkpoint:human-action" gate="blocking">
-  <name>Task 3: BAA HIPAA checkpoint — confirm Postmark BAA + Stripe BAA before any production-tenant Stripe keys land</name>
+  <name>Task 4: BAA HIPAA checkpoint — confirm Postmark BAA + Stripe BAA before any production-tenant Stripe keys land</name>
   <action>This task is a human-verification checkpoint — no automated action. Execute the steps in <how-to-verify> manually, document outcomes in the referenced VERIFICATION/CHECKPOINT file, and use the resume-signal to continue.</action>
   <what-built>Phase 15 ships per-tenant Stripe payment processing and Postmark-delivered receipt emails containing patient name + sale items (PHI). Stripe BAA + Postmark BAA both required before any production tenant configures Stripe keys.</what-built>
   <how-to-verify>
@@ -474,6 +531,7 @@ Fernet(key).decrypt(ciphertext: bytes) -> bytes
 - `node -e "require('@stripe/react-stripe-js')"` succeeds
 - `.planning/REQUIREMENTS.md` contains 16 POS-* requirement rows + 16 traceability rows
 - `.env.example` documents PAYMENTS_FERNET_KEY without leaking a real key
+- 15-VALIDATION.md per-task table pre-populated (WARNING #4) — at least 24 rows, no `(TBD)` placeholder
 - 15-BAA-CHECKPOINT.md exists (or explicit defer decision recorded)
 </verification>
 

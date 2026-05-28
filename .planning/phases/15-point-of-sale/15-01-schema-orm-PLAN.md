@@ -10,11 +10,11 @@ files_modified:
   - backend/db/models/public/saas.py
   - backend/core/permissions.py
 autonomous: true
-requirements: [POS-08, POS-09, POS-11, POS-12, POS-13]
+requirements: [POS-05, POS-08, POS-09, POS-11, POS-12, POS-13]
 
 must_haves:
   truths:
-    - "Alembic migration 0020 applies cleanly (DDL-only via --sql) and adds Sale/SaleLineItem/Payment/Refund/RefundLineItem/RefundPayment/DailyCloseRun/StripeWebhookEvent tables + 4 Tenant columns"
+    - "Alembic migration 0020 applies cleanly (DDL-only via --sql) and adds Sale/SaleLineItem/Payment/Refund/RefundLineItem/RefundPayment/DailyCloseRun/StripeWebhookEvent tables + 4 Tenant columns + InventoryTransaction.sale_id column + SaleLineItem.optical_order_line_item_id FK + extends ck_inventory_reason CHECK with 'sale_placed' and 'refund_restock'"
     - "All 8 new ORM classes import without errors from backend.db.models.tenant.clinical"
     - "13 new AuditAction VARCHAR values + 6 new ClinicalAction values added with correct PERMISSION_MATRIX rows"
     - "Encounter / Patient back-references for Sale work via selectinload (no MissingGreenlet)"
@@ -24,7 +24,7 @@ must_haves:
       provides: "Migration for 8 new tables + 4 Tenant columns + indexes + audit/permission enum is VARCHAR so no DDL for those"
       contains: "def upgrade()"
     - path: "backend/db/models/tenant/clinical.py"
-      provides: "Sale, SaleLineItem, Payment, Refund, RefundLineItem, RefundPayment, DailyCloseRun, StripeWebhookEvent ORMs + Sale lifecycle enums + 13 new AuditAction values"
+      provides: "Sale (with SaleLineItem.optical_order_line_item_id FK), Payment, Refund, RefundLineItem, RefundPayment, DailyCloseRun, StripeWebhookEvent ORMs + Sale lifecycle enums + 14 new AuditAction values + extended InventoryTransaction (sale_id column + widened ck_inventory_reason CHECK)"
       contains: "class Sale("
     - path: "backend/db/models/public/saas.py"
       provides: "Tenant model gets sales_tax_rate + stripe_publishable_key + stripe_secret_key_encrypted + stripe_webhook_secret_encrypted columns"
@@ -163,6 +163,29 @@ class StripeWebhookEvent(TenantBase):
 
     `def upgrade():` creates (use `sa.text("'{}'::jsonb")` for any JSONB server_default; use `ADD COLUMN IF NOT EXISTS` pattern for the Tenant column adds wrapped in DO blocks for idempotency):
 
+    0. **Inventory transaction extension** (BLOCKER fixes #1 + #2 from checker iter 1):
+       - Drop and recreate `ck_inventory_reason` CHECK constraint to add Phase 15 reasons:
+         ```python
+         op.drop_constraint('ck_inventory_reason', 'inventory_transactions', type_='check')
+         op.create_check_constraint(
+             'ck_inventory_reason', 'inventory_transactions',
+             "reason IN ('order_placed','order_cancelled','receive_stock','manual_adjust','sale_placed','refund_restock')",
+         )
+         ```
+       - Add `sale_id` column to `inventory_transactions` (nullable, SET NULL on sale delete) for audit traceability:
+         ```python
+         op.add_column('inventory_transactions',
+             sa.Column('sale_id', postgresql.UUID(as_uuid=True), nullable=True))
+         # FK added AFTER `sales` table CREATE TABLE in this same upgrade():
+         op.create_foreign_key(
+             'fk_inventory_transactions_sale', 'inventory_transactions', 'sales',
+             ['sale_id'], ['id'], ondelete='SET NULL',
+         )
+         op.create_index('ix_inventory_transactions_sale',
+                         'inventory_transactions', ['tenant_id', 'sale_id'])
+         ```
+         NOTE: The `add_column` runs FIRST (before `sales` CREATE TABLE) so the column exists; the FK constraint is added LATER in the same upgrade() function, after `sales` table is created. This avoids forward-reference issues with Alembic.
+
     1. **Tenant column additions** (DO block for idempotency, ADD COLUMN IF NOT EXISTS):
        - `sales_tax_rate Numeric(5,4) NOT NULL DEFAULT 0.0725`
        - `stripe_publishable_key VARCHAR(128) NULL`
@@ -192,7 +215,8 @@ class StripeWebhookEvent(TenantBase):
        - tenant_id UUID NOT NULL FK
        - sale_id UUID NOT NULL FK → sales.id ON DELETE CASCADE
        - source_type VARCHAR(20) NOT NULL  -- {superbill, optical_order, product, adhoc}
-       - source_id UUID NULL  -- nullable for adhoc
+       - source_id UUID NULL  -- nullable for adhoc; for optical_order rows still points at OpticalOrder.id (shared across the order's lines for UI grouping)
+       - **optical_order_line_item_id UUID NULL FK → optical_order_line_items.id ON DELETE SET NULL** (WARNING #3 fix from checker iter 1): exact restock target for `source_type='optical_order'` lines. Populated by `prefill_from_optical_order` in Plan 15-03. NULL for non-optical_order lines. Plan 15-05 `restock_for_refund_line` uses this FK directly (no `line_total` heuristic).
        - description VARCHAR(500) NOT NULL
        - qty Integer NOT NULL DEFAULT 1 (CHECK qty > 0)
        - unit_price Numeric(10,2) NOT NULL
@@ -201,7 +225,7 @@ class StripeWebhookEvent(TenantBase):
        - taxable Boolean NOT NULL DEFAULT true
        - line_total Numeric(10,2) NOT NULL  -- = qty * unit_price - discount_amount (computed app-side, stored)
        - created_at, updated_at
-       - Indexes: (sale_id), (tenant_id, source_type, source_id) for cross-references
+       - Indexes: (sale_id), (tenant_id, source_type, source_id) for cross-references, **partial index `ix_sale_line_items_optical_oli (tenant_id, optical_order_line_item_id) WHERE optical_order_line_item_id IS NOT NULL`** for Plan 15-05 refund lookups
 
     4. **`payments` table:**
        - id UUID PK
@@ -349,9 +373,60 @@ class StripeWebhookEvent(TenantBase):
         ClinicalAction.RUN_DAILY_CLOSE: {Role.OWNER, Role.ADMIN},
         ClinicalAction.MANAGE_PAYMENT_CONFIG: {Role.OWNER},
     ```
+
+    **E. InventoryTransaction ORM extension (`backend/db/models/tenant/clinical.py:1706-1766`) — BLOCKER #1 + #2 mirror**
+
+    Update the existing `InventoryTransaction.__table_args__` CheckConstraint string to mirror the migration (BLOCKER #1):
+    ```python
+    __table_args__ = (
+        Index(
+            "ix_inventory_transactions_product",
+            "product_id", "created_at",
+        ),
+        Index(
+            "ix_inventory_transactions_sale",
+            "tenant_id", "sale_id",
+        ),
+        CheckConstraint(
+            "reason IN ('order_placed','order_cancelled','receive_stock','manual_adjust','sale_placed','refund_restock')",
+            name="ck_inventory_reason",
+        ),
+    )
+    ```
+
+    Add the `sale_id` column field (place AFTER existing `optical_order_id` column for grouping audit-link FKs) (BLOCKER #2):
+    ```python
+    sale_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sales.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    ```
+
+    No back-ref relationship is required (audit-only). If Sale ever needs to list its inventory transactions, a one-way `sale = relationship("Sale", lazy="selectin")` may be added later — not in scope for Phase 15.
+
+    **F. SaleLineItem ORM — optical_order_line_item_id FK (WARNING #3)**
+
+    The new `SaleLineItem` class created in Section B MUST include the new FK column to OpticalOrderLineItem:
+    ```python
+    optical_order_line_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("optical_order_line_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    ```
+    Plus a partial index entry in `SaleLineItem.__table_args__`:
+    ```python
+    Index(
+        "ix_sale_line_items_optical_oli",
+        "tenant_id", "optical_order_line_item_id",
+        postgresql_where=text("optical_order_line_item_id IS NOT NULL"),
+    ),
+    ```
+    Plan 15-03 `prefill_from_optical_order` populates this column on each cart line; Plan 15-05 `restock_for_refund_line` reads it directly to find the OpticalOrderLineItem (and therefore the product_id to restock) — no fragile `line_total` matching.
   </action>
   <verify>
-    <automated>cd backend && alembic upgrade head --sql > /tmp/0020.sql && grep -E "CREATE TABLE.*(sales|sale_line_items|payments|refunds|refund_line_items|refund_payments|daily_close_runs|stripe_webhook_events)" /tmp/0020.sql | wc -l && python -c "from backend.db.models.tenant.clinical import Sale, SaleLineItem, Payment, Refund, RefundLineItem, RefundPayment, DailyCloseRun, StripeWebhookEvent, SaleStatus, PaymentMethod, PaymentStatus, SaleLineItemSourceType, AuditAction; assert AuditAction.SALE_PAID.value == 'SALE_PAID'; assert AuditAction.REFUND_ISSUED.value == 'REFUND_ISSUED'; assert AuditAction.STRIPE_WEBHOOK_RECEIVED.value == 'STRIPE_WEBHOOK_RECEIVED'; print('ok')" && python -c "from backend.core.permissions import ClinicalAction, PERMISSION_MATRIX, Role; assert ClinicalAction.RECORD_WRITE_OFF in PERMISSION_MATRIX; assert Role.OWNER in PERMISSION_MATRIX[ClinicalAction.RECORD_WRITE_OFF]; assert Role.TECHNICIAN not in PERMISSION_MATRIX[ClinicalAction.RECORD_WRITE_OFF]; print('ok')" && python -c "from backend.db.models.public.saas import Tenant; cols = {c.name for c in Tenant.__table__.columns}; assert 'sales_tax_rate' in cols; assert 'stripe_secret_key_encrypted' in cols; print('ok')" && pytest backend/tests/test_pos_models.py backend/tests/test_pos_enums.py backend/tests/test_permissions_pos.py -v</automated>
+    <automated>cd backend && alembic upgrade head --sql > /tmp/0020.sql && grep -E "CREATE TABLE.*(sales|sale_line_items|payments|refunds|refund_line_items|refund_payments|daily_close_runs|stripe_webhook_events)" /tmp/0020.sql | wc -l && grep -c "sale_placed\|refund_restock" /tmp/0020.sql && python -c "from backend.db.models.tenant.clinical import Sale, SaleLineItem, Payment, Refund, RefundLineItem, RefundPayment, DailyCloseRun, StripeWebhookEvent, InventoryTransaction, SaleStatus, PaymentMethod, PaymentStatus, SaleLineItemSourceType, AuditAction; assert AuditAction.SALE_PAID.value == 'SALE_PAID'; assert AuditAction.REFUND_ISSUED.value == 'REFUND_ISSUED'; assert AuditAction.STRIPE_WEBHOOK_RECEIVED.value == 'STRIPE_WEBHOOK_RECEIVED'; assert 'sale_id' in {c.name for c in InventoryTransaction.__table__.columns}; assert 'optical_order_line_item_id' in {c.name for c in SaleLineItem.__table__.columns}; print('ok')" && python -c "from backend.db.models.tenant.clinical import InventoryTransaction; cs = [c for c in InventoryTransaction.__table__.constraints if getattr(c,'name','')=='ck_inventory_reason']; assert cs and 'sale_placed' in str(cs[0].sqltext) and 'refund_restock' in str(cs[0].sqltext); print('ok')" && python -c "from backend.core.permissions import ClinicalAction, PERMISSION_MATRIX, Role; assert ClinicalAction.RECORD_WRITE_OFF in PERMISSION_MATRIX; assert Role.OWNER in PERMISSION_MATRIX[ClinicalAction.RECORD_WRITE_OFF]; assert Role.TECHNICIAN not in PERMISSION_MATRIX[ClinicalAction.RECORD_WRITE_OFF]; print('ok')" && python -c "from backend.db.models.public.saas import Tenant; cols = {c.name for c in Tenant.__table__.columns}; assert 'sales_tax_rate' in cols; assert 'stripe_secret_key_encrypted' in cols; print('ok')" && pytest backend/tests/test_pos_models.py backend/tests/test_pos_enums.py backend/tests/test_permissions_pos.py -v</automated>
   </verify>
   <acceptance_criteria>
     - `alembic upgrade head --sql` exits 0 and contains exactly 8 `CREATE TABLE ... (sales|sale_line_items|payments|refunds|refund_line_items|refund_payments|daily_close_runs|stripe_webhook_events)` statements
@@ -367,6 +442,12 @@ class StripeWebhookEvent(TenantBase):
     - `grep -c "ON DELETE CASCADE" /tmp/0020.sql` returns >= 6 (Sale-owned children cascade)
     - `grep -c "UNIQUE.*event_id" /tmp/0020.sql` returns >= 1 (StripeWebhookEvent global uniqueness)
     - `grep -c "UNIQUE.*tenant_id.*close_date\|UNIQUE.*close_date.*tenant_id" /tmp/0020.sql` returns >= 1 (DailyCloseRun one-per-day)
+    - `grep -c "sale_placed" /tmp/0020.sql` returns >= 1 — BLOCKER #1: ck_inventory_reason CHECK extended with 'sale_placed'
+    - `grep -c "refund_restock" /tmp/0020.sql` returns >= 1 — BLOCKER #1: CHECK extended with 'refund_restock'
+    - `grep -c "ck_inventory_reason" /tmp/0020.sql` returns >= 2 — BLOCKER #1: DROP CONSTRAINT + ADD CONSTRAINT both emitted
+    - `python -c "from backend.db.models.tenant.clinical import InventoryTransaction; assert 'sale_id' in {c.name for c in InventoryTransaction.__table__.columns}"` exits 0 — BLOCKER #2: sale_id column present
+    - `python -c "from backend.db.models.tenant.clinical import InventoryTransaction; cs = [c for c in InventoryTransaction.__table__.constraints if getattr(c,'name','')=='ck_inventory_reason']; assert cs and 'sale_placed' in str(cs[0].sqltext) and 'refund_restock' in str(cs[0].sqltext)"` exits 0 — BLOCKER #1: ORM CheckConstraint mirrors migration
+    - `python -c "from backend.db.models.tenant.clinical import SaleLineItem; assert 'optical_order_line_item_id' in {c.name for c in SaleLineItem.__table__.columns}"` exits 0 — WARNING #3: FK column present
   </acceptance_criteria>
   <done>Schema substrate in place; downstream plans can import all ORM classes; Wave-0 models/enums/permissions tests green; migration validates offline via --sql (live DB application gated on Supabase pooler access — see STATE.md blocker).</done>
 </task>

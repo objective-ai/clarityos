@@ -17,7 +17,7 @@ must_haves:
     - "All money math goes through quantize_money(Decimal, ROUND_HALF_EVEN) — no float anywhere"
     - "Sale totals computed as: subtotal = sum(line_total); tax = quantize(taxable_subtotal * tenant.sales_tax_rate); total = subtotal + tax"
     - "prefill_from_superbill derives copay from PatientInsurance.copay_amount when billed_payer_id set, else falls back to Superbill.total_fee"
-    - "prefill_from_optical_order creates one SaleLineItem per OpticalOrderLineItem (flat, shared source_id per RESEARCH Open Q 1)"
+    - "prefill_from_optical_order creates one SaleLineItem per OpticalOrderLineItem (flat, shared source_id per RESEARCH Open Q 1) AND populates SaleLineItem.optical_order_line_item_id with the OpticalOrderLineItem.id (WARNING #3 fix — Plan 15-05 restock reads this FK directly)"
     - "compute_remaining = sale.total - sum(p.amount where status in {succeeded, partial_refund}) — drives split-tender close gate"
     - "Pydantic SaleResponse + SaleLineItemResponse + PaymentResponse + RefundResponse + DailyCloseResponse all camelize via by_alias=True"
     - "Decimal fields serialize as STRING in JSON (matches TS interface)"
@@ -166,8 +166,9 @@ export interface OpticalOrder {
 
     prefill_from_optical_order(db, sale, optical_order_id):
     - selectinload OpticalOrder with lines + product
-    - For each OpticalOrderLineItem creates one SaleLineItem(source_type='optical_order', source_id=optical_order_id, description=line.product.brand + ' ' + product.model, qty=line.qty, unit_price=line.unit_price, taxable=True, line_total=line.line_total)
+    - For each OpticalOrderLineItem creates one SaleLineItem(source_type='optical_order', source_id=optical_order_id, **optical_order_line_item_id=oli.id (WARNING #3 fix)**, description=line.product.brand + ' ' + product.model, qty=line.qty, unit_price=line.unit_price, taxable=True, line_total=line.line_total)
     - Flat structure per RESEARCH Open Q 1 (shared source_id, no parent_line_id self-FK)
+    - `optical_order_line_item_id` FK lets Plan 15-05 `restock_for_refund_line` look up the OpticalOrderLineItem directly (no fragile line_total matching)
   </behavior>
   <action>
     Two concrete files.
@@ -320,6 +321,7 @@ export interface OpticalOrder {
                 sale_id=sale.id,
                 source_type="optical_order",
                 source_id=order.id,
+                optical_order_line_item_id=oli.id,   # WARNING #3 fix: precise FK for Plan 15-05 restock (no line_total heuristic)
                 description=desc,
                 qty=oli.qty,
                 unit_price=quantize_money(oli.unit_price),
@@ -458,6 +460,7 @@ export interface OpticalOrder {
     - `grep -c "ROUND_HALF_EVEN" backend/services/money.py` >= 1
     - `grep -c "float\\(" backend/services/money.py backend/services/sale_lifecycle.py` returns 0 — no float() anywhere
     - `python -c "from backend.services.sale_lifecycle import compute_sale_totals, compute_remaining, prefill_from_superbill, prefill_from_optical_order"` exits 0
+    - `grep -c "optical_order_line_item_id=oli\.id" backend/services/sale_lifecycle.py` returns >= 1 — WARNING #3: prefill_from_optical_order populates the FK column on every cart line so Plan 15-05 can look up the OpticalOrderLineItem directly
   </acceptance_criteria>
   <done>Pure helpers + tax / copay / remaining math TDD'd and green.</done>
 </task>

@@ -36,11 +36,11 @@ created: 2026-05-27
 
 ## Per-Task Verification Map
 
-*To be populated by planner — every task should map to one row here referencing its automated verification command.*
+*Pre-populated by Plan 15-00 Task 3 (Wave 0) — one row per anticipated task across plans 15-00..15-11. Plan 15-11 updates the `File Exists` and `Status` columns during verification but does NOT backfill rows. Per checker iter 1 WARNING #4.*
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 15-01-01 | 01 | 1 | (TBD) | unit | `cd backend && pytest tests/test_pos_models.py` | ❌ W0 | ⬜ pending |
+| 15-01-01 | 01 | 1 | (TBD — populate from Plan 15-00 Task 3) | unit | `cd backend && pytest tests/test_pos_models.py` | ❌ W0 | ⬜ pending |
 
 ---
 

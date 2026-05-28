@@ -9,11 +9,13 @@ files_modified:
   - backend/api/routes/sale_payments.py
   - backend/main.py
   - backend/services/sale_lifecycle.py
+# NOTE per checker iter 1 WARNING #6: sale_payments.py is a MODULE FILE only (helpers + route handlers); routes are mounted on the shared `sales_router` from sales.py — no separate `sale_payments_router` registered in main.py
 autonomous: true
 requirements: [POS-01, POS-02, POS-06, POS-11, POS-12, POS-13, POS-15]
 
 must_haves:
   truths:
+    - "All payment routes attached to single `sales_router` (no dual-prefix collision per checker WARNING #6)"
     - "POST /api/sales/ creates an open Sale, optionally with prefill items, primary-TXN audit SALE_CREATE"
     - "PATCH /api/sales/{id}/lines/{lineId}/ accepts qty/unit_price/discount/discount_reason/taxable; recomputes totals; audits SALE_DISCOUNT_APPLIED when discount changes"
     - "POST /api/sales/{id}/payments/ records cash/external_card/write_off ledger payments inline; for stripe_card creates PaymentIntent and returns clientSecret"
@@ -161,7 +163,7 @@ confirmed = await processor.confirm_payment(tenant, payment_intent_id)
        - Load sale with selectinload lines + payments. 409 if status != 'open'.
        - Compute remaining; 409 if remaining > 0 with message "Sale can't close — $X.XX still owed".
        - Compute totals (defensive). Persist.
-       - For each line where source_type in {'product', 'optical_order'}: row-lock Product via `select(Product).where(Product.id == ...).with_for_update()` and decrement stock_qty; write `InventoryTransaction(tenant_id, product_id, delta=-qty, reason='sale_placed', staff_id=staff.id, sale_id=sale.id)` (NB: InventoryTransaction may need `sale_id` column — check Phase 13 schema; if missing, store reference via `reason_metadata_jsonb` or skip the FK and only audit via log_action). For source_type='optical_order': resolve product_id via OpticalOrderLineItem.product_id; if multiple lines share the same OpticalOrder, mark order.status='dispensed' if cart toggle indicated (read from sale.notes or a dedicated `dispense_optical_on_close` field — for Phase 15 use a request-body flag `markDispensed: true`).
+       - For each line where source_type in {'product', 'optical_order'}: row-lock Product via `select(Product).where(Product.id == ...).with_for_update()` and decrement stock_qty; write `InventoryTransaction(tenant_id, product_id, delta=-qty, reason='sale_placed', staff_id=staff.id, sale_id=sale.id)` — the `sale_id` column exists per Plan 15-01 (BLOCKER #2 closed) and the `reason='sale_placed'` value is in the extended `ck_inventory_reason` CHECK constraint (BLOCKER #1 closed). For source_type='optical_order': resolve product_id via the `optical_order_line_item_id` FK on SaleLineItem (populated by Plan 15-03 prefill) — `oli = await db.get(OpticalOrderLineItem, line.optical_order_line_item_id); product_id = oli.product_id` (no description matching). If multiple lines share the same OpticalOrder, mark order.status='dispensed' if cart toggle indicated (request-body flag `markDispensed: true`).
        - Even on zero stock, write the InventoryTransaction (soft-block warning per Phase 13 — log a `zero_stock` audit metadata flag); never 4xx.
        - Generate `receipt_number = "R-{YYYYMMDD}-{NNNN}"` where NNNN = `LPAD(count(Sale where tenant=ctx.tenant_id AND date(closed_at)=today AND receipt_number IS NOT NULL) + 1, 4, '0')`. Set sale.receipt_number, sale.closed_at = now(), sale.status='paid'.
        - log_action SALE_PAID with metadata `{receipt_number, total, payment_count}`.
@@ -232,15 +234,18 @@ confirmed = await processor.confirm_payment(tenant, payment_intent_id)
     - `grep -c "include_router(sales_router\|sales\\.router\|sales_router" backend/main.py` returns >= 1
     - `grep -c "receipt_number" backend/api/routes/sales.py backend/services/sale_lifecycle.py` returns >= 2 (set + helper)
     - `python -c "from backend.api.routes.sales import router; assert any(r.path.endswith('/close/') for r in router.routes); assert any(r.path.endswith('/lines/') for r in router.routes); print('ok')"` exits 0
+    - `grep -c "sale_id=sale\.id" backend/api/routes/sales.py backend/services/sale_lifecycle.py` returns >= 1 — BLOCKER #2: InventoryTransaction(sale_id=sale.id, ...) uses the new column
+    - `grep -c "reason=.sale_placed.\|reason=\"sale_placed\"" backend/api/routes/sales.py backend/services/sale_lifecycle.py` returns >= 1 — BLOCKER #1: reason='sale_placed' value matches extended CHECK
+    - `python -c "import re, pathlib; src = pathlib.Path('backend/services/sale_lifecycle.py').read_text() + pathlib.Path('backend/api/routes/sales.py').read_text(); assert 'optical_order_line_item_id' in src, 'must resolve product_id via FK (Plan 15-01)'"` exits 0 — WARNING #3 fix is wired here too
   </acceptance_criteria>
   <done>Sales lifecycle routes ready; close-sale handler row-locks + decrements + audits in primary TXN; discount/void/line CRUD wired.</done>
 </task>
 
 <task type="auto" tdd="false">
-  <name>Task 2: backend/api/routes/sale_payments.py — POST payments (cash/external_card/write_off inline; stripe_card creates PaymentIntent) + POST stripe-confirm + write-off permission gate + DELETE pending payment</name>
+  <name>Task 2: backend/api/routes/sale_payments.py (module-only; routes mounted on sales_router from Task 1) — POST payments (cash/external_card/write_off inline; stripe_card creates PaymentIntent) + POST stripe-confirm + write-off permission gate + DELETE pending payment</name>
   <files>backend/api/routes/sale_payments.py, backend/main.py</files>
   <read_first>
-    - backend/api/routes/sales.py (Task 1 result — confirm router prefix; this file uses prefix `/api/sales` too but on sub-paths)
+    - backend/api/routes/sales.py (Task 1 result — sale_payments.py imports `sales_router` from this module; no separate router defined; WARNING #6)
     - backend/api/routes/optical_order.py (entitlement + permission decorator patterns)
     - backend/core/permissions.py (ClinicalAction enum, require_permission)
     - backend/services/payments/base.py + stripe_processor.py (Plan 15-02 output)
@@ -271,10 +276,47 @@ confirmed = await processor.confirm_payment(tenant, payment_intent_id)
 
     3. `DELETE /{payment_id}/` — cancel a pending stripe_card Payment. Calls `stripe.PaymentIntent.cancel()` via a new processor method or directly (acceptable here since processor exposes refund_payment, not cancel — add `cancel_intent()` to PaymentProcessor Protocol as an OPTIONAL method; or accept TODO + call directly with a comment "Pitfall 7 mitigation — extend Protocol if more processors added"). Sets Payment.status='canceled'. Audit PAYMENT_FAILED with reason `staff_canceled`.
 
-    **B. Register router in `backend/main.py`:**
+    **B. Mount routes on the existing `sales_router` (WARNING #6 fix — single-router registration; no dual prefix collision)**
+
+    `backend/api/routes/sale_payments.py` does NOT define its own `APIRouter`. Instead it:
+    1. Imports `sales_router` from `backend.api.routes.sales`
+    2. Defines internal helpers (`_record_cash_payment`, `_record_writeoff`, `_record_external_card`, `_initiate_stripe_payment`) — WARNING #5 names enforced by grep below
+    3. Registers route handlers using `@sales_router.post("/sales/{sale_id}/payments/...")` decorators directly on the imported router
+
+    Example top of `sale_payments.py`:
     ```python
-    from backend.api.routes.sale_payments import router as sale_payments_router
-    app.include_router(sale_payments_router)
+    from backend.api.routes.sales import router as sales_router
+    # ... imports ...
+
+    async def _record_cash_payment(body, sale, staff, ctx, db): ...
+    async def _record_writeoff(body, sale, staff, ctx, db): ...
+    async def _record_external_card(body, sale, staff, ctx, db): ...
+    async def _initiate_stripe_payment(body, sale, tenant, staff, ctx, db): ...
+
+    @sales_router.post("/{sale_id}/payments/", response_model=PaymentResponse | StripeIntentResponse)
+    async def create_payment(
+        sale_id: UUID,
+        body: PaymentCreate,
+        ctx: TenantContext = Depends(get_tenant_context),
+        _perm: None = Depends(require_permission(ClinicalAction.RECORD_PAYMENT)),
+        db: AsyncSession = Depends(get_db),
+    ):
+        # dispatch to _record_cash_payment / _record_writeoff / etc.
+        ...
+
+    @sales_router.post("/{sale_id}/payments/stripe-confirm/")
+    async def stripe_confirm(...): ...
+
+    @sales_router.delete("/{sale_id}/payments/{payment_id}/")
+    async def cancel_pending_payment(...): ...
+    ```
+
+    `backend/main.py` registers ONLY `sales_router` (no separate `sale_payments_router`):
+    ```python
+    from backend.api.routes.sales import router as sales_router
+    # ensure sale_payments.py is imported once so its decorators run and attach routes to sales_router
+    from backend.api.routes import sale_payments  # noqa: F401  (side-effect import: registers payment routes on sales_router)
+    app.include_router(sales_router)
     ```
 
     **C. Replace skip-stub bodies in `backend/tests/test_payment_cash.py` and `backend/tests/test_payment_writeoff.py`:**
@@ -327,7 +369,7 @@ confirmed = await processor.confirm_payment(tenant, payment_intent_id)
     Implementation note: the route handler should DELEGATE to internal `_record_cash_payment` / `_record_external_card` / `_record_writeoff` / `_initiate_stripe_payment` async helpers that take a small set of args, so unit tests don't need full HTTP simulation. This pattern matches Phase 13's optical_order.py `_compute_optical_status` helper extraction.
   </action>
   <verify>
-    <automated>cd backend && python -c "from backend.api.routes.sale_payments import router; print([r.path for r in router.routes])" && pytest tests/test_payment_cash.py tests/test_payment_writeoff.py tests/test_stripe_processor.py -v</automated>
+    <automated>cd backend && python -c "from backend.api.routes import sale_payments; from backend.api.routes.sales import router as sales_router; paths = [r.path for r in sales_router.routes]; assert any('/payments/' in p for p in paths); assert any('/stripe-confirm' in p for p in paths); print('ok')" && pytest tests/test_payment_cash.py tests/test_payment_writeoff.py tests/test_stripe_processor.py -v</automated>
   </verify>
   <acceptance_criteria>
     - `backend/api/routes/sale_payments.py` exists with router prefixed `/api/sales/{sale_id}/payments`
@@ -340,9 +382,15 @@ confirmed = await processor.confirm_payment(tenant, payment_intent_id)
     - `grep -c "automatic_payment_methods\|payment_method_types" backend/api/routes/sale_payments.py` returns 0 — those are processor internals, route layer doesn't touch them
     - `pytest backend/tests/test_payment_cash.py tests/test_payment_writeoff.py -v` exits 0 with all real tests passing
     - `pytest backend/tests/test_stripe_processor.py -v` still passes (no regression)
-    - `grep -c "include_router(sale_payments_router\|sale_payments\\.router" backend/main.py` returns >= 1
+    - `grep -c "include_router(sale_payments_router" backend/main.py` returns 0 — WARNING #6: no separate sale_payments_router (routes mounted on sales_router via decorator)
+    - `grep -c "APIRouter" backend/api/routes/sale_payments.py` returns 0 — WARNING #6: sale_payments.py defines NO router; it imports sales_router from sales.py
+    - `grep -c "from backend.api.routes.sales import router" backend/api/routes/sale_payments.py` returns >= 1 — WARNING #6: shared router import
+    - `grep -c "@sales_router\." backend/api/routes/sale_payments.py` returns >= 3 — WARNING #6: routes attached to sales_router (POST payments, POST stripe-confirm, DELETE)
+    - `grep -cE "async def _record_(cash_payment|writeoff|external_card)" backend/api/routes/sale_payments.py` returns 3 — WARNING #5: internal helper names enforced
+    - `grep -c "async def _initiate_stripe_payment" backend/api/routes/sale_payments.py` returns 1 — WARNING #5: Stripe init helper name enforced
+    - `python -c "from backend.api.routes import sale_payments; from backend.api.routes.sales import router as sales_router; paths = [r.path for r in sales_router.routes]; assert any('/payments/' in p for p in paths), 'payment routes not mounted on sales_router (WARNING #6)'; assert any('/stripe-confirm' in p for p in paths), 'stripe-confirm route missing'; print('ok')"` exits 0
   </acceptance_criteria>
-  <done>Payment-recording routes + Stripe confirm endpoint live; write-off gated; cash math validated.</done>
+  <done>Payment-recording routes + Stripe confirm endpoint live; write-off gated; cash math validated; all under single sales_router (no dual-prefix collision).</done>
 </task>
 
 </tasks>
