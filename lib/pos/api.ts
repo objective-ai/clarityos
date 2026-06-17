@@ -18,6 +18,8 @@
 
 import { apiFetch } from "@/lib/api-client";
 import type {
+  DailyClosePayload,
+  DailyCloseResponse,
   Payment,
   PaymentCreatePayload,
   Refund,
@@ -153,6 +155,19 @@ export const posApi = {
     apiFetch<{ ok: true }>(`/api/sales/${saleId}/receipt/email/`, {
       method: "POST",
       body: JSON.stringify(emailOverride ? { emailOverride } : {}),
+    }),
+
+  /** GET /api/pos/daily-close/?date={iso} — totals + reconciliation for a date. */
+  getDailyClose: (date: string): Promise<DailyCloseResponse> =>
+    apiFetch<DailyCloseResponse>(
+      `/api/pos/daily-close/?date=${encodeURIComponent(date)}`,
+    ),
+
+  /** POST /api/pos/daily-close/ — record counted cash + variance and close the day. */
+  saveDailyClose: (payload: DailyClosePayload): Promise<DailyCloseResponse> =>
+    apiFetch<DailyCloseResponse>(`/api/pos/daily-close/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };
 

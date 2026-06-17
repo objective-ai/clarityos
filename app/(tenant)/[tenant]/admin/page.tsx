@@ -19,6 +19,7 @@ import type { StaffRole } from "@/types/session";
 import { formatClinicDateTime, useClinicTimezone } from "@/lib/timezone";
 import ScheduleSection from "@/components/admin/ScheduleSection";
 import { SystemStatusSection } from "@/components/admin/SystemStatusSection";
+import { PosPaymentsCard } from "@/components/pos/PosPaymentsCard";
 
 // ---------------------------------------------------------------------------
 // Staff type — maps to /api/staff backend response (snake_case → camelCase)
@@ -59,6 +60,7 @@ type SectionKey =
   | "compliance"
   | "demo"
   | "schedule"
+  | "payments"
   | "system";
 
 const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
@@ -120,6 +122,11 @@ const SECTIONS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
         <line x1="3" y1="10" x2="21" y2="10" />
       </svg>
     ),
+  },
+  {
+    key: "payments",
+    label: "Payments",
+    icon: <CreditCard className="w-4 h-4" />,
   },
   {
     key: "system",
@@ -2502,6 +2509,7 @@ export default function AdminPage() {
   const [activeSection, setActiveSection] = useState<SectionKey>("general");
   const setSubtitle = usePageHeaderStore((s) => s.setSubtitle);
   const isAdminOrOwner = session?.user.role === "admin" || session?.user.role === "owner";
+  const isOwner = session?.user.role === "owner";
   const canViewSystem = has("view_system_status");
 
   // Deep-link support: ?section=<key> — respect entitlement when landing on /admin?section=system
@@ -2561,6 +2569,7 @@ export default function AdminPage() {
           {SECTIONS.filter(
             (section) =>
               (section.key !== "payers" || isAdminOrOwner) &&
+              (section.key !== "payments" || isOwner) &&
               (section.key !== "system" || canViewSystem)
           ).map((section) => {
             const active = activeSection === section.key;
@@ -2589,6 +2598,7 @@ export default function AdminPage() {
           {activeSection === "compliance" && <ComplianceSection />}
           {activeSection === "demo" && <DemoDataSection />}
           {activeSection === "schedule" && <ScheduleSection />}
+          {activeSection === "payments" && <PosPaymentsCard />}
           {activeSection === "system" &&
             (canViewSystem ? (
               <SystemStatusSection />
