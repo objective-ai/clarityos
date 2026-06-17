@@ -15,6 +15,7 @@ import { X, Send, SendHorizonal, CheckCircle, MessageSquare, CreditCard } from "
 import { useMessagingStore } from "@/store/messagingStore";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { Entitlement } from "@/lib/entitlements";
+import { apiFetch } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -106,8 +107,10 @@ export function AppointmentDetailDrawer({
     setResolvingPayment(true);
     try {
       // Resolve the encounter's superbill so POS prefills the patient-owed amount.
-      const res = await fetch(`/api/encounters/${appt.encounterId}/superbill`);
-      const sb = res.ok ? await res.json().catch(() => null) : null;
+      const sb = await apiFetch<{ id: string } | null>(
+        `/api/encounters/${appt.encounterId}/superbill`,
+        { retries: 0 },
+      ).catch(() => null);
       const superbillId: string | null = sb?.id ?? null;
       if (superbillId) {
         router.push(

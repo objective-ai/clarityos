@@ -47,7 +47,7 @@ export function SuperbillRowActions({
           `/${tenant}/pos?patient=${patientId}&prefill=superbill:${superbillId}`,
         )
       }
-      className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-[var(--text-muted)] hover:text-[var(--accent)]"
+      className="p-1.5 rounded-lg hover:bg-[var(--bg-glass)] transition-colors text-[var(--text-muted)] hover:text-[var(--accent)]"
       title="Take payment"
       aria-label="Take payment"
     >
