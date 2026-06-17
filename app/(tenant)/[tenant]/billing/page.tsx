@@ -16,6 +16,7 @@ import { usePageHeaderStore } from "@/store/pageHeaderStore";
 import { useBillingDashboardStore } from "@/store/billingDashboardStore";
 import { usePayerStore } from "@/store/payerStore";
 import { BillingWorkflowDialog } from "@/components/billing/BillingWorkflow";
+import { SuperbillRowActions } from "@/components/billing/SuperbillRowActions";
 import type { ClaimStatus, SuperbillListItem } from "@/types/billing";
 
 // ---------------------------------------------------------------------------
@@ -452,6 +453,12 @@ export default function BillingPage() {
                   {/* Icon buttons */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
+                      <SuperbillRowActions
+                        superbillId={sb.id}
+                        patientId={sb.patientId}
+                        status={sb.claimStatus}
+                        tenant={tenant}
+                      />
                       <button
                         type="button"
                         onClick={() => setWorkflowSb(sb)}

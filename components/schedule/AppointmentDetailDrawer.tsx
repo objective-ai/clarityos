@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Appointment } from "@/types/appointment";
 import {
   STATUS_LABELS,
@@ -10,8 +11,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatClinicTime, formatDateLong } from "@/lib/timezone";
 import { getWaitMinutes, getWaitColor } from "@/lib/scheduleUtils";
-import { X, Send, SendHorizonal, CheckCircle, MessageSquare } from "lucide-react";
+import { X, Send, SendHorizonal, CheckCircle, MessageSquare, CreditCard } from "lucide-react";
 import { useMessagingStore } from "@/store/messagingStore";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import { Entitlement } from "@/lib/entitlements";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -59,8 +62,12 @@ export function AppointmentDetailDrawer({
   onCancel,
   onReschedule,
   onIntake,
+  tenant,
   timezone,
 }: AppointmentDetailDrawerProps) {
+  const router = useRouter();
+  const { has, requireRole } = useEntitlements();
+  const [resolvingPayment, setResolvingPayment] = useState(false);
   const openComposer = useMessagingStore((s) => s.openComposer);
   // ESC key closes drawer
   useEffect(() => {
@@ -86,6 +93,35 @@ export function AppointmentDetailDrawer({
   const canCancelOrReschedule =
     appt &&
     ["scheduled", "confirmed", "arrived"].includes(appt.status);
+
+  // Take payment (Phase 15) — completed visit with an encounter (→ superbill).
+  const canTakePayment =
+    appt?.status === "completed" &&
+    !!appt.encounterId &&
+    has(Entitlement.RETAIL_POS) &&
+    requireRole("owner", "admin", "technician", "receptionist");
+
+  async function handleTakePayment() {
+    if (!appt?.encounterId) return;
+    setResolvingPayment(true);
+    try {
+      // Resolve the encounter's superbill so POS prefills the patient-owed amount.
+      const res = await fetch(`/api/encounters/${appt.encounterId}/superbill`);
+      const sb = res.ok ? await res.json().catch(() => null) : null;
+      const superbillId: string | null = sb?.id ?? null;
+      if (superbillId) {
+        router.push(
+          `/${tenant}/pos?patient=${appt.patientId}&prefill=superbill:${superbillId}`,
+        );
+      } else {
+        // No superbill yet — open POS for the patient; staff can add lines.
+        router.push(`/${tenant}/pos?patient=${appt.patientId}`);
+      }
+    } finally {
+      setResolvingPayment(false);
+      onClose();
+    }
+  }
 
   // Wait time
   const waitMinutes = appt ? getWaitMinutes(appt) : null;
@@ -284,6 +320,17 @@ export function AppointmentDetailDrawer({
               {canViewEncounter && hasEncounter && (
                 <Button className="w-full" variant="outline" onClick={onClose}>
                   View Encounter
+                </Button>
+              )}
+
+              {canTakePayment && (
+                <Button
+                  className="w-full"
+                  onClick={() => { void handleTakePayment(); }}
+                  disabled={resolvingPayment}
+                >
+                  <CreditCard className="w-4 h-4 mr-2" aria-hidden />
+                  {resolvingPayment ? "Opening…" : "Take payment"}
                 </Button>
               )}
 

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Check, ChevronLeft, Inbox, Users, BarChart3, Settings as SettingsIcon, MessageSquare } from "lucide-react";
+import { Check, ChevronLeft, Inbox, Users, BarChart3, Settings as SettingsIcon, MessageSquare, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -151,6 +151,7 @@ export function Sidebar({ tenant: tenantSlug, isCollapsed, onToggle }: SidebarPr
     { label: "Analytics", href: `${base}/analytics`, icon: Icon.Analytics, requiredEntitlement: Entitlement.ADVANCED_ANALYTICS },
     { label: "Optical", href: `${base}/optical`, icon: Icon.Optical },
     { label: "Inventory", href: `${base}/inventory`, icon: Icon.Optical, requiredEntitlement: Entitlement.RETAIL_POS },
+    { label: "Point of Sale", href: `${base}/pos`, icon: () => <CreditCard className="w-4 h-4" />, requiredEntitlement: Entitlement.RETAIL_POS },
     { label: "Billing", href: `${base}/billing`, icon: Icon.Billing, requiredRoles: ["doctor", "admin", "owner"] },
   ];
 

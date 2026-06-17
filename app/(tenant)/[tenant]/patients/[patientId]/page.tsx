@@ -43,6 +43,10 @@ const PatientBillingTab = dynamic(
   () => import("@/components/patient/PatientBillingTab").then((m) => ({ default: m.PatientBillingTab })),
   { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
 );
+const PatientPaymentsTab = dynamic(
+  () => import("@/components/patient/PatientPaymentsTab").then((m) => ({ default: m.PatientPaymentsTab })),
+  { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
+);
 const MessagesTab = dynamic(
   () => import("@/components/patients/MessagesTab").then((m) => ({ default: m.MessagesTab })),
   { loading: () => <div className="animate-pulse h-48 bg-white/5 rounded-xl" />, ssr: false },
@@ -56,7 +60,7 @@ const OrdersTab = dynamic(
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing" | "messages" | "orders";
+type TabKey = "demographics" | "encounters" | "flowsheets" | "rx-history" | "insurance" | "billing" | "payments" | "messages" | "orders";
 
 interface TabDescriptor {
   key: TabKey;
@@ -450,14 +454,27 @@ export default function PatientDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("demographics");
 
   const tabs = useMemo<TabDescriptor[]>(() => {
-    const ordersLocked = !has(Entitlement.RETAIL_POS);
+    const posLocked = !has(Entitlement.RETAIL_POS);
+    // Insert "Payments" right after "Billing"; gated on the Retail POS add-on.
+    const withPayments: TabDescriptor[] = [];
+    for (const t of BASE_TABS) {
+      withPayments.push(t);
+      if (t.key === "billing") {
+        withPayments.push({
+          key: "payments",
+          label: "Payments",
+          locked: posLocked,
+          upsell: posLocked ? "Available with Retail POS add-on" : undefined,
+        });
+      }
+    }
     return [
-      ...BASE_TABS,
+      ...withPayments,
       {
         key: "orders",
         label: "Orders",
-        locked: ordersLocked,
-        upsell: ordersLocked ? "Available with Retail POS add-on" : undefined,
+        locked: posLocked,
+        upsell: posLocked ? "Available with Retail POS add-on" : undefined,
       },
     ];
   }, [has]);
@@ -588,6 +605,9 @@ export default function PatientDetailPage() {
         )}
         {activeTab === "insurance" && <InsuranceTab patientId={patientId} />}
         {activeTab === "billing" && <PatientBillingTab patientId={patientId} />}
+        {activeTab === "payments" && has(Entitlement.RETAIL_POS) && (
+          <PatientPaymentsTab patientId={patientId} />
+        )}
         {activeTab === "messages" && (
           <MessagesTab patientId={patientId} patientFirstName={patient.firstName} />
         )}

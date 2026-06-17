@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { X, CreditCard } from "lucide-react";
 
 import { useLensCatalogStore } from "@/store/lensCatalogStore";
 import { useOpticalOrderStore } from "@/store/opticalOrderStore";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import { Entitlement } from "@/lib/entitlements";
 import type {
   OpticalOrder,
   OpticalOrderActionWarning,
@@ -67,6 +70,9 @@ export function OrderDetailDrawer({
   warnings,
   onClose,
 }: Props) {
+  const router = useRouter();
+  const { tenant } = useParams<{ tenant: string }>();
+  const { has, requireRole } = useEntitlements();
   const cancelOrder = useOpticalOrderStore((s) => s.cancelOrder);
   const loadOrder = useOpticalOrderStore((s) => s.loadOrder);
   const { lensTypes, lensMaterials, lensCoatings, loadAll: loadLensCatalogs } =
@@ -320,6 +326,26 @@ export function OrderDetailDrawer({
                       </>
                     )}
                   </dl>
+                </section>
+              )}
+
+            {/* Take payment (Phase 15) — POS entry point when order is placed */}
+            {order.status === "placed" &&
+              has(Entitlement.RETAIL_POS) &&
+              requireRole("owner", "admin", "technician", "receptionist") && (
+                <section className="pt-3 border-t border-[var(--glass-border)]">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/${tenant}/pos?patient=${order.patientId}&prefill=optical_order:${order.id}`,
+                      )
+                    }
+                    className="w-full"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" aria-hidden />
+                    Take payment
+                  </Button>
                 </section>
               )}
 

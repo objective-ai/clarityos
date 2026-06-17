@@ -64,6 +64,19 @@ export default function PosPage() {
     const prefill: SalePrefillItem[] = [];
     if (superbillId) prefill.push({ kind: "superbill", sourceId: superbillId });
     if (opticalId) prefill.push({ kind: "optical_order", sourceId: opticalId });
+    // `prefill=superbill:{id}` / `prefill=optical_order:{id}` — emitted by the
+    // Take-payment CTAs (Plan 15-10: Superbill row, OrderDetailDrawer,
+    // AppointmentDetailDrawer). Repeatable for split prefill.
+    for (const raw of searchParams.getAll("prefill")) {
+      const sep = raw.indexOf(":");
+      if (sep < 0) continue;
+      const kind = raw.slice(0, sep);
+      const sourceId = raw.slice(sep + 1);
+      if (!sourceId) continue;
+      if (kind === "superbill" || kind === "optical_order") {
+        prefill.push({ kind, sourceId });
+      }
+    }
     void openSale({
       patientId: patientId ?? null,
       prefill: prefill.length > 0 ? prefill : undefined,
