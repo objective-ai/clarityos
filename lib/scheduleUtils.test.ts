@@ -374,11 +374,15 @@ describe("formatBlockDisplay", () => {
 describe("generateRepeatDates", () => {
   it("generates Mon/Wed for 2 weeks from a Wednesday start", () => {
     // Apr 22 = Wednesday, weekdays [0,2] = Mon+Wed
+    // Start date anchors the WEEK — Mon Apr 20 (same week) IS included so
+    // users picking a recurring weekday lunch get all selected weekdays
+    // starting from this week, not just from the picked day.
     const dates = generateRepeatDates("2026-04-22", [0, 2], 2);
+    expect(dates).toContain("2026-04-20"); // Mon of week 1 (same week)
     expect(dates).toContain("2026-04-22"); // Wed of week 1
     expect(dates).toContain("2026-04-27"); // Mon of week 2
     expect(dates).toContain("2026-04-29"); // Wed of week 2
-    expect(dates).not.toContain("2026-04-20"); // Mon before start — excluded
+    expect(dates).not.toContain("2026-04-13"); // Mon of prior week — excluded
   });
   it("returns sorted dates", () => {
     const dates = generateRepeatDates("2026-04-22", [0, 2, 4], 2);

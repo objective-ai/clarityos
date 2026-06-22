@@ -9,6 +9,16 @@ import type { Appointment, AppointmentStatus } from "@/types/appointment";
 import type { ViewMode } from "@/types/schedule";
 import { ROLE_DEFAULT_VIEWS } from "@/types/schedule";
 
+/** Local YYYY-MM-DD — toISOString returns UTC, which drifts a day for users
+ *  east/west of UTC depending on time of day. Always extract the calendar
+ *  date in the browser's local zone. */
+function toLocalYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Returns array of 7 ISO date strings (Mon-Sun) for the week containing dateStr.
  * dateStr format: "YYYY-MM-DD"
@@ -21,7 +31,7 @@ export function getWeekDays(dateStr: string): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const dd = new Date(monday);
     dd.setDate(monday.getDate() + i);
-    return dd.toISOString().slice(0, 10);
+    return toLocalYMD(dd);
   });
 }
 
@@ -178,8 +188,13 @@ export function formatBlockDisplay(
 
 /**
  * Generates YYYY-MM-DD strings for the given weekday indices (0=Mon…6=Sun)
- * starting from startDate, for `weeks` consecutive weeks.
- * Only returns dates >= startDate.
+ * for the week containing startDate, plus the next (weeks-1) weeks.
+ *
+ * The startDate anchors the WEEK, not the day. Picking Wed Apr 29 with
+ * weekdays [Tue, Wed] yields [Apr 28, Apr 29, May 5, May 6, …] — Tue Apr 28
+ * is included even though it's earlier in the same week than the picked
+ * start. This matches user intent for "weekly recurring lunches starting
+ * this week."
  */
 export function generateRepeatDates(
   startDate: string,
@@ -195,8 +210,120 @@ export function generateRepeatDates(
     for (const wd of weekdays) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + w * 7 + wd);
-      if (d >= start) dates.push(d.toISOString().slice(0, 10));
+      dates.push(toLocalYMD(d));
     }
   }
   return dates.sort();
+}
+
+type BlockLike = {
+  id: string;
+  blockType: string;
+  startDatetime: string;
+  endDatetime: string;
+  reason?: string | null;
+};
+
+export type BlockGroup = {
+  key: string;
+  blockType: string;
+  startTime: string; // local "HH:MM"
+  endTime: string;   // local "HH:MM"
+  weekday: number;   // 0=Mon..6=Sun (single weekday per group)
+  members: BlockLike[];
+};
+
+/**
+ * Local HH:MM extracted from an ISO datetime string. Slicing the raw string
+ * yields the UTC component when an offset is present, which is wrong for
+ * display — always go through Date so the browser's local timezone is honored.
+ */
+function localHHMM(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Groups blocks for list rendering. Keyed by blockType + weekday + start/end
+ * time, so Tuesday lunches and Thursday lunches at 12-1 are SEPARATE rows
+ * (not merged into "Tue, Thu") even though they share the time slot.
+ *
+ * Single-occurrence blocks become one-member groups; recurring weekday
+ * patterns collapse into one group per weekday.
+ */
+export function groupBlocksForDisplay(blocks: BlockLike[]): BlockGroup[] {
+  const map = new Map<string, BlockGroup>();
+  for (const b of blocks) {
+    const startTime = localHHMM(b.startDatetime);
+    const endTime = localHHMM(b.endDatetime);
+    const d = new Date(b.startDatetime);
+    const weekday = (d.getDay() + 6) % 7; // Mon=0..Sun=6
+    // Holidays span date ranges, not weekday recurrences — key off date instead
+    // so each holiday remains its own row.
+    const groupKey =
+      b.blockType === "holiday"
+        ? `holiday|${b.id}`
+        : `${b.blockType}|${weekday}|${startTime}|${endTime}`;
+    let g = map.get(groupKey);
+    if (!g) {
+      g = { key: groupKey, blockType: b.blockType, startTime, endTime, weekday, members: [] };
+      map.set(groupKey, g);
+    }
+    g.members.push(b);
+  }
+  for (const g of map.values()) {
+    g.members.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    // Order by earliest occurrence so the user sees upcoming series first
+    return a.members[0].startDatetime.localeCompare(b.members[0].startDatetime);
+  });
+}
+
+const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/**
+ * Format weekdays as compact range when contiguous, comma-separated otherwise.
+ * [0,1,2,3,4] → "Mon–Fri", [0,2,4] → "Mon, Wed, Fri"
+ */
+export function formatWeekdays(weekdays: number[]): string {
+  if (weekdays.length === 0) return "";
+  const sorted = [...weekdays].sort((a, b) => a - b);
+  const contiguous = sorted.every((wd, i) => i === 0 || wd === sorted[i - 1] + 1);
+  if (contiguous && sorted.length >= 3) {
+    return `${WEEKDAY_SHORT[sorted[0]]}–${WEEKDAY_SHORT[sorted[sorted.length - 1]]}`;
+  }
+  return sorted.map(wd => WEEKDAY_SHORT[wd]).join(", ");
+}
+
+/** Compact 12-h time. "12:00" → "12 pm", "12:30" → "12:30 pm", "09:00" → "9 am". */
+export function formatTimeShort(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(":");
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const suffix = h >= 12 ? "pm" : "am";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${h12} ${suffix}` : `${h12}:${mStr.padStart(2, "0")} ${suffix}`;
+}
+
+/** Same as formatTimeShort but accepts an ISO datetime and uses local timezone. */
+export function formatIsoTimeShort(iso: string): string {
+  return formatTimeShort(localHHMM(iso));
+}
+
+/**
+ * Find the block (if any) overlapping a given calendar date for a staff member.
+ * Returns the FIRST matching block — prefers lunch when multiple exist same day.
+ */
+export function blockForDate(blocks: BlockLike[], dateStr: string): BlockLike | null {
+  const matches = blocks.filter(b => {
+    // Compare in local time — convert ISO to local YYYY-MM-DD
+    const startLocal = new Date(b.startDatetime);
+    const endLocal = new Date(b.endDatetime);
+    const startYMD = `${startLocal.getFullYear()}-${String(startLocal.getMonth() + 1).padStart(2, "0")}-${String(startLocal.getDate()).padStart(2, "0")}`;
+    const endYMD = `${endLocal.getFullYear()}-${String(endLocal.getMonth() + 1).padStart(2, "0")}-${String(endLocal.getDate()).padStart(2, "0")}`;
+    return dateStr >= startYMD && dateStr <= endYMD;
+  });
+  if (matches.length === 0) return null;
+  return matches.find(b => b.blockType === "lunch") ?? matches[0];
 }

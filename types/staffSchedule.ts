@@ -25,6 +25,7 @@ export interface StaffAvailabilityEntry {
   lastName: string;
   role: string;
   schedule: WeeklyScheduleDay[];
+  blocks: BlockedTime[];
 }
 
 export interface WeeklyAvailabilityResponse {
